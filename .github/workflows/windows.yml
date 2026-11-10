@@ -1,0 +1,28 @@
+name: Windows validation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Run tests
+        run: dotnet test PrismaMusic.Tests/PrismaMusic.Tests.csproj -c Release
+      - name: Publish
+        run: dotnet publish PrismaMusic.csproj -c Release -r win-x64 --self-contained true -o publish
+      - name: Smoke test
+        run: '& .\publish\Prisma Music.exe --smoke-test'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prisma-music-windows
+          path: publish
+          retention-days: 14
