@@ -1775,6 +1775,7 @@ public partial class MainWindow : Window
 
 	private void RefreshRows()
 	{
+		galleryExportTracks = null;
 		UpdateCollectionHeader();
 		System.Windows.Controls.ListBox rows = Rows;
 		bool flag = collection == null;
@@ -2666,6 +2667,7 @@ public partial class MainWindow : Window
 		var lyricsPage = NewSettingsPage();
 		var appearancePage = NewSettingsPage();
 		var languagePage = NewSettingsPage();
+		var libraryPage = NewSettingsPage();
 		var panel = soundPage;
 		var soundAnchor = new TextBlock
 		{
@@ -3069,6 +3071,32 @@ public partial class MainWindow : Window
 			HorizontalAlignment = System.Windows.HorizontalAlignment.Left
 		};
 		panel.Children.Add(button3);
+		libraryPage.Children.Add(SettingsSection(new TextBlock { Text = LocalTextExtension.Translate("Biblioteca") },
+			"Exporta tu colección o las pistas de la vista actual."));
+		var exportLibrary = new System.Windows.Controls.Button { Content = LocalTextExtension.Translate("Exportar biblioteca") };
+		exportLibrary.Click += ExportLibrary;
+		var exportPlaylist = new System.Windows.Controls.Button { Content = LocalTextExtension.Translate("Exportar lista") };
+		exportPlaylist.Click += ExportCurrentPlaylist;
+		AddLibraryAction("Biblioteca JSON", "Incluye las pistas, fuentes, listas y etiquetas editadas.", exportLibrary);
+		AddLibraryAction("Lista M3U8", "Incluye las pistas de la vista actual en el orden mostrado.", exportPlaylist);
+
+		void AddLibraryAction(string heading, string description, System.Windows.Controls.Button button)
+		{
+			var row = new Grid();
+			row.ColumnDefinitions.Add(new ColumnDefinition());
+			row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+			var text = new StackPanel { Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+			text.Children.Add(new TextBlock { Text = LocalTextExtension.Translate(heading), FontWeight = FontWeights.SemiBold });
+			text.Children.Add(new TextBlock { Text = LocalTextExtension.Translate(description), TextWrapping = TextWrapping.Wrap,
+				Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 4, 0, 0) });
+			row.Children.Add(text);
+			Grid.SetColumn(button, 1);
+			button.VerticalAlignment = VerticalAlignment.Center;
+			row.Children.Add(button);
+			libraryPage.Children.Add(new Border { Background = (Brush)FindResource("SettingsBackground"),
+				BorderBrush = (Brush)FindResource("SettingsStroke"), BorderThickness = new Thickness(1),
+				CornerRadius = new CornerRadius(8), Padding = new Thickness(14), Margin = new Thickness(0, 0, 0, 8), Child = row });
+		}
 		var settingsScroll = new ScrollViewer
 		{
 			Style = (Style)FindResource("LyricsScroll"),
@@ -3177,6 +3205,7 @@ public partial class MainWindow : Window
 		AddSettingsLink("Letras", "\uE8BD", lyricsPage);
 		AddSettingsLink("Apariencia", "\uE790", appearancePage);
 		AddSettingsLink("Idioma", "\uE774", languagePage);
+		AddSettingsLink("Biblioteca", "\uE8B7", libraryPage);
 		navigation.SelectionChanged += (_, _) =>
 		{
 			settingsScroll.Content = (navigation.SelectedItem as ListBoxItem)?.Tag;
@@ -3246,9 +3275,9 @@ public partial class MainWindow : Window
 					pngBitmapEncoder.Save(stream);
 					if (settingsScroll != null)
 					{
-						navigation.SelectedIndex = 3;
-						if (!ReferenceEquals(settingsScroll.Content, appearancePage))
-							throw new InvalidOperationException("Settings navigation did not switch to Appearance.");
+						navigation.SelectedIndex = 5;
+						if (!ReferenceEquals(settingsScroll.Content, libraryPage))
+							throw new InvalidOperationException("Settings navigation did not switch to Library.");
 						await Task.Delay(250);
 						settingsWindow.UpdateLayout();
 						RenderTargetBitmap renderTargetBitmap2 = new RenderTargetBitmap((int)frameworkElement.ActualWidth, (int)frameworkElement.ActualHeight, 96.0, 96.0, PixelFormats.Pbgra32);
@@ -3257,7 +3286,7 @@ public partial class MainWindow : Window
 						{
 							Frames = { BitmapFrame.Create(renderTargetBitmap2) }
 						};
-						using FileStream stream2 = System.IO.File.Create(Path.Combine(Path.GetDirectoryName(preview), Path.GetFileNameWithoutExtension(preview) + "-appearance.png"));
+						using FileStream stream2 = System.IO.File.Create(Path.Combine(Path.GetDirectoryName(preview), Path.GetFileNameWithoutExtension(preview) + "-biblioteca.png"));
 						pngBitmapEncoder2.Save(stream2);
 					}
 					settingsWindow.Close();

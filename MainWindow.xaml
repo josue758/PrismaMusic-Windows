@@ -129,14 +129,29 @@
             </Style></TextBlock.Style>
           </TextBlock>
         </Grid>
-        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6"><ComboBox Style="{StaticResource FilterCombo}" x:Name="PlaylistPicker" Width="145" Margin="0,0,6,6" Visibility="Collapsed" SelectionChanged="SelectPlaylist"/><Button x:Name="OpenRelatedArtist" Content="{local:LocalText Text=Ver artista}" Click="BrowseRelatedArtist" Visibility="Collapsed"/><Button x:Name="OpenRelatedAlbum" Content="{local:LocalText Text=Ver álbum}" Click="BrowseRelatedAlbum" Visibility="Collapsed"/>
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+          <Button x:Name="LibraryMenuButton" DockPanel.Dock="Right" Content="&#xE712;" Style="{StaticResource TransportIcon}"
+                  VerticalAlignment="Top" Click="ShowLibraryMenu" AutomationProperties.Name="{local:LocalText Text=Opciones de biblioteca}" ToolTip="{local:LocalText Text=Opciones de biblioteca}">
+            <Button.ContextMenu>
+              <ContextMenu Style="{StaticResource PlayerMenu}">
+                <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Exportar lista}" Click="ExportCurrentPlaylist">
+                  <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8A5;"/></MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Exportar biblioteca}" Click="ExportLibrary">
+                  <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8B7;"/></MenuItem.Icon>
+                </MenuItem>
+              </ContextMenu>
+            </Button.ContextMenu>
+          </Button>
+          <WrapPanel><ComboBox Style="{StaticResource FilterCombo}" x:Name="PlaylistPicker" Width="145" Margin="0,0,6,6" Visibility="Collapsed" SelectionChanged="SelectPlaylist"/><Button x:Name="OpenRelatedArtist" Content="{local:LocalText Text=Ver artista}" Click="BrowseRelatedArtist" Visibility="Collapsed"/><Button x:Name="OpenRelatedAlbum" Content="{local:LocalText Text=Ver álbum}" Click="BrowseRelatedAlbum" Visibility="Collapsed"/>
           <ComboBox Style="{StaticResource FilterCombo}" x:Name="ArtistFilter" Width="146" Margin="0,0,6,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Artista}"/>
           <ComboBox Style="{StaticResource FilterCombo}" x:Name="Genre" Width="165" Margin="0,0,6,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Género}"/>
           <ComboBox Style="{StaticResource FilterCombo}" x:Name="Year" Width="139" Margin="0,0,6,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Año}"/>
           <ComboBox Style="{StaticResource FilterCombo}" x:Name="Sort" Width="110" Margin="0,0,0,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Orden}">
             <ComboBoxItem Content="{local:LocalText Text=Nombre}"/><ComboBoxItem Content="{local:LocalText Text=Artista}"/><ComboBoxItem Content="{local:LocalText Text=Año}"/><ComboBoxItem Content="{local:LocalText Text=Álbum}"/>
           </ComboBox>
-        </WrapPanel>
+          </WrapPanel>
+        </DockPanel>
                 <StackPanel x:Name="QueueTools" DockPanel.Dock="Top" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,0,8">
           <Button Content="↑" Click="MoveQueueUp" AutomationProperties.Name="{local:LocalText Text=Subir en la cola}" ToolTip="{local:LocalText Text=Subir en la cola}"/>
           <Button Content="↓" Click="MoveQueueDown" AutomationProperties.Name="{local:LocalText Text=Bajar en la cola}" ToolTip="{local:LocalText Text=Bajar en la cola}"/>
@@ -181,14 +196,14 @@
               </DockPanel>
             </DataTemplate>
             <DataTemplate x:Key="GalleryCard">
-              <StackPanel Width="158" Margin="4,2,8,12">
-                <Border Height="158" CornerRadius="14" Background="#20FFFFFF" Margin="0,0,0,10">
+              <StackPanel Width="150" Margin="2,2,2,4">
+                <Border Height="150" CornerRadius="8" Background="#20FFFFFF" Margin="0,0,0,10">
                   <Grid ClipToBounds="True">
                     <local:ArtworkTile Caption="{Binding TileCaption}"/>
                     <Image Loaded="LoadGalleryCard" Stretch="UniformToFill"/>
                   </Grid>
                 </Border>
-                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
                 <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
                 <TextBlock Text="{Binding Footnote}" Foreground="#C5FFFFFF" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
               </StackPanel>

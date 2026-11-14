@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -15,10 +16,12 @@ public partial class MainWindow
 {
     private const int GalleryPageSize = 30;
     private int galleryPage;
+    private IEnumerable<Track> galleryExportTracks;
     private readonly SemaphoreSlim artworkWorkers = new(2);
 
     private void SetGalleryRows(LibraryRow[] rows)
     {
+        galleryExportTracks = rows.SelectMany(row => row.Tracks);
         int pages = Math.Max(1, (rows.Length + GalleryPageSize - 1) / GalleryPageSize);
         galleryPage = Math.Clamp(galleryPage, 0, pages - 1);
         Rows.ItemsSource = rows.Skip(galleryPage * GalleryPageSize).Take(GalleryPageSize).ToArray();

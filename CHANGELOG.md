@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.40.0
+
+- Añade la página Biblioteca en Configuración y un menú junto a los filtros de la colección.
+- Exporta pistas, fuentes, listas y etiquetas editadas a JSON, o las pistas de la vista filtrada a M3U8.
+- Ajusta el espaciado de las tarjetas de álbum y artista para mostrar más portadas.
+
 ## 0.39.0
 
 - Rediseña la biblioteca con superficies más neutras, una jerarquía de lectura más clara y un indicador de formato por canción.
