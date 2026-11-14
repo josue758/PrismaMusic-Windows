@@ -17,8 +17,8 @@ public partial class MainWindow
         foreach (var control in new FrameworkElement[]
         {
             Navigation, Rows, Search, PlayButton, ShuffleButton, RepeatButton, Seek, Volume,
-            TransportArtworkButton, NewPlaylistButton, AudioOutputButton, CastToolbarButton,
-            FavoriteToolbarButton, LookupLyricsToolbarButton
+            TransportArtworkButton, NewPlaylistButton, AudioOutputButton, ListeningMenuButton,
+            FavoriteToolbarButton, MuteButton
         })
         {
             var peer = UIElementAutomationPeer.CreatePeerForElement(control);

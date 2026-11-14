@@ -152,7 +152,14 @@
           <TextBlock x:Name="GalleryPageLabel" Margin="8,0,14,0" VerticalAlignment="Center"/>
           <Button x:Name="GalleryNext" AutomationProperties.Name="{local:LocalText Text=Siguiente}" Content="›" Click="NextGalleryPage" ToolTip="{local:LocalText Text=Siguiente}"/>
         </StackPanel>
-        <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ContextMenuOpening="PrepareLibraryTagsMenu" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ContextMenu>
+            <ContextMenu Style="{StaticResource PlayerMenu}">
+              <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Editar etiquetas de biblioteca}" Click="EditLibraryTags">
+                <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE70F;"/></MenuItem.Icon>
+              </MenuItem>
+            </ContextMenu>
+          </ListBox.ContextMenu>
           <ListBox.Resources>
 <DataTemplate x:Key="SongRow">
               <DockPanel Margin="2,2">
@@ -238,75 +245,97 @@
             <Button Content="{local:LocalText Text=＋ Cola}" Click="Enqueue"/><Button Content="{local:LocalText Text=＋ Lista}" Click="Playlist" AutomationProperties.Name="{local:LocalText Text=Añadir o quitar de la lista seleccionada}" ToolTip="{local:LocalText Text=Añadir o quitar de la lista seleccionada}"/>
             <Button Content="{local:LocalText Text=Artista}" Click="ArtistProfile" AutomationProperties.Name="{local:LocalText Text=Ver perfil del artista}" ToolTip="{local:LocalText Text=Ver perfil del artista}"/>
             <Button Style="{StaticResource CompactButton}" Content="ⓘ" Click="Inspect" AutomationProperties.Name="{local:LocalText Text=Información del archivo}" ToolTip="{local:LocalText Text=Información del archivo}"/>
-            <Button Content="&#xE712;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Click="ShowListeningMenu" AutomationProperties.Name="{local:LocalText Text=Más opciones}" ToolTip="{local:LocalText Text=Más opciones}">
-              <Button.ContextMenu>
-                <ContextMenu Background="#2C2C2C" Foreground="#FFFFFF">
-                  <MenuItem Header="{local:LocalText Text=Traducir}" Click="TranslateLyrics"/>
-                  <MenuItem Header="{local:LocalText Text=Artista}" Click="ArtistProfile"/>
-                  <MenuItem Header="Mini" Click="Mini"/>
-                  <MenuItem Header="{local:LocalText Text=Pantalla completa}" Click="Fullscreen"/>
-                </ContextMenu>
-              </Button.ContextMenu>
-            </Button>
           </WrapPanel>
           <UniformGrid x:Name="SpectrumView" DockPanel.Dock="Top" Rows="1" Height="28" Margin="0,2,0,12" ToolTip="{local:LocalText Text=Espectro de la pista}" AutomationProperties.Name="{local:LocalText Text=Espectro de diez bandas}"/>
           <ScrollViewer VerticalScrollBarVisibility="Auto"><TextBlock x:Name="Lyrics" TextWrapping="Wrap" Foreground="{StaticResource Muted}"/></ScrollViewer>
         </DockPanel>
       </Border>
     </Grid>
-    <Border x:Name="Transport" Grid.Row="2" Margin="18,8,18,14" Background="#A0202027" BorderBrush="#38FFFFFF" BorderThickness="1" CornerRadius="24" Padding="22,10,22,10">
-      <Border.Effect><DropShadowEffect Color="#000000" BlurRadius="26" ShadowDepth="8" Opacity=".28"/></Border.Effect>
+    <Border x:Name="Transport" Grid.Row="2" Margin="16,6,16,12" Background="#F21C1D24" BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="14" Padding="14,8">
       <Grid>
-        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Slider Style="{StaticResource TransportSlider}" x:Name="Seek" Grid.ColumnSpan="3" Margin="0,0,0,6" IsMoveToPointEnabled="True" ValueChanged="SeekChanged" AutomationProperties.Name="{local:LocalText Text=Posición}"/>
-        <DockPanel Grid.Row="1" VerticalAlignment="Center" Margin="0,0,10,0">
-          <Button x:Name="TransportArtworkButton" Width="52" Height="52" Padding="0" Margin="0,0,12,0"
-                  Background="Transparent" Click="Fullscreen" AutomationProperties.Name="{local:LocalText Text=Pantalla completa}"
-                  ToolTip="{local:LocalText Text=Pantalla completa}">
-            <Border CornerRadius="12" Background="#16FFFFFF" ClipToBounds="True">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="1.55*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <DockPanel VerticalAlignment="Center" Margin="0,0,12,0">
+          <Button x:Name="TransportArtworkButton" Style="{StaticResource TransportIcon}" Width="50" Height="50" Margin="0,0,10,0"
+                  Click="Fullscreen" AutomationProperties.Name="{local:LocalText Text=Pantalla completa}" ToolTip="{local:LocalText Text=Pantalla completa}">
+            <Border Width="48" Height="48" CornerRadius="7" ClipToBounds="True">
               <Grid>
                 <local:ArtworkTile Caption="{Binding Tag, ElementName=Cover}"/>
                 <Image x:Name="TransportCover" Source="{Binding Source, ElementName=Cover}" Stretch="UniformToFill"/>
               </Grid>
             </Border>
           </Button>
+          <Button DockPanel.Dock="Right" x:Name="FavoriteToolbarButton" Content="&#xEB51;" Style="{StaticResource TransportIcon}"
+                  Click="Favorite" AutomationProperties.Name="{local:LocalText Text=Favorito}" ToolTip="{local:LocalText Text=Favorito}"/>
           <StackPanel VerticalAlignment="Center">
             <TextBlock x:Name="TransportTitle" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
-            <TextBlock x:Name="TimeLabel" Text="0:00 / 0:00" FontSize="11" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+            <TextBlock Text="{Binding Text, ElementName=Artist}" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding Text, ElementName=AudioFormat}" Foreground="{DynamicResource AccentBrush}" FontSize="10" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
           </StackPanel>
         </DockPanel>
-        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
-          <Button Style="{StaticResource CompactButton}" Content="▥" Click="ShowVisualizer"
-                  AutomationProperties.Name="{local:LocalText Text=Visualizador}" ToolTip="{local:LocalText Text=Visualizador}" Width="38" Height="42"/>
-          <Button x:Name="ShuffleButton" AutomationProperties.Name="{local:LocalText Text=Aleatorio}" Style="{StaticResource CompactButton}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Content="&#xE8B1;" Click="ToggleShuffle" ToolTip="{local:LocalText Text=Aleatorio}"/>
-          <Button Style="{StaticResource CompactButton}" Content="⏮" Click="Previous" AutomationProperties.Name="{local:LocalText Text=Anterior}" ToolTip="{local:LocalText Text=Anterior}" Width="42" Height="42"/>
-          <Button Style="{StaticResource PrimaryTransport}" x:Name="PlayButton" AutomationProperties.Name="{local:LocalText Text=Reproducir o pausar}" Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource OnAccentBrush}" Width="54" Height="48" Padding="0" Content="▶" Click="Toggle" ToolTip="{local:LocalText Text=Reproducir o pausar}"/>
-          <Button Style="{StaticResource CompactButton}" Content="⏭" Click="Next" AutomationProperties.Name="{local:LocalText Text=Siguiente}" ToolTip="{local:LocalText Text=Siguiente}" Width="42" Height="42"/>
-          <Button x:Name="RepeatButton" AutomationProperties.Name="{local:LocalText Text=Repetir}" Style="{StaticResource CompactButton}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Content="&#xE8EE;" Click="ToggleRepeat" ToolTip="{local:LocalText Text=Repetir}"/>
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="4,0">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button x:Name="ShuffleButton" Style="{StaticResource TransportIcon}" Content="&#xE8B1;" Click="ToggleShuffle" AutomationProperties.Name="{local:LocalText Text=Aleatorio}" ToolTip="{local:LocalText Text=Aleatorio}"/>
+            <Button Style="{StaticResource TransportIcon}" Content="&#xE892;" Click="Previous" AutomationProperties.Name="{local:LocalText Text=Anterior}" ToolTip="{local:LocalText Text=Anterior}"/>
+            <Button Style="{StaticResource PrimaryTransport}" x:Name="PlayButton" AutomationProperties.Name="{local:LocalText Text=Reproducir o pausar}" Width="44" Height="38" Margin="5,0" Content="&#xE768;" Click="Toggle" ToolTip="{local:LocalText Text=Reproducir o pausar}"/>
+            <Button Style="{StaticResource TransportIcon}" Content="&#xE893;" Click="Next" AutomationProperties.Name="{local:LocalText Text=Siguiente}" ToolTip="{local:LocalText Text=Siguiente}"/>
+            <Button x:Name="RepeatButton" Style="{StaticResource TransportIcon}" Content="&#xE8EE;" Click="ToggleRepeat" AutomationProperties.Name="{local:LocalText Text=Repetir}" ToolTip="{local:LocalText Text=Repetir}"/>
+          </StackPanel>
+          <Grid Margin="0,3,0,0">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="55"/><ColumnDefinition Width="*"/><ColumnDefinition Width="55"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="TimeLabel" Text="0:00" TextAlignment="Right" FontSize="10" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,7,0"/>
+            <Slider Grid.Column="1" Style="{StaticResource TransportSlider}" x:Name="Seek" IsMoveToPointEnabled="True" ValueChanged="SeekChanged" AutomationProperties.Name="{local:LocalText Text=Posición}"/>
+            <TextBlock Grid.Column="2" x:Name="RemainingTimeLabel" Text="−0:00" FontSize="10" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="7,0,0,0"/>
+          </Grid>
         </StackPanel>
-        <StackPanel Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center">
-          <Button x:Name="PictureInPictureButton" Content="&#xE8A7;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                  Style="{StaticResource CompactButton}" Click="Mini" AutomationProperties.Name="{local:LocalText Text=Modo PiP}"
-                  ToolTip="{local:LocalText Text=Modo PiP}" Width="34" Height="40" Padding="0" Margin="1,0"/>
-          <Button x:Name="FullScreenToolbarButton" Content="&#xE740;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                  Style="{StaticResource CompactButton}" Click="Fullscreen" AutomationProperties.Name="{local:LocalText Text=Pantalla completa}"
-                  ToolTip="{local:LocalText Text=Pantalla completa}" Width="34" Height="40" Padding="0" Margin="1,0"/>
-          <Button x:Name="FavoriteToolbarButton" Content="♡" Style="{StaticResource CompactButton}" Width="34" Height="40" Padding="0" Margin="1,0"
-                  Click="Favorite" AutomationProperties.Name="{local:LocalText Text=Favorito}" ToolTip="{local:LocalText Text=Favorito}"/>
-          <Button x:Name="LookupLyricsToolbarButton" Content="&#xE8BD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                  Style="{StaticResource CompactButton}" Width="34" Height="40" Padding="0" Margin="1,0"
-                  Click="LookupLyrics" AutomationProperties.Name="{local:LocalText Text=Buscar letras}" ToolTip="{local:LocalText Text=Buscar letras}"/>
-          <Button x:Name="CastToolbarButton" Content="&#xE709;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                  Style="{StaticResource CompactButton}" Click="CastTrack" AutomationProperties.Name="{local:LocalText Text=Transmitir a dispositivo}"
-                  ToolTip="{local:LocalText Text=Transmitir a dispositivo}" Width="34" Height="40" Padding="0" Margin="1,0"/>
-          <Button x:Name="AudioOutputButton" Content="&#xE7F5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                  Style="{StaticResource CompactButton}" Click="ShowAudioOutputMenu" AutomationProperties.Name="{local:LocalText Text=Salida de audio}"
-                  ToolTip="{local:LocalText Text=Salida de audio}" Width="34" Height="40" Padding="0" Margin="1,0"/>
+        <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0,0,0">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="SleepCountdown" Style="{StaticResource TransportIcon}" FontFamily="Segoe UI" Width="Auto" MinWidth="40" Padding="5,0" FontSize="11" Foreground="{DynamicResource AccentBrush}" Visibility="Collapsed" Click="ShowSleepTimer" AutomationProperties.Name="{local:LocalText Text=Temporizador de sueño}" ToolTip="{local:LocalText Text=Temporizador de sueño}"/>
+            <Button x:Name="AudioOutputButton" Content="&#xE7F5;" Style="{StaticResource TransportIcon}" Click="ShowAudioOutputMenu" AutomationProperties.Name="{local:LocalText Text=Salida de audio}" ToolTip="{local:LocalText Text=Salida de audio}"/>
+            <Button x:Name="ListeningMenuButton" Content="&#xE712;" Style="{StaticResource TransportIcon}" Click="ShowListeningMenu" AutomationProperties.Name="{local:LocalText Text=Más opciones}" ToolTip="{local:LocalText Text=Más opciones}">
+              <Button.ContextMenu>
+                <ContextMenu Style="{StaticResource PlayerMenu}">
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Buscar letras}" Click="LookupLyrics">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8BD;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Traducir}" Click="TranslateLyrics">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8C1;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <Separator/>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Información del archivo}" InputGestureText="Ctrl+I" Click="Inspect">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE946;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Editar etiquetas de biblioteca}" Click="EditLibraryTags">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE70F;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Ver perfil del artista}" Click="ArtistProfile">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE77B;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <Separator/>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Modo PiP}" Click="Mini">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8A7;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem x:Name="FullScreenMenuItem" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Pantalla completa}" InputGestureText="F11" Click="Fullscreen">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE740;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <Separator/>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Visualizador}" Click="ShowVisualizer">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE9E9;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem x:Name="CastMenuItem" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Transmitir a dispositivo}" Click="CastTrack">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE709;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Temporizador de sueño}" Click="ShowSleepTimerFromMenu">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE916;"/></MenuItem.Icon>
+                  </MenuItem>
+                </ContextMenu>
+              </Button.ContextMenu>
+            </Button>
+          </StackPanel>
           <Button x:Name="EnableVolumeButton" Content="{local:LocalText Text=Activar volumen}" Click="EnableAdjustableVolume" Visibility="Collapsed"/>
-          <StackPanel x:Name="VolumeControls" Orientation="Horizontal" VerticalAlignment="Center">
-          <TextBlock Text="&#xE767;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,9,0"/>
-          <Slider Style="{StaticResource TransportSlider}" x:Name="Volume" Width="92" Minimum="0" Maximum="1" Value=".7" ValueChanged="ChangeVolume" AutomationProperties.Name="{local:LocalText Text=Volumen}"/>
+          <StackPanel x:Name="VolumeControls" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="MuteButton" Content="&#xE767;" Style="{StaticResource TransportIcon}" Width="30" Height="26" Click="ToggleMute" AutomationProperties.Name="{local:LocalText Text=Silenciar}" ToolTip="{local:LocalText Text=Silenciar}"/>
+            <Slider Style="{StaticResource TransportSlider}" x:Name="Volume" Width="83" Minimum="0" Maximum="1" Value=".7" ValueChanged="ChangeVolume" AutomationProperties.Name="{local:LocalText Text=Volumen}"/>
+            <TextBlock x:Name="VolumeLabel" Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="10" Foreground="{StaticResource Muted}" Text="{Binding Value, ElementName=Volume, StringFormat={}{0:P0}}"/>
           </StackPanel>
         </StackPanel>
       </Grid>

@@ -397,10 +397,10 @@ public partial class MainWindow
 
     private void UpdateFullscreenToolbarButton(bool active)
     {
-        FullScreenToolbarButton.Content = active ? "\uE73F" : "\uE740";
+        ((TextBlock)FullScreenMenuItem.Icon).Text = active ? "\uE73F" : "\uE740";
         string label = LocalTextExtension.Translate(active ? "Salir de pantalla completa" : "Pantalla completa");
-        FullScreenToolbarButton.ToolTip = label;
-        System.Windows.Automation.AutomationProperties.SetName(FullScreenToolbarButton, label);
+        FullScreenMenuItem.Header = label;
+        System.Windows.Automation.AutomationProperties.SetName(FullScreenMenuItem, label);
     }
 
     private static TextBlock MirrorText(TextBlock source, double size, Brush color)

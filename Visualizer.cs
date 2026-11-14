@@ -239,14 +239,14 @@ public partial class MainWindow
             HorizontalAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(16, 8, 16, 36)
         };
-        var previousButton = CreateVisualizerControl("⏮", LocalTextExtension.Translate("Anterior"), Previous);
-        visualizerPlayButton = CreateVisualizerControl(PlayButton.Content?.ToString() ?? "▶",
+        var previousButton = CreateVisualizerControl("\uE892", LocalTextExtension.Translate("Anterior"), Previous);
+        visualizerPlayButton = CreateVisualizerControl(PlayButton.Content?.ToString() ?? "\uE768",
             LocalTextExtension.Translate("Reproducir o pausar"), Toggle);
         visualizerPlayButton.Background = new SolidColorBrush(color);
         visualizerPlayButton.Foreground = Brushes.Black;
         visualizerPlayButton.Width = 58;
         visualizerPlayButton.Height = 54;
-        var nextButton = CreateVisualizerControl("⏭", LocalTextExtension.Translate("Siguiente"), Next);
+        var nextButton = CreateVisualizerControl("\uE893", LocalTextExtension.Translate("Siguiente"), Next);
         controls.Children.Add(previousButton);
         controls.Children.Add(visualizerPlayButton);
         controls.Children.Add(nextButton);
@@ -310,6 +310,7 @@ public partial class MainWindow
             Padding = new Thickness(0),
             Margin = new Thickness(7),
             FontSize = 16,
+            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
             ToolTip = label
         };
         System.Windows.Automation.AutomationProperties.SetName(button, label);

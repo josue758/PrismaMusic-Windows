@@ -75,8 +75,8 @@ public partial class MainWindow
                     throw new InvalidOperationException(result.ToString());
                 if (playing) Toggle(this, new RoutedEventArgs());
                 castingPlayer.Play();
-                CastToolbarButton.ToolTip = LocalTextExtension.Translate("Desconectar");
-                System.Windows.Automation.AutomationProperties.SetName(CastToolbarButton,
+                CastMenuItem.Header = LocalTextExtension.Translate("Desconectar");
+                System.Windows.Automation.AutomationProperties.SetName(CastMenuItem,
                     LocalTextExtension.Translate("Desconectar"));
                 Status.Text = LocalTextExtension.Format("Transmitiendo «{0}» a {1}.", track.Name, args.SelectedCastingDevice.FriendlyName);
             }
@@ -122,8 +122,8 @@ public partial class MainWindow
         castingPlayer?.Dispose();
         castingPlayer = null;
         castingTrack = null;
-        CastToolbarButton.ToolTip = LocalTextExtension.Translate("Transmitir a dispositivo");
-        System.Windows.Automation.AutomationProperties.SetName(CastToolbarButton,
+        CastMenuItem.Header = LocalTextExtension.Translate("Transmitir a dispositivo");
+        System.Windows.Automation.AutomationProperties.SetName(CastMenuItem,
             LocalTextExtension.Translate("Transmitir a dispositivo"));
     }
 }

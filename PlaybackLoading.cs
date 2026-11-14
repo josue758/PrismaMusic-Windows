@@ -31,7 +31,7 @@ public partial class MainWindow
         pendingTrack = track;
         player.Pause();
         SetPlaying(false);
-        PlayButton.Content = "×";
+        PlayButton.Content = "\uE711";
         var cancelLabel = LocalTextExtension.Translate("Cancelar apertura");
         System.Windows.Automation.AutomationProperties.SetName(PlayButton, cancelLabel);
         if (miniToggle != null) System.Windows.Automation.AutomationProperties.SetName(miniToggle, cancelLabel);
@@ -58,6 +58,7 @@ public partial class MainWindow
             prepared = null; // The engine owns the decoder, including on output initialization failure.
             if (!opened) return;
 
+            track = ApplyLibraryTags(track);
             if (remember && current != null && current != track) previous.Push(current);
             bool trackChanged = !ReferenceEquals(current, track);
             current = track;
