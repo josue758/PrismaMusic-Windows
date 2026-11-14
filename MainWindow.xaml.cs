@@ -40,6 +40,7 @@ using TagLib;
 using WinRT.Interop;
 using Windows.Devices.Enumeration;
 using Windows.Foundation;
+using Windows.Media;
 using Windows.Media.Casting;
 using Windows.Media.Core;
 using Windows.Media.Playback;
@@ -341,6 +342,7 @@ public partial class MainWindow : Window
 			UpdateAwakeRequest(false);
 			scanCancellation?.Cancel();
 			timer.Stop();
+			DisposeSystemPlaybackControls();
 			CancelPendingOpen();
 			if (!smokeTest)
 			{
@@ -353,6 +355,8 @@ public partial class MainWindow : Window
 		{
 			EnableDarkTitleBar();
 			ApplyFluentBackdrop();
+			if (!smokeTest || Environment.GetEnvironmentVariable("PRISMA_SYSTEM_CONTROLS_PROBE") == "1")
+				InitializeSystemPlaybackControls();
 		};
 		StateChanged += (object? _, EventArgs _) =>
 		{
@@ -950,6 +954,29 @@ public partial class MainWindow : Window
 			if (Lyrics.Inlines.OfType<Hyperlink>().Count() >= 6)
 				throw new InvalidOperationException("Lyrics follow mode did not restore the listening window.");
 			Console.WriteLine("Full lyrics and automatic verse modes passed.");
+			if (Environment.GetEnvironmentVariable("PRISMA_SYSTEM_CONTROLS_PROBE") == "1")
+			{
+				PublishSystemPlayback();
+				if (systemControls?.IsEnabled != true || systemControls.DisplayUpdater.MusicProperties.Title != current.Name)
+					throw new InvalidOperationException("Windows media controls did not receive the track metadata.");
+				ApplySystemPlaybackButton(SystemMediaTransportControlsButton.Play);
+				if (!playing || systemControls.PlaybackStatus != MediaPlaybackStatus.Playing)
+					throw new InvalidOperationException("Windows media play did not start local playback.");
+				ApplySystemPlaybackButton(SystemMediaTransportControlsButton.Pause);
+				if (playing || systemControls.PlaybackStatus != MediaPlaybackStatus.Paused)
+					throw new InvalidOperationException("Windows media pause did not pause local playback.");
+				var originalTrack = current;
+				queue.Insert(0, demo.Tracks[1]);
+				ApplySystemPlaybackButton(SystemMediaTransportControlsButton.Next);
+				for (int attempt = 0; attempt < 30 && pendingTrack != null; attempt++) await Task.Delay(50);
+				if (current != demo.Tracks[1] || systemControls.DisplayUpdater.MusicProperties.Title != current.Name)
+					throw new InvalidOperationException("Windows media next did not advance the queue and update the title.");
+				ApplySystemPlaybackButton(SystemMediaTransportControlsButton.Previous);
+				for (int attempt = 0; attempt < 30 && pendingTrack != null; attempt++) await Task.Delay(50);
+				if (current != originalTrack)
+					throw new InvalidOperationException("Windows media previous did not return to the previous track.");
+				Console.WriteLine("Windows media controls published metadata and verified play, pause, next and previous.");
+			}
 			string portrait = Environment.GetEnvironmentVariable("PRISMA_PORTRAIT_PROBE");
 			if (portrait != null)
 			{
@@ -2218,11 +2245,13 @@ public partial class MainWindow : Window
 			RemainingTimeLabel.Text = "−" + FormatClock(num2 - totalSeconds);
 			UpdateLyricDisplay(totalSeconds);
 		}
+		PublishSystemPlayback();
 	}
 
 	private void SetPlaying(bool value)
 	{
 		playing = value;
+		PublishSystemPlayback();
 		UpdateAwakeRequest(value && keepAwake);
 		PlayButton.Content = (value ? "\uE769" : "\uE768");
 		string value2 = LocalTextExtension.Translate(value ? "Pausar" : "Reproducir");

@@ -102,6 +102,7 @@ public partial class MainWindow
                 if (Navigation.SelectedIndex == 5) RefreshRows();
             }
             if (trackChanged) LoadPresentation(track);
+            PublishSystemPlayback();
         }
         catch (OperationCanceledException) when (request.IsCancellationRequested) { }
         catch (Exception error)

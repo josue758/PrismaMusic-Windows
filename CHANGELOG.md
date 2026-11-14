@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.45.0
+
+- Integra los controles multimedia de Windows con el motor local, incluidos reproducir, pausar, anterior, siguiente y cambiar de posición.
+- Publica el título, artista, álbum y estado de la pista en la sesión multimedia de Windows.
+
 ## 0.44.0
 
 - Ajusta el tamaño y las columnas de la galería al ancho disponible.
