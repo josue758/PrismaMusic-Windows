@@ -303,6 +303,7 @@ public partial class MainWindow
         lyricsContent.Children.Add(lyrics);
         var lyricsScroll = new ScrollViewer
         {
+            Style = (Style)FindResource("LyricsScroll"),
             Content = lyricsContent,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,

@@ -860,7 +860,12 @@ public partial class MainWindow : Window
 			if (Math.Abs(player.Position.TotalSeconds - 3.5) > .2 || lyricDisplayIndex != 1 ||
 				Math.Abs(Lyrics.Inlines.OfType<Hyperlink>().Last().FontSize - 23.4) > .01)
 				throw new InvalidOperationException("Lyrics size, synchronization or offset-aware seek failed.");
-			CaptureDesignPreview(Shell, "PRISMA_LYRIC_PANEL_PREVIEW");
+			if (Environment.GetEnvironmentVariable("PRISMA_LYRIC_PANEL_PREVIEW") != null)
+			{
+				Navigation.SelectedIndex = 0;
+				SetLyrics("[00:00]Las luces de la ciudad\n[00:04]Se reflejan sobre el agua\n[00:08]Y nos marcan el camino");
+				CaptureDesignPreview(Shell, "PRISMA_LYRIC_PANEL_PREVIEW");
+			}
 			lyricOffset = 0;
 			lyricScale = 1;
 			RefreshLyrics();
