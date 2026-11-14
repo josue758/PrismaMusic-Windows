@@ -442,6 +442,7 @@ public partial class MainWindow : Window
 		_ = 27;
 		try
 		{
+			await VerifyButtonFeedback();
 			string language = LocalTextExtension.Language;
 			string text;
 			if (language == "en")
@@ -3448,3 +3449,4 @@ public partial class MainWindow : Window
 		}
 	}
 }
+

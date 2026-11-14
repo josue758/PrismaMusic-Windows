@@ -1,6 +1,6 @@
 # Prisma Music para Windows
 
-**Versión Windows 0.34.0** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
+**Versión Windows 0.34.1** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
 
 [Historial completo de versiones Windows](CHANGELOG.md) · [Proyecto para macOS](https://github.com/josue758/PrismaMusic)
 
@@ -105,3 +105,4 @@ Versión 0.32: los controles tienen superficies más redondeadas y reflejos tran
 Versión 0.33: rediseño completo de la ventana con fondo ambiental desenfocado desde la carátula, paneles de vidrio, navegación más clara, arte destacado y controles de reproducción ampliados. Traducir prepara automáticamente Python integrado y Argos Translate; no requiere instalar Python ni seleccionar un ejecutable. El runtime oficial se verifica mediante SHA-256, se descarga desde python.org, y las traducciones se ejecutan sin conexión después de instalar cada modelo. Al elegir un retrato, Windows detecta localmente el rostro más prominente y genera un recorte cuadrado centrado para la biblioteca.
 
 La suite automatizada está en `PrismaMusic.Tests`. El flujo de CI de Windows compila y ejecuta las pruebas para los cambios enviados al repositorio; consulta su configuración antes de asumir que hay binarios publicados. Las pruebas de audio cubren la selección automática/manual de frecuencia y verifican que PCM directo y WASAPI compartido no reciban una frecuencia exclusiva solicitada.
+

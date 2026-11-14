@@ -8,13 +8,6 @@ public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
-        // Respeta "Mostrar animaciones" de Windows: sin movimiento, los cambios son instantáneos.
-        if (!SystemParameters.ClientAreaAnimation)
-        {
-            foreach (var key in new[] { "MotionFast", "MotionPress", "MotionSlow" })
-                Resources[key] = new Duration(TimeSpan.Zero);
-        }
-
         // Color de acento del sistema, aclarado para el tema oscuro como hacen las aplicaciones Fluent.
         try
         {
@@ -30,3 +23,4 @@ public partial class App : Application
 
     private static byte Lighten(byte channel) => (byte)(channel + (255 - channel) * .35);
 }
+
