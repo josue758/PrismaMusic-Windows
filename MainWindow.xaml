@@ -66,7 +66,7 @@
             <Button Click="Rescan" Margin="0,0,0,4" AutomationProperties.Name="{local:LocalText Text=Actualizar biblioteca}" Background="Transparent">
               <DockPanel>
                 <TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Margin="0,0,9,0"/>
-                <TextBlock Text="{local:LocalText Text=Actualizar biblioteca}"/>
+                <TextBlock Text="{local:LocalText Text=Actualizar}"/>
               </DockPanel>
             </Button>
             <Button Click="Settings" AutomationProperties.Name="{local:LocalText Text=Configuración}" Background="Transparent">
@@ -180,7 +180,7 @@
         <TextBlock x:Name="LosslessNotice" DockPanel.Dock="Top" Visibility="Collapsed" Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8"/>
         <Border Background="{StaticResource SettingsBackground}" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="10" Padding="4">
         <Grid>
-        <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ContextMenuOpening="PrepareLibraryTagsMenu" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" SizeChanged="GalleryViewportChanged" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ContextMenuOpening="PrepareLibraryTagsMenu" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
           <ListBox.ContextMenu>
             <ContextMenu Style="{StaticResource PlayerMenu}">
               <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Editar etiquetas de biblioteca}" Click="EditLibraryTags">
@@ -192,6 +192,7 @@
             </ContextMenu>
           </ListBox.ContextMenu>
           <ListBox.Resources>
+            <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinVerticalScrollBar}"/>
             <DataTemplate x:Key="SongRow">
               <DockPanel Margin="2,2">
                 <Border DockPanel.Dock="Left" Width="{DynamicResource SongThumbnailSize}" Height="{DynamicResource SongThumbnailSize}" CornerRadius="7" Background="#18FFFFFF" Margin="0,0,12,0">

@@ -329,11 +329,7 @@ public partial class MainWindow : Window
 				Advance(endOfTrack: true);
 			}
 		};
-		player.MediaFailed += (object? _, Exception e) =>
-		{
-			SetPlaying(value: false);
-			Status.Text = LocalTextExtension.Translate("Windows no pudo reproducir el archivo. ") + e.Message;
-		};
+		player.MediaFailed += async (_, error) => await HandleAudioFailure(error);
 		timer.Tick += (object? _, EventArgs _) =>
 		{
 			Tick();
@@ -661,6 +657,24 @@ public partial class MainWindow : Window
 			{
 				throw new InvalidOperationException("Album gallery did not use cards.");
 			}
+			double galleryWidth = Width;
+			int originalAlbumSize = albumSize;
+			albumSize = 2;
+			ApplyAlbumSize();
+			Width = MinWidth;
+			UpdateLayout();
+			await Task.Delay(250);
+			var firstTile = Rows.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
+			var secondTile = Rows.ItemContainerGenerator.ContainerFromIndex(1) as ListBoxItem;
+			if (firstTile == null || secondTile == null ||
+				Math.Abs(firstTile.TranslatePoint(new Point(), Rows).Y - secondTile.TranslatePoint(new Point(), Rows).Y) > 1)
+				throw new InvalidOperationException("Compact gallery did not fit two large album cards on the same row.");
+			CaptureDesignPreview(Shell, "PRISMA_COMPACT_GALLERY_PREVIEW");
+			Width = galleryWidth;
+			albumSize = originalAlbumSize;
+			ApplyAlbumSize();
+			UpdateLayout();
+			Console.WriteLine("Compact gallery fit two album cards with the largest cover preference.");
 			SetGalleryRows(Enumerable.Repeat(libraryRow, 31).ToArray());
 			if (Rows.Items.Count != 30 || !GalleryNext.IsEnabled)
 			{
@@ -1096,8 +1110,12 @@ public partial class MainWindow : Window
             if (Environment.GetEnvironmentVariable("PRISMA_OUTPUT_FALLBACK_PROBE") != null)
             {
                 player.OutputId = "{0.0.0.00000000}." + Guid.NewGuid().ToString("B");
-                await ReopenOutput();
-                if (!opened || player.ActiveOutputId == null || player.ActiveOutputId == player.OutputId)
+                string requestedOutput = player.OutputId;
+                player.Position = TimeSpan.FromSeconds(2);
+                SetPlaying(true);
+                await HandleAudioFailure(new COMException("Simulated endpoint invalidation", unchecked((int)0x88890004)));
+                if (!opened || !playing || player.OutputId != requestedOutput || player.ActiveOutputId == null ||
+                    player.ActiveOutputId == requestedOutput || Math.Abs(player.Position.TotalSeconds - 2) > .35)
                     throw new InvalidOperationException($"Unavailable output did not fall back to the system device: {Status.Text}");
                 Console.WriteLine("Unavailable device fallback preserved the requested ID and exposed the actual endpoint.");
             }

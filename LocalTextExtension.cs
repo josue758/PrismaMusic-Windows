@@ -450,6 +450,7 @@ public sealed class LocalTextExtension : MarkupExtension
         ["No se pudo abrir la carpeta. "] = ("Could not open the folder. ", "Não foi possível abrir a pasta. "),
         ["{0:N0} pistas en esta fuente"] = ("{0:N0} tracks in this source", "{0:N0} faixas nesta fonte"),
         ["Actualizar biblioteca"] = ("Refresh library", "Atualizar biblioteca"),
+        ["Actualizar"] = ("Refresh", "Atualizar"),
         ["Tus letras. Tu idioma."] = ("Your lyrics. Your language.", "Suas letras. Seu idioma."),
         ["Traducción sin conexión. La primera vez se descarga el motor y el modelo; después funciona sin enviar letras a un servidor."] =
             ("Offline translation. The engine and model download once; after that, your lyrics stay on your device.",

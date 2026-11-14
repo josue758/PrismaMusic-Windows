@@ -13,6 +13,7 @@ public partial class MainWindow
     private bool autoLyrics;
     private bool keepAwake;
     private bool awakeRequestActive;
+    private double preferredAlbumSize = 150;
 
     [DllImport("kernel32.dll")]
     private static extern uint SetThreadExecutionState(uint flags);
@@ -29,7 +30,21 @@ public partial class MainWindow
 
     private void ApplyAlbumSize()
     {
-        double size = albumSize switch { 0 => 116, 2 => 188, _ => 150 };
+        preferredAlbumSize = albumSize switch { 0 => 116, 2 => 188, _ => 150 };
+        UpdateGallerySizing();
+    }
+
+    private void GalleryViewportChanged(object sender, SizeChangedEventArgs args) => UpdateGallerySizing();
+
+    private void UpdateGallerySizing()
+    {
+        // Reserve the scrollbar and list item padding before distributing available space.
+        double available = Math.Max(0, Rows.ActualWidth - SystemParameters.VerticalScrollBarWidth - 4);
+        double slot = preferredAlbumSize + 32;
+        int columns = Math.Max(1, (int)Math.Round(available / slot, MidpointRounding.AwayFromZero));
+        if (available >= 272) columns = Math.Max(2, columns);
+        double size = available == 0 ? preferredAlbumSize : Math.Clamp(Math.Floor(available / columns) - 32, 64, preferredAlbumSize + 28);
+        if (Equals(Application.Current.Resources["GalleryTileSize"], size)) return;
         Application.Current.Resources["GalleryTileSize"] = size;
     }
 

@@ -280,38 +280,39 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="ThinVerticalScrollBar" TargetType="ScrollBar">
+      <Setter Property="Width" Value="9"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ScrollBar">
+            <Track x:Name="PART_Track" IsDirectionReversed="True" Orientation="Vertical">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Command="ScrollBar.PageUpCommand" Focusable="False" Opacity="0"/>
+              </Track.DecreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb MinHeight="22">
+                  <Thumb.Template>
+                    <ControlTemplate TargetType="Thumb">
+                      <Border x:Name="ThumbFill" Background="#5CFFFFFF" CornerRadius="3" Margin="2,0"/>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ThumbFill" Property="Background" Value="#91FFFFFF"/></Trigger>
+                        <Trigger Property="IsDragging" Value="True"><Setter TargetName="ThumbFill" Property="Background" Value="{DynamicResource AccentBrush}"/></Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Thumb.Template>
+                </Thumb>
+              </Track.Thumb>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Command="ScrollBar.PageDownCommand" Focusable="False" Opacity="0"/>
+              </Track.IncreaseRepeatButton>
+            </Track>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="LyricsScroll" TargetType="ScrollViewer">
       <Style.Resources>
-        <Style TargetType="ScrollBar">
-          <Setter Property="Width" Value="9"/>
-          <Setter Property="Template">
-            <Setter.Value>
-              <ControlTemplate TargetType="ScrollBar">
-                <Track x:Name="PART_Track" IsDirectionReversed="True" Orientation="Vertical">
-                  <Track.DecreaseRepeatButton>
-                    <RepeatButton Command="ScrollBar.PageUpCommand" Focusable="False" Opacity="0"/>
-                  </Track.DecreaseRepeatButton>
-                  <Track.Thumb>
-                    <Thumb MinHeight="22">
-                      <Thumb.Template>
-                        <ControlTemplate TargetType="Thumb">
-                          <Border x:Name="ThumbFill" Background="#5CFFFFFF" CornerRadius="3" Margin="2,0"/>
-                          <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ThumbFill" Property="Background" Value="#91FFFFFF"/></Trigger>
-                            <Trigger Property="IsDragging" Value="True"><Setter TargetName="ThumbFill" Property="Background" Value="{DynamicResource AccentBrush}"/></Trigger>
-                          </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                      </Thumb.Template>
-                    </Thumb>
-                  </Track.Thumb>
-                  <Track.IncreaseRepeatButton>
-                    <RepeatButton Command="ScrollBar.PageDownCommand" Focusable="False" Opacity="0"/>
-                  </Track.IncreaseRepeatButton>
-                </Track>
-              </ControlTemplate>
-            </Setter.Value>
-          </Setter>
-        </Style>
+        <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinVerticalScrollBar}"/>
       </Style.Resources>
     </Style>
     <Style x:Key="TransportSlider" TargetType="Slider">

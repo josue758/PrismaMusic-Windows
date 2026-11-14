@@ -11,6 +11,28 @@ public partial class MainWindow
     private CancellationTokenSource pendingOpen;
     private Track pendingTrack;
     private Func<string, bool, WaveStream> prepareAudioFile = AudioEngine.Prepare;
+    private bool recoveringAudioOutput;
+
+    private async Task HandleAudioFailure(Exception error)
+    {
+        bool resume = playing;
+        double position = player.Position.TotalSeconds;
+        opened = false;
+        SetPlaying(false);
+        Status.Text = LocalTextExtension.Translate("Windows no pudo reproducir el archivo. ") + error.Message;
+        const int deviceInvalidated = unchecked((int)0x88890004);
+        const int resourcesInvalidated = unchecked((int)0x88890026);
+        if (error.HResult is not (deviceInvalidated or resourcesInvalidated) || player.StrictDirect ||
+            !resume || current == null || pendingOpen != null || recoveringAudioOutput) return;
+
+        recoveringAudioOutput = true;
+        var track = current;
+        try
+        {
+            await OpenTrack(track, remember: false, position, autoplay: true, recordHistory: false);
+        }
+        finally { recoveringAudioOutput = false; }
+    }
 
     private Task Play(Track track, bool remember = true, double? restorePosition = null) =>
         OpenTrack(track, remember, restorePosition ?? 0, autoplay: !restorePosition.HasValue,

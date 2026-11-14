@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.44.0
+
+- Ajusta el tamaño y las columnas de la galería al ancho disponible.
+- Intenta recuperar la reproducción por WASAPI cuando Windows invalida la salida. Conserva la posición y la selección de dispositivo. PCM directo conserva su requisito de salida exclusiva.
+
 ## 0.43.0
 
 - Añade estados vacíos con acciones, tres tamaños de portada y etiquetas visibles para Cola y Lista.
