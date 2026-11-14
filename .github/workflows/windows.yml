@@ -21,7 +21,8 @@ jobs:
         run: dotnet publish PrismaMusic.csproj -c Release -r win-x64 --self-contained true -o publish
       - name: Smoke test
         run: |
-          $app = Start-Process -FilePath '.\publish\Prisma Music.exe' -ArgumentList '--smoke-test' -PassThru -Wait
+          $app = Start-Process -FilePath '.\publish\Prisma Music.exe' -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru -Wait -RedirectStandardOutput smoke-output.txt -RedirectStandardError smoke-error.txt
+          Get-Content smoke-output.txt, smoke-error.txt
           exit $app.ExitCode
       - uses: actions/upload-artifact@v4
         with:
