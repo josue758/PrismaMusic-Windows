@@ -247,7 +247,19 @@
             <Button Style="{StaticResource CompactButton}" Content="ⓘ" Click="Inspect" AutomationProperties.Name="{local:LocalText Text=Información del archivo}" ToolTip="{local:LocalText Text=Información del archivo}"/>
           </WrapPanel>
           <UniformGrid x:Name="SpectrumView" DockPanel.Dock="Top" Rows="1" Height="28" Margin="0,2,0,12" ToolTip="{local:LocalText Text=Espectro de la pista}" AutomationProperties.Name="{local:LocalText Text=Espectro de diez bandas}"/>
-          <ScrollViewer VerticalScrollBarVisibility="Auto"><TextBlock x:Name="Lyrics" TextWrapping="Wrap" Foreground="{StaticResource Muted}"/></ScrollViewer>
+          <Border Background="#252630" BorderBrush="#23FFFFFF" BorderThickness="1" CornerRadius="12" Padding="13,9">
+            <DockPanel>
+              <Grid DockPanel.Dock="Top" Margin="0,0,0,5">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <TextBlock Text="{local:LocalText Text=Letras}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" Style="{StaticResource TransportIcon}" Width="30" Height="30" Content="&#xE721;"
+                        Click="LookupLyrics" ToolTip="{local:LocalText Text=Buscar letras}" AutomationProperties.Name="{local:LocalText Text=Buscar letras}"/>
+              </Grid>
+              <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <TextBlock x:Name="Lyrics" TextWrapping="Wrap" Foreground="{StaticResource Muted}"/>
+              </ScrollViewer>
+            </DockPanel>
+          </Border>
         </DockPanel>
       </Border>
     </Grid>
@@ -289,6 +301,9 @@
         </StackPanel>
         <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0,0,0">
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="StopAfterTrackIndicator" Style="{StaticResource TransportIcon}" Width="30" Content="&#xE71A;"
+                    Foreground="{DynamicResource AccentBrush}" Visibility="Collapsed" Click="ToggleStopAfterTrack"
+                    ToolTip="{local:LocalText Text=Cancelar pausa al final de la canción}" AutomationProperties.Name="{local:LocalText Text=Cancelar pausa al final de la canción}"/>
             <Button x:Name="SleepCountdown" Style="{StaticResource TransportIcon}" FontFamily="Segoe UI" Width="Auto" MinWidth="40" Padding="5,0" FontSize="11" Foreground="{DynamicResource AccentBrush}" Visibility="Collapsed" Click="ShowSleepTimer" AutomationProperties.Name="{local:LocalText Text=Temporizador de sueño}" ToolTip="{local:LocalText Text=Temporizador de sueño}"/>
             <Button x:Name="AudioOutputButton" Content="&#xE7F5;" Style="{StaticResource TransportIcon}" Click="ShowAudioOutputMenu" AutomationProperties.Name="{local:LocalText Text=Salida de audio}" ToolTip="{local:LocalText Text=Salida de audio}"/>
             <Button x:Name="ListeningMenuButton" Content="&#xE712;" Style="{StaticResource TransportIcon}" Click="ShowListeningMenu" AutomationProperties.Name="{local:LocalText Text=Más opciones}" ToolTip="{local:LocalText Text=Más opciones}">
@@ -326,6 +341,9 @@
                   </MenuItem>
                   <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Temporizador de sueño}" Click="ShowSleepTimerFromMenu">
                     <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE916;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem x:Name="StopAfterTrackMenuItem" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Pausar al final de esta canción}" Click="ToggleStopAfterTrack">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE769;"/></MenuItem.Icon>
                   </MenuItem>
                 </ContextMenu>
               </Button.ContextMenu>

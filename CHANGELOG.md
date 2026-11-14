@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.37.0
+
+- Rediseña el panel lateral de letras, con búsqueda directa y ajustes de tamaño y sincronización de hasta ±10 segundos para el panel y la sala de escucha.
+- Permite pausar al final de la canción desde el menú del reproductor. Configuración permite desactivar el avance automático de forma persistente.
+
 ## 0.36.0
 
 - Rediseña la barra inferior con iconos Fluent, portada, artista, formato de audio y progreso centrado con tiempo transcurrido y restante.

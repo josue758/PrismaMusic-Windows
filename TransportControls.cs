@@ -9,6 +9,18 @@ namespace PrismaMusic;
 public partial class MainWindow
 {
     private double volumeBeforeMute = .7;
+    private bool stopAfterTrack;
+    private bool continueAfterTrack = true;
+
+    private void ToggleStopAfterTrack(object sender, RoutedEventArgs args) => SetStopAfterTrack(!stopAfterTrack);
+
+    private void SetStopAfterTrack(bool enabled)
+    {
+        stopAfterTrack = enabled;
+        StopAfterTrackIndicator.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        StopAfterTrackMenuItem.Header = LocalTextExtension.Translate(enabled
+            ? "Cancelar pausa al final de la canción" : "Pausar al final de esta canción");
+    }
 
     private void ToggleMute(object sender, RoutedEventArgs args)
     {

@@ -107,7 +107,7 @@ public record Track(string Path, string Name, string Artist, string Album, strin
 public partial class MainWindow : Window
 {
 
-	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0);
+	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1);
 
 	private enum RepeatMode
 	{
@@ -781,6 +781,26 @@ public partial class MainWindow : Window
 			}
 			repeat = RepeatMode.Off;
 			Console.WriteLine("Repeat: track restart and collection wrap passed.");
+			await Play(track);
+			queue.Clear();
+			queue.Add(demo.Tracks[1]);
+			repeat = RepeatMode.Track;
+			SetStopAfterTrack(true);
+			player.Position = player.NaturalDuration.TimeSpan - TimeSpan.FromMilliseconds(180);
+			for (int attempt = 0; attempt < 35 && playing; attempt++) await Task.Delay(100);
+			if (playing || stopAfterTrack || current != track || queue.Count != 1 ||
+				StopAfterTrackIndicator.Visibility != Visibility.Collapsed)
+				throw new InvalidOperationException("Pause after track did not override repeat and preserve the queue.");
+			continueAfterTrack = false;
+			Advance(endOfTrack: true);
+			if (queue.Count != 1 || playing) throw new InvalidOperationException("Disabled autoplay advanced the queue.");
+			continueAfterTrack = true;
+			Next(this, new RoutedEventArgs());
+			for (int attempt = 0; attempt < 35 && current != demo.Tracks[1]; attempt++) await Task.Delay(100);
+			if (current != demo.Tracks[1] || queue.Count != 0) throw new InvalidOperationException("Manual Next did not consume the queue.");
+			repeat = RepeatMode.Off;
+			await Play(track);
+			Console.WriteLine("Pause after track, autoplay and manual Next passed.");
 			player.Speed = 1.5;
 			await Play(track, remember: false, 1.0);
 			var details = ReadTrackDetails(track);
@@ -789,7 +809,7 @@ public partial class MainWindow : Window
 			var listeningMenu = ListeningMenuButton.ContextMenu;
 			listeningMenu.StaysOpen = true;
 			ShowListeningMenu(ListeningMenuButton, new RoutedEventArgs());
-			if (!listeningMenu.IsOpen || listeningMenu.Items.OfType<MenuItem>().Count() != 10)
+			if (!listeningMenu.IsOpen || listeningMenu.Items.OfType<MenuItem>().Count() != 11)
 				throw new InvalidOperationException("Listening menu did not expose all commands.");
 			CaptureDesignPreview(listeningMenu, "PRISMA_LISTENING_MENU_PREVIEW");
 			listeningMenu.IsOpen = false;
@@ -832,6 +852,19 @@ public partial class MainWindow : Window
 				throw new InvalidOperationException("Selecting a verse did not seek.");
 			}
 			Console.WriteLine("Clickable synchronized verse passed.");
+			lyricOffset = 1.5;
+			lyricScale = 1.3;
+			RefreshLyrics();
+			var lastVerse = Lyrics.Inlines.OfType<Hyperlink>().Last();
+			lastVerse.RaiseEvent(new RoutedEventArgs(Hyperlink.ClickEvent));
+			if (Math.Abs(player.Position.TotalSeconds - 3.5) > .2 || lyricDisplayIndex != 1 ||
+				Math.Abs(Lyrics.Inlines.OfType<Hyperlink>().Last().FontSize - 23.4) > .01)
+				throw new InvalidOperationException("Lyrics size, synchronization or offset-aware seek failed.");
+			CaptureDesignPreview(Shell, "PRISMA_LYRIC_PANEL_PREVIEW");
+			lyricOffset = 0;
+			lyricScale = 1;
+			RefreshLyrics();
+			Console.WriteLine("Lyric scaling, sync offset and offset-aware seek passed.");
 			string portrait = Environment.GetEnvironmentVariable("PRISMA_PORTRAIT_PROBE");
 			if (portrait != null)
 			{
@@ -2112,6 +2145,15 @@ public partial class MainWindow : Window
 
 	private void Advance(bool endOfTrack = false)
 	{
+		if (endOfTrack && (stopAfterTrack || !continueAfterTrack))
+		{
+			SetStopAfterTrack(false);
+			player.Pause();
+			if (opened) player.Position = TimeSpan.Zero;
+			SetPlaying(false);
+			Tick();
+			return;
+		}
 		if (endOfTrack && repeat == RepeatMode.Track && current != null)
 		{
 			Play(current, remember: false);
@@ -2150,6 +2192,7 @@ public partial class MainWindow : Window
 		{
 			contextMenu.PlacementTarget = button;
 			contextMenu.Placement = PlacementMode.Top;
+			StopAfterTrackMenuItem.IsEnabled = current != null;
 			contextMenu.IsOpen = true;
 		}
 	}
@@ -2424,6 +2467,9 @@ public partial class MainWindow : Window
 			player.StrictDirect = audioSettings.StrictDirect;
 			shuffle = audioSettings.Shuffle;
 			rememberPosition = audioSettings.RememberPosition;
+			continueAfterTrack = audioSettings.ContinueAfterTrack;
+			lyricOffset = Math.Clamp(audioSettings.LyricOffset, -10, 10);
+			lyricScale = Math.Clamp(audioSettings.LyricScale, .85, 1.35);
 			repeat = (Enum.IsDefined(audioSettings.Repeat) ? audioSettings.Repeat : RepeatMode.Off);
 			MarkPlaybackToggle(ShuffleButton, shuffle);
 			UpdateRepeatButton();
@@ -2475,7 +2521,7 @@ public partial class MainWindow : Window
 		try
 		{
 			Directory.CreateDirectory(DataDirectory);
-			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate)));
+			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale)));
 			System.IO.File.Move(AudioSettingsFile + ".tmp", AudioSettingsFile, overwrite: true);
 			return true;
 		}
@@ -2804,6 +2850,13 @@ public partial class MainWindow : Window
 			ReopenOutput();
 			SaveSettingsSoon();
 		});
+		AddPreference("Continuar con la siguiente canción", continueAfterTrack, enabled => continueAfterTrack = enabled);
+		var lyricsAnchor = new TextBlock { Text = LocalTextExtension.Translate("Letras") };
+		panel.Children.Add(SettingsSection(lyricsAnchor, "Ajusta el tamaño y la sincronización de las letras."));
+		panel.Children.Add(CreateLyricSetting("Tamaño de las letras", .85, 1.35, .05, lyricScale, "P0",
+			value => { lyricScale = value; RefreshLyrics(); SaveSettingsSoon(); }));
+		panel.Children.Add(CreateLyricSetting("Ajuste de sincronización", -10, 10, .1, lyricOffset, "+0.0 s;-0.0 s;0.0 s",
+			value => { lyricOffset = value; RefreshLyrics(); SaveSettingsSoon(); }));
 		var appearanceAnchor = new TextBlock
 		{
 			Text = LocalTextExtension.Translate("Apariencia"),
@@ -3054,6 +3107,7 @@ public partial class MainWindow : Window
 		}
 		AddSettingsLink("Sonido", "\uE767", () => soundAnchor.BringIntoView());
 		AddSettingsLink("Reproducción", "\uE768", () => playbackAnchor.BringIntoView());
+		AddSettingsLink("Letras", "\uE8BD", () => lyricsAnchor.BringIntoView());
 		AddSettingsLink("Apariencia", "\uE790", () => appearanceAnchor.BringIntoView());
 		AddSettingsLink("Idioma", "\uE774", () => languageAnchor.BringIntoView());
 		Grid.SetRow(navigation, 1);
