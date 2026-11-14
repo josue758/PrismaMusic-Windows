@@ -107,7 +107,7 @@ public record Track(string Path, string Name, string Artist, string Album, strin
 public partial class MainWindow : Window
 {
 
-	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1);
+	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0);
 
 	private enum RepeatMode
 	{
@@ -506,6 +506,15 @@ public partial class MainWindow : Window
 			Width = width;
 			Height = height;
 			VerifyAutomationPeers();
+			var originalProfile = appearanceProfile;
+			ApplyAppearanceProfile(2);
+			if (ArtworkTint.Opacity != 0 || AmbientArtwork.Opacity != 0 || ArtworkShellBrush(Colors.Gold) is not SolidColorBrush)
+				throw new InvalidOperationException("Contrast appearance did not remove the artwork backdrop.");
+			ApplyAppearanceProfile(1);
+			if (ArtworkTint.Opacity <= 0 || ArtworkTint.Opacity >= .76)
+				throw new InvalidOperationException("Calm appearance did not soften the artwork backdrop.");
+			ApplyAppearanceProfile(originalProfile);
+			Console.WriteLine("Appearance profiles passed.");
 			Console.WriteLine("Compact layout and accessible transport label passed.");
 			Console.WriteLine($"Interface: {LocalTextExtension.Language} ({Heading.Text})");
 			if (Environment.GetEnvironmentVariable("PRISMA_WELCOME_PREVIEW") != null)
@@ -1068,6 +1077,7 @@ public partial class MainWindow : Window
 
 	private Brush DefaultShellBrush()
 	{
+		if (appearanceProfile == 2) return new SolidColorBrush(Color.FromRgb(19, 21, 27));
 		if (!micaActive)
 		{
 			return new SolidColorBrush(Color.FromRgb(32, 32, 32));
@@ -1077,11 +1087,14 @@ public partial class MainWindow : Window
 
 	private Brush ArtworkShellBrush(Color accent)
 	{
+		if (appearanceProfile == 2) return DefaultShellBrush();
+		double strength = appearanceProfile == 1 ? .14 : .35;
 		if (!micaActive)
 		{
-			return new LinearGradientBrush(Color.FromRgb((byte)((double)(int)accent.R * 0.35 + 20.8), (byte)((double)(int)accent.G * 0.35 + 20.8), (byte)((double)(int)accent.B * 0.35 + 20.8)), Color.FromRgb(32, 32, 32), 120.0);
+			return new LinearGradientBrush(Color.FromRgb((byte)(accent.R * strength + 20.8),
+				(byte)(accent.G * strength + 20.8), (byte)(accent.B * strength + 20.8)), Color.FromRgb(32, 32, 32), 120.0);
 		}
-		return new LinearGradientBrush(Color.FromArgb(85, accent.R, accent.G, accent.B), Color.FromArgb(32, 0, 0, 0), 120.0);
+		return new LinearGradientBrush(Color.FromArgb((byte)(strength * 243), accent.R, accent.G, accent.B), Color.FromArgb(32, 0, 0, 0), 120.0);
 	}
 
 	private void ShellMouseMove(object sender, System.Windows.Input.MouseEventArgs args)
@@ -1097,7 +1110,7 @@ public partial class MainWindow : Window
 		//IL_00ab: Unknown result type (might be due to invalid IL or missing references)
 		//IL_00ac: Unknown result type (might be due to invalid IL or missing references)
 		//IL_00b3: Unknown result type (might be due to invalid IL or missing references)
-		if (SystemParameters.ClientAreaAnimation && !(Shell.ActualWidth <= 0.0) && !(Shell.ActualHeight <= 0.0))
+		if (appearanceProfile == 0 && SystemParameters.ClientAreaAnimation && Shell.ActualWidth > 0 && Shell.ActualHeight > 0)
 		{
 			Point position = args.GetPosition(Shell);
 			Point val = new Point(position.X / Shell.ActualWidth, position.Y / Shell.ActualHeight);
@@ -2085,7 +2098,7 @@ public partial class MainWindow : Window
 			spectrumBars[num].Height = Math.Max(val, spectrumBars[num].Height * 0.65);
 			num++;
 		}
-		AudioGlow.Opacity = ((animateSpectrum && playing && SystemParameters.ClientAreaAnimation) ? Math.Clamp(player.Level * 0.42, 0.025, 0.2) : 0.0);
+		AudioGlow.Opacity = ((appearanceProfile == 0 && animateSpectrum && playing && SystemParameters.ClientAreaAnimation) ? Math.Clamp(player.Level * 0.42, 0.025, 0.2) : 0.0);
 		UpdateVisualizer();
 		if (opened)
 		{
@@ -2475,6 +2488,7 @@ public partial class MainWindow : Window
 			continueAfterTrack = audioSettings.ContinueAfterTrack;
 			lyricOffset = Math.Clamp(audioSettings.LyricOffset, -10, 10);
 			lyricScale = Math.Clamp(audioSettings.LyricScale, .85, 1.35);
+			ApplyAppearanceProfile(audioSettings.AppearanceProfile);
 			repeat = (Enum.IsDefined(audioSettings.Repeat) ? audioSettings.Repeat : RepeatMode.Off);
 			MarkPlaybackToggle(ShuffleButton, shuffle);
 			UpdateRepeatButton();
@@ -2526,7 +2540,7 @@ public partial class MainWindow : Window
 		try
 		{
 			Directory.CreateDirectory(DataDirectory);
-			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale)));
+			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile)));
 			System.IO.File.Move(AudioSettingsFile + ".tmp", AudioSettingsFile, overwrite: true);
 			return true;
 		}
@@ -2575,10 +2589,13 @@ public partial class MainWindow : Window
 			settingsSaveStatus.Text = LocalTextExtension.Translate("Guardando ajustes…");
 		}
 
-		StackPanel panel = new StackPanel
-		{
-			Margin = new Thickness(22.0)
-		};
+		StackPanel NewSettingsPage() => new StackPanel { Margin = new Thickness(20, 16, 20, 20) };
+		var soundPage = NewSettingsPage();
+		var playbackPage = NewSettingsPage();
+		var lyricsPage = NewSettingsPage();
+		var appearancePage = NewSettingsPage();
+		var languagePage = NewSettingsPage();
+		var panel = soundPage;
 		var soundAnchor = new TextBlock
 		{
 			Text = LocalTextExtension.Translate("Ecualizador"),
@@ -2808,6 +2825,7 @@ public partial class MainWindow : Window
 		UpdateMode();
 		panel.Children.Add(exclusive);
 		panel.Children.Add(mode);
+		panel = playbackPage;
 		var playbackAnchor = new TextBlock
 		{
 			Text = LocalTextExtension.Translate("Reproducción"),
@@ -2856,12 +2874,23 @@ public partial class MainWindow : Window
 			SaveSettingsSoon();
 		});
 		AddPreference("Continuar con la siguiente canción", continueAfterTrack, enabled => continueAfterTrack = enabled);
+		AddPreference("Recordar posición de la pista", rememberPosition, enabled => rememberPosition = enabled);
+		var sleep = new System.Windows.Controls.Button
+		{
+			Content = LocalTextExtension.Translate("Temporizador de sueño"),
+			Margin = new Thickness(0, 14, 0, 0),
+			HorizontalAlignment = System.Windows.HorizontalAlignment.Left
+		};
+		sleep.Click += ShowSleepTimer;
+		panel.Children.Add(sleep);
+		panel = lyricsPage;
 		var lyricsAnchor = new TextBlock { Text = LocalTextExtension.Translate("Letras") };
 		panel.Children.Add(SettingsSection(lyricsAnchor, "Ajusta el tamaño y la sincronización de las letras."));
 		panel.Children.Add(CreateLyricSetting("Tamaño de las letras", .85, 1.35, .05, lyricScale, "P0",
 			value => { lyricScale = value; RefreshLyrics(); SaveSettingsSoon(); }));
 		panel.Children.Add(CreateLyricSetting("Ajuste de sincronización", -10, 10, .1, lyricOffset, "+0.0 s;-0.0 s;0.0 s",
 			value => { lyricOffset = value; RefreshLyrics(); SaveSettingsSoon(); }));
+		panel = appearancePage;
 		var appearanceAnchor = new TextBlock
 		{
 			Text = LocalTextExtension.Translate("Apariencia"),
@@ -2870,6 +2899,11 @@ public partial class MainWindow : Window
 			Margin = new Thickness(0.0, 20.0, 0.0, 4.0)
 		};
 		panel.Children.Add(SettingsSection(appearanceAnchor, "Personaliza el aspecto del reproductor."));
+		panel.Children.Add(CreateAppearanceProfiles(appearanceProfile, profile =>
+		{
+			ApplyAppearanceProfile(profile);
+			SaveSettingsSoon();
+		}));
 		panel.Children.Add(new TextBlock
 		{
 			Text = LocalTextExtension.Translate("Color de la aplicación"),
@@ -2902,18 +2936,7 @@ public partial class MainWindow : Window
 			animateSpectrum = enabled;
 			SpectrumView.Visibility = ((!enabled) ? Visibility.Collapsed : Visibility.Visible);
 		});
-		System.Windows.Controls.Button sleep = new System.Windows.Controls.Button
-		{
-			Content = LocalTextExtension.Translate("Temporizador de sueño"),
-			Margin = new Thickness(0.0, 14.0, 0.0, 0.0),
-			HorizontalAlignment = System.Windows.HorizontalAlignment.Left
-		};
-		sleep.Click += ShowSleepTimer;
-		panel.Children.Add(sleep);
-		AddPreference("Recordar posición de la pista", rememberPosition, (bool enabled) =>
-		{
-			rememberPosition = enabled;
-		});
+		panel = languagePage;
 		var languageAnchor = new TextBlock
 		{
 			Text = LocalTextExtension.Translate("Idioma de interfaz"),
@@ -2977,34 +3000,20 @@ public partial class MainWindow : Window
 		panel.Children.Add(button3);
 		var settingsScroll = new ScrollViewer
 		{
-			Content = new Border
-			{
-				Background = new SolidColorBrush(Color.FromArgb(0x24, 255, 255, 255)),
-				BorderBrush = new SolidColorBrush(Color.FromArgb(0x30, 255, 255, 255)),
-				BorderThickness = new Thickness(1),
-				CornerRadius = new CornerRadius(20),
-				Padding = new Thickness(20, 17, 20, 20),
-				Child = panel
-			},
-			Background = Brushes.Transparent,
-			BorderThickness = new Thickness(0),
+			Style = (Style)FindResource("LyricsScroll"),
 			VerticalScrollBarVisibility = ScrollBarVisibility.Auto
 		};
-		var settingsBackground = new LinearGradientBrush(
-			new GradientStopCollection
-			{
-				new GradientStop(Color.FromRgb(24, 26, 35), 0),
-				new GradientStop(Color.FromRgb(32, 30, 43), 1)
-			},
-			new Point(0, 0),
-			new Point(1, 1));
-		var settingsRoot = new Grid { Margin = new Thickness(18), Background = settingsBackground };
+		var settingsCard = new Border { Background = (Brush)FindResource("SettingsCard"),
+			BorderBrush = (Brush)FindResource("SettingsStroke"), BorderThickness = new Thickness(1),
+			CornerRadius = new CornerRadius(12), Child = settingsScroll };
+		var settingsBackground = (Brush)FindResource("SettingsBackground");
+		var settingsRoot = new Grid { Background = settingsBackground };
 		settingsRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 		settingsRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 		settingsRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(188) });
 		settingsRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-		var settingsHeader = new Grid { Margin = new Thickness(6, 2, 6, 16) };
+		var settingsHeader = new Grid { Margin = new Thickness(24, 20, 24, 16) };
 		settingsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 		settingsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 		settingsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -3030,15 +3039,8 @@ public partial class MainWindow : Window
 		var titleText = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
 		titleText.Children.Add(new TextBlock
 		{
-			Text = LocalTextExtension.Translate("CONFIGURACIÓN"),
-			FontSize = 9,
-			Foreground = (Brush)FindResource("AccentBrush"),
-			FontWeight = FontWeights.SemiBold
-		});
-		titleText.Children.Add(new TextBlock
-		{
-			Text = LocalTextExtension.Translate("Ajusta tu experiencia"),
-			FontSize = 21,
+			Text = LocalTextExtension.Translate("Configuración"),
+			FontSize = 24,
 			FontWeight = FontWeights.SemiBold,
 			Margin = new Thickness(0, 2, 0, 0)
 		});
@@ -3071,22 +3073,18 @@ public partial class MainWindow : Window
 			VerticalAlignment = VerticalAlignment.Top
 		};
 		closeSettings.Click += (_, _) => settingsWindow.Close();
+		AutomationProperties.SetName(closeSettings, LocalTextExtension.Translate("Cerrar"));
 		WindowChrome.SetIsHitTestVisibleInChrome(closeSettings, true);
 		Grid.SetColumn(closeSettings, 2);
 		settingsHeader.Children.Add(closeSettings);
 		Grid.SetColumnSpan(settingsHeader, 2);
 		settingsRoot.Children.Add(settingsHeader);
 
-		var navigation = new StackPanel { Margin = new Thickness(0, 0, 14, 0) };
-		navigation.Children.Add(new TextBlock
-		{
-			Text = LocalTextExtension.Translate("PREFERENCIAS"),
-			Foreground = (Brush)FindResource("Muted"),
-			FontSize = 9,
-			FontWeight = FontWeights.SemiBold,
-			Margin = new Thickness(12, 4, 0, 9)
-		});
-		void AddSettingsLink(string label, string glyph, Action navigate)
+		var navigation = new System.Windows.Controls.ListBox { Margin = new Thickness(18, 0, 14, 16),
+			Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+			Foreground = (Brush)FindResource("Ink") };
+		AutomationProperties.SetName(navigation, LocalTextExtension.Translate("Configuración"));
+		void AddSettingsLink(string label, string glyph, StackPanel page)
 		{
 			var content = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
 			content.Children.Add(new TextBlock
@@ -3099,27 +3097,27 @@ public partial class MainWindow : Window
 				Foreground = (Brush)FindResource("AccentBrush")
 			});
 			content.Children.Add(new TextBlock { Text = LocalTextExtension.Translate(label), VerticalAlignment = VerticalAlignment.Center });
-			var link = new System.Windows.Controls.Button
-			{
-				Content = content,
-				HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
-				Margin = new Thickness(0, 2, 0, 3),
-				Padding = new Thickness(12, 11, 8, 11),
-				Background = new SolidColorBrush(Color.FromArgb(0x18, 255, 255, 255))
-			};
-			link.Click += (_, _) => navigate();
-			navigation.Children.Add(link);
+			var link = new ListBoxItem { Content = content, Tag = page };
+			AutomationProperties.SetName(link, LocalTextExtension.Translate(label));
+			navigation.Items.Add(link);
 		}
-		AddSettingsLink("Sonido", "\uE767", () => soundAnchor.BringIntoView());
-		AddSettingsLink("Reproducción", "\uE768", () => playbackAnchor.BringIntoView());
-		AddSettingsLink("Letras", "\uE8BD", () => lyricsAnchor.BringIntoView());
-		AddSettingsLink("Apariencia", "\uE790", () => appearanceAnchor.BringIntoView());
-		AddSettingsLink("Idioma", "\uE774", () => languageAnchor.BringIntoView());
+		AddSettingsLink("Sonido", "\uE767", soundPage);
+		AddSettingsLink("Reproducción", "\uE768", playbackPage);
+		AddSettingsLink("Letras", "\uE8BD", lyricsPage);
+		AddSettingsLink("Apariencia", "\uE790", appearancePage);
+		AddSettingsLink("Idioma", "\uE774", languagePage);
+		navigation.SelectionChanged += (_, _) =>
+		{
+			settingsScroll.Content = (navigation.SelectedItem as ListBoxItem)?.Tag;
+			settingsScroll.ScrollToTop();
+		};
+		navigation.SelectedIndex = 0;
 		Grid.SetRow(navigation, 1);
 		settingsRoot.Children.Add(navigation);
-		Grid.SetColumn(settingsScroll, 1);
-		Grid.SetRow(settingsScroll, 1);
-		settingsRoot.Children.Add(settingsScroll);
+		Grid.SetColumn(settingsCard, 1);
+		Grid.SetRow(settingsCard, 1);
+		settingsCard.Margin = new Thickness(0, 0, 18, 18);
+		settingsRoot.Children.Add(settingsCard);
 		settingsWindow = new Window
 		{
 			Owner = this,
@@ -3164,7 +3162,7 @@ public partial class MainWindow : Window
 			string preview = Environment.GetEnvironmentVariable("PRISMA_SETTINGS_PREVIEW");
 			if (preview != null)
 			{
-				settingsWindow.ContentRendered += (object? _, EventArgs _) =>
+				settingsWindow.ContentRendered += async (object? _, EventArgs _) =>
 				{
 					FrameworkElement frameworkElement = (FrameworkElement)settingsWindow.Content;
 					RenderTargetBitmap renderTargetBitmap = new RenderTargetBitmap((int)frameworkElement.ActualWidth, (int)frameworkElement.ActualHeight, 96.0, 96.0, PixelFormats.Pbgra32);
@@ -3177,7 +3175,10 @@ public partial class MainWindow : Window
 					pngBitmapEncoder.Save(stream);
 					if (settingsScroll != null)
 					{
-						settingsScroll.ScrollToEnd();
+						navigation.SelectedIndex = 3;
+						if (!ReferenceEquals(settingsScroll.Content, appearancePage))
+							throw new InvalidOperationException("Settings navigation did not switch to Appearance.");
+						await Task.Delay(250);
 						settingsWindow.UpdateLayout();
 						RenderTargetBitmap renderTargetBitmap2 = new RenderTargetBitmap((int)frameworkElement.ActualWidth, (int)frameworkElement.ActualHeight, 96.0, 96.0, PixelFormats.Pbgra32);
 						renderTargetBitmap2.Render(frameworkElement);
@@ -3228,7 +3229,7 @@ public partial class MainWindow : Window
 		}
 		Border SettingsSection(TextBlock heading, string description)
 		{
-			heading.FontSize = 17;
+			heading.FontSize = 27;
 			heading.FontWeight = FontWeights.SemiBold;
 			heading.Margin = new Thickness(0);
 			StackPanel content = new StackPanel();
@@ -3237,17 +3238,16 @@ public partial class MainWindow : Window
 			{
 				Text = LocalTextExtension.Translate(description),
 				Foreground = (Brush)FindResource("Muted"),
-				FontSize = 11,
+				FontSize = 12,
+				TextWrapping = TextWrapping.Wrap,
 				Margin = new Thickness(0, 3, 0, 0)
 			});
 			return new Border
 			{
 				Margin = new Thickness(0, 0, 0, 14),
-				Padding = new Thickness(13, 11, 13, 11),
-				CornerRadius = new CornerRadius(13),
-				Background = new SolidColorBrush(Color.FromArgb(0x20, 255, 255, 255)),
-				BorderBrush = new SolidColorBrush(Color.FromArgb(0x25, 255, 255, 255)),
-				BorderThickness = new Thickness(1),
+				Padding = new Thickness(0, 2, 0, 10),
+				BorderBrush = (Brush)FindResource("SettingsStroke"),
+				BorderThickness = new Thickness(0, 0, 0, 1),
 				Child = content
 			};
 		}

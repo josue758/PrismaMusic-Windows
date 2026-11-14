@@ -1,6 +1,6 @@
 # Prisma Music para Windows
 
-**Versión Windows 0.37.0** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
+**Versión Windows 0.38.0** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
 
 [Historial completo de versiones Windows](CHANGELOG.md) · [Proyecto para macOS](https://github.com/josue758/PrismaMusic)
 

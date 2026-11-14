@@ -6,6 +6,27 @@
     <SolidColorBrush x:Key="Ink" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="Muted" Color="#B8FFFFFF"/>
     <SolidColorBrush x:Key="Panel" Color="#A82B2933"/>
+    <SolidColorBrush x:Key="SettingsBackground" Color="#191B22"/>
+    <SolidColorBrush x:Key="SettingsCard" Color="#23262F"/>
+    <SolidColorBrush x:Key="SettingsStroke" Color="#38FFFFFF"/>
+    <Style x:Key="AppearanceChoice" TargetType="RadioButton">
+      <Setter Property="Margin" Value="2,0,5,0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="Card" Padding="9" CornerRadius="8" Background="{StaticResource SettingsCard}"
+                    BorderBrush="{StaticResource SettingsStroke}" BorderThickness="1">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Card" Property="Background" Value="#30343E"/></Trigger>
+              <Trigger Property="IsChecked" Value="True"><Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Card" Property="BorderBrush" Value="White"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style TargetType="TextBlock"><Setter Property="Foreground" Value="{StaticResource Ink}"/></Style>
     <Style TargetType="ListBoxItem">
       <Setter Property="HorizontalContentAlignment" Value="Stretch"/>

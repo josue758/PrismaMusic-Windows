@@ -7,7 +7,7 @@
   </shell:WindowChrome.WindowChrome>
   <Grid x:Name="Shell" Background="Transparent" MouseMove="ShellMouseMove">
     <Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-    <Image Grid.RowSpan="3" Source="{Binding Source, ElementName=Cover}" Stretch="UniformToFill" Opacity=".14" IsHitTestVisible="False">
+    <Image x:Name="AmbientArtwork" Grid.RowSpan="3" Source="{Binding Source, ElementName=Cover}" Stretch="UniformToFill" Opacity=".14" IsHitTestVisible="False">
       <Image.Effect><BlurEffect Radius="86" KernelType="Gaussian"/></Image.Effect>
     </Image>
     <Border x:Name="ArtworkTint" Grid.RowSpan="3" IsHitTestVisible="False" Opacity=".76">
