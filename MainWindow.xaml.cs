@@ -115,7 +115,7 @@ public record Track(string Path, string Name, string Artist, string Album, strin
 public partial class MainWindow : Window
 {
 
-	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0, bool CompactRows = false, bool ShowTrackQuality = true, bool MiniAlwaysOnTop = true, bool FollowLyrics = true);
+	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0, bool CompactRows = false, bool ShowTrackQuality = true, bool MiniAlwaysOnTop = true, bool FollowLyrics = true, int AlbumSize = 1, bool AutoArtwork = true, bool AutoLyrics = false, bool KeepAwake = false);
 
 	private enum RepeatMode
 	{
@@ -342,6 +342,7 @@ public partial class MainWindow : Window
 		Closed += (object? _, EventArgs _) =>
 		{
 			mini?.Close();
+			UpdateAwakeRequest(false);
 			scanCancellation?.Cancel();
 			timer.Stop();
 			CancelPendingOpen();
@@ -395,6 +396,7 @@ public partial class MainWindow : Window
 		Sort.SelectedIndex = 0;
 		ready = true;
 		ApplyLibraryPresentation();
+		ApplyAlbumSize();
 		Shell.Background = DefaultShellBrush();
 		if (smokeTest)
 		{
@@ -1086,11 +1088,19 @@ public partial class MainWindow : Window
             ShowAudioOutputMenu(AudioOutputButton, new RoutedEventArgs());
             for (int attempt = 0; attempt < 50 && audioDevicePicker == null; attempt++) await Task.Delay(50);
             if (audioOutputPopup?.IsOpen != true || audioOutputSurface == null || audioDevicePicker is not { Items.Count: > 0 } ||
-                audioRatePicker is not { Items.Count: > 0 } || audioRatePicker.Items[0]?.ToString() !=
-                    LocalTextExtension.Translate("Automática · seguir la frecuencia de la pista"))
+                (!player.StrictDirect && (audioRatePicker is not { Items.Count: > 0 } || audioRatePicker.Items[0]?.ToString() !=
+                    LocalTextExtension.Translate("Automática · seguir la frecuencia de la pista"))))
                 throw new InvalidOperationException("The audio output panel did not expose device and exclusive-rate choices.");
             CaptureDesignPreview(audioOutputSurface, "PRISMA_AUDIO_MENU_PREVIEW");
             audioOutputPopup.IsOpen = false;
+            if (Environment.GetEnvironmentVariable("PRISMA_OUTPUT_FALLBACK_PROBE") != null)
+            {
+                player.OutputId = "{0.0.0.00000000}." + Guid.NewGuid().ToString("B");
+                await ReopenOutput();
+                if (!opened || player.ActiveOutputId == null || player.ActiveOutputId == player.OutputId)
+                    throw new InvalidOperationException($"Unavailable output did not fall back to the system device: {Status.Text}");
+                Console.WriteLine("Unavailable device fallback preserved the requested ID and exposed the actual endpoint.");
+            }
             Console.WriteLine("Audio output panel opened and exposed device and sample-rate choices.");
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
@@ -1789,6 +1799,7 @@ public partial class MainWindow : Window
 		if (collection != null)
 		{
 			Rows.ItemsSource = collection.Tracks.Select((Track track, int index) => new LibraryRow(albumPage ? $"{index + 1:00}  {track.Name}" : track.Name, track.Detail, new Track[1] { track })).ToArray();
+			UpdateEmptyLibrary();
 			return;
 		}
 		Dictionary<string, Track> lookup = library.Tracks.ToDictionary((Track t) => t.Path, StringComparer.OrdinalIgnoreCase);
@@ -1874,6 +1885,7 @@ public partial class MainWindow : Window
 				}
 			}
 		}
+		UpdateEmptyLibrary();
 	}
 
 	private static bool MatchesLibraryQuery(Track track, string[] query)
@@ -2108,6 +2120,7 @@ public partial class MainWindow : Window
 		goto IL_0274;
 		IL_0274:
 		SetLyrics(tuple.Item1);
+		await CompleteTrackPresentation(track);
 	}
 
 	private void SetLyrics(string text)
@@ -2192,6 +2205,7 @@ public partial class MainWindow : Window
 	private void SetPlaying(bool value)
 	{
 		playing = value;
+		UpdateAwakeRequest(value && keepAwake);
 		PlayButton.Content = (value ? "\uE769" : "\uE768");
 		string value2 = LocalTextExtension.Translate(value ? "Pausar" : "Reproducir");
 		AutomationProperties.SetName((DependencyObject)(object)PlayButton, value2);
@@ -2579,6 +2593,10 @@ public partial class MainWindow : Window
 			showTrackQuality = audioSettings.ShowTrackQuality;
 			miniAlwaysOnTop = audioSettings.MiniAlwaysOnTop;
 			followLyrics = audioSettings.FollowLyrics;
+			albumSize = Math.Clamp(audioSettings.AlbumSize, 0, 2);
+			autoArtwork = audioSettings.AutoArtwork;
+			autoLyrics = audioSettings.AutoLyrics;
+			keepAwake = audioSettings.KeepAwake;
 			repeat = (Enum.IsDefined(audioSettings.Repeat) ? audioSettings.Repeat : RepeatMode.Off);
 			MarkPlaybackToggle(ShuffleButton, shuffle);
 			UpdateRepeatButton();
@@ -2630,7 +2648,7 @@ public partial class MainWindow : Window
 		try
 		{
 			Directory.CreateDirectory(DataDirectory);
-			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics)));
+			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics, albumSize, autoArtwork, autoLyrics, keepAwake)));
 			System.IO.File.Move(AudioSettingsFile + ".tmp", AudioSettingsFile, overwrite: true);
 			return true;
 		}
@@ -2686,6 +2704,7 @@ public partial class MainWindow : Window
 		var appearancePage = NewSettingsPage();
 		var languagePage = NewSettingsPage();
 		var libraryPage = NewSettingsPage();
+		var visualizerPage = NewSettingsPage();
 		var panel = soundPage;
 		var soundAnchor = new TextBlock
 		{
@@ -2965,6 +2984,11 @@ public partial class MainWindow : Window
 			SaveSettingsSoon();
 		});
 		AddPreference("Continuar con la siguiente canción", continueAfterTrack, enabled => continueAfterTrack = enabled);
+		AddPreference("Evitar el reposo al reproducir", keepAwake, enabled =>
+		{
+			keepAwake = enabled;
+			UpdateAwakeRequest(playing && enabled);
+		});
 		AddPreference("Mantener el minirreproductor encima", miniAlwaysOnTop, enabled =>
 		{
 			miniAlwaysOnTop = enabled;
@@ -3003,6 +3027,8 @@ public partial class MainWindow : Window
 		}));
 		AddPreference("Filas compactas en la biblioteca", compactRows, enabled => { compactRows = enabled; ApplyLibraryPresentation(); });
 		AddPreference("Mostrar formato en la biblioteca y la barra", showTrackQuality, enabled => { showTrackQuality = enabled; ApplyLibraryPresentation(); });
+		AddOption(appearancePage, "Tamaño de las portadas", new[] { "Pequeño", "Mediano", "Grande" }, albumSize,
+			index => { albumSize = index; ApplyAlbumSize(); });
 		panel.Children.Add(new TextBlock
 		{
 			Text = LocalTextExtension.Translate("Color de la aplicación"),
@@ -3105,6 +3131,45 @@ public partial class MainWindow : Window
 		exportPlaylist.Click += ExportCurrentPlaylist;
 		AddLibraryAction("Biblioteca JSON", "Incluye las pistas, fuentes, listas y etiquetas editadas.", exportLibrary);
 		AddLibraryAction("Lista M3U8", "Incluye las pistas de la vista actual en el orden mostrado.", exportPlaylist);
+		panel = libraryPage;
+		AddPreference("Buscar carátulas automáticamente", autoArtwork, enabled => autoArtwork = enabled);
+		AddPreference("Buscar letras automáticamente", autoLyrics, enabled => autoLyrics = enabled);
+		libraryPage.Children.Add(new TextBlock { Text = T("La búsqueda automática usa el título y el artista para consultar los catálogos en línea."),
+			Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(9, 4, 0, 0) });
+		visualizerPage.Children.Add(SettingsSection(new TextBlock { Text = T("Visualizador") }, "Ajusta el movimiento del visualizador."));
+		string[] styles = { "bars", "mirror", "centered" };
+		AddOption(visualizerPage, "Estilo del visualizador", new[] { "Barras", "Espejo", "Centrado" },
+			Array.IndexOf(styles, visualizerStyle), index => { visualizerStyle = styles[index]; });
+		int[] rates = { 24, 30, 60 };
+		AddOption(visualizerPage, "Frecuencia de actualización", new[] { "24 FPS", "30 FPS", "60 FPS" },
+			Array.IndexOf(rates, visualizerFramesPerSecond), index =>
+			{
+				visualizerFramesPerSecond = rates[index];
+				if (visualizerTimer != null) visualizerTimer.Interval = TimeSpan.FromMilliseconds(1000d / rates[index]);
+			});
+		visualizerPage.Children.Add(CreateLyricSetting("Sensibilidad", .5, 2, .25, visualizerSensitivity, "0.00×",
+			value => { visualizerSensitivity = value; SaveSettingsSoon(); }));
+		panel = visualizerPage;
+		AddPreference("Espectro animado", animateSpectrum, enabled =>
+		{
+			animateSpectrum = enabled;
+			SpectrumView.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+		});
+
+		void AddOption(StackPanel page, string label, string[] values, int index, Action<int> change)
+		{
+			page.Children.Add(new TextBlock { Text = T(label), Margin = new Thickness(0, 10, 0, 4) });
+			var selector = new System.Windows.Controls.ComboBox { Style = (Style)FindResource("FilterCombo"),
+				ItemsSource = values.Select(T).ToArray(), SelectedIndex = index };
+			AutomationProperties.SetName(selector, T(label));
+			selector.SelectionChanged += (_, _) =>
+			{
+				if (selector.SelectedIndex < 0) return;
+				change(selector.SelectedIndex);
+				SaveSettingsSoon();
+			};
+			page.Children.Add(selector);
+		}
 
 		void AddLibraryAction(string heading, string description, System.Windows.Controls.Button button)
 		{
@@ -3232,6 +3297,7 @@ public partial class MainWindow : Window
 		AddSettingsLink("Apariencia", "\uE790", appearancePage);
 		AddSettingsLink("Idioma", "\uE774", languagePage);
 		AddSettingsLink("Biblioteca", "\uE8B7", libraryPage);
+		AddSettingsLink("Visualizador", "\uE9E9", visualizerPage);
 		navigation.SelectionChanged += (_, _) =>
 		{
 			settingsScroll.Content = (navigation.SelectedItem as ListBoxItem)?.Tag;

@@ -36,37 +36,6 @@ public partial class MainWindow
             SelectedIndex = accentPreset switch { "blue" => 1, "violet" => 2, _ => 0 },
             Style = (Style)FindResource("FilterCombo")
         };
-        var animatedSpectrum = new CheckBox
-        {
-            Style = (Style)FindResource("SettingsToggle"),
-            Content = T("Mostrar espectro animado"),
-            IsChecked = animateSpectrum,
-            Foreground = Brushes.White
-        };
-        var visualizerStylePicker = new ComboBox
-        {
-            ItemsSource = new[] { T("Barras"), T("Espejo"), T("Centrado") },
-            SelectedIndex = visualizerStyle switch { "bars" => 0, "centered" => 2, _ => 1 },
-            Style = (Style)FindResource("FilterCombo")
-        };
-        var frameRatePicker = new ComboBox
-        {
-            ItemsSource = new[] { "24 FPS", "30 FPS", "60 FPS" },
-            SelectedIndex = visualizerFramesPerSecond switch { 24 => 0, 60 => 2, _ => 1 },
-            Style = (Style)FindResource("FilterCombo")
-        };
-        var sensitivityPicker = new Slider
-        {
-            Style = (Style)FindResource("TransportSlider"),
-            Minimum = .5,
-            Maximum = 2,
-            Value = visualizerSensitivity,
-            TickFrequency = .25,
-            IsSnapToTickEnabled = true
-        };
-        var sensitivityValue = new TextBlock { Foreground = Brushes.Gainsboro };
-        sensitivityPicker.ValueChanged += (_, change) => sensitivityValue.Text = $"{change.NewValue:0.00}×";
-        sensitivityValue.Text = $"{sensitivityPicker.Value:0.00}×";
         string selectedFolder = null;
         var librarySelection = new TextBlock
         {
@@ -130,30 +99,6 @@ public partial class MainWindow
         pages[2].Children.Add(CreateAppearanceProfiles(chosenAppearance, profile => chosenAppearance = profile));
         pages[2].Children.Add(new TextBlock { Text = T("Color de la aplicación"), FontWeight = FontWeights.SemiBold });
         pages[2].Children.Add(accentChoices);
-        pages[2].Children.Add(animatedSpectrum);
-        pages[2].Children.Add(new TextBlock
-        {
-            Text = T("Estilo del visualizador"),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 12, 0, 4)
-        });
-        pages[2].Children.Add(visualizerStylePicker);
-        pages[2].Children.Add(new TextBlock
-        {
-            Text = T("Frecuencia de actualización"),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 12, 0, 4)
-        });
-        pages[2].Children.Add(frameRatePicker);
-        pages[2].Children.Add(new TextBlock
-        {
-            Text = T("Sensibilidad"),
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 12, 0, 4)
-        });
-        pages[2].Children.Add(sensitivityPicker);
-        pages[2].Children.Add(sensitivityValue);
-
         pages[3] = new StackPanel();
         pages[3].Children.Add(new TextBlock
         {
@@ -381,7 +326,7 @@ public partial class MainWindow
             {
                 T("Los menús estarán en el idioma que prefieras."),
                 T("Elige una carpeta local, de red o prueba las demos."),
-                T("Ajusta el color y el visualizador a tu gusto."),
+                T("Elige el aspecto de Prisma Music."),
                 T("Revisa tus opciones antes de entrar a tu biblioteca.")
             };
             stageTitle.Text = titles[currentStep];
@@ -453,11 +398,6 @@ public partial class MainWindow
         ApplyAppearanceProfile(chosenAppearance);
         if (accentChoices.SelectedIndex >= 0)
             ApplyAccentPreset(new[] { "artwork", "blue", "violet" }[accentChoices.SelectedIndex]);
-        animateSpectrum = animatedSpectrum.IsChecked == true;
-        SpectrumView.Visibility = animateSpectrum ? Visibility.Visible : Visibility.Collapsed;
-        visualizerStyle = visualizerStylePicker.SelectedIndex switch { 0 => "bars", 2 => "centered", _ => "mirror" };
-        visualizerFramesPerSecond = frameRatePicker.SelectedIndex switch { 0 => 24, 2 => 60, _ => 30 };
-        visualizerSensitivity = sensitivityPicker.Value;
         SaveAudioSettings();
         try
         {

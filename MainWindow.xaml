@@ -179,6 +179,7 @@
         </StackPanel>
         <TextBlock x:Name="LosslessNotice" DockPanel.Dock="Top" Visibility="Collapsed" Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8"/>
         <Border Background="{StaticResource SettingsBackground}" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="10" Padding="4">
+        <Grid>
         <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ContextMenuOpening="PrepareLibraryTagsMenu" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
           <ListBox.ContextMenu>
             <ContextMenu Style="{StaticResource PlayerMenu}">
@@ -209,8 +210,8 @@
               </DockPanel>
             </DataTemplate>
             <DataTemplate x:Key="GalleryCard">
-              <StackPanel Width="150" Margin="2,2,2,4">
-                <Border Height="150" CornerRadius="8" Background="#20FFFFFF" Margin="0,0,0,10">
+              <StackPanel Width="{DynamicResource GalleryTileSize}" Margin="2,2,2,4">
+                <Border Height="{DynamicResource GalleryTileSize}" CornerRadius="8" Background="#20FFFFFF" Margin="0,0,0,10">
                   <Grid ClipToBounds="True">
                     <local:ArtworkTile Caption="{Binding TileCaption}"/>
                     <Image Loaded="LoadGalleryCard" Stretch="UniformToFill"/>
@@ -236,6 +237,13 @@
           </ListBox.Style>
 
         </ListBox>
+        <StackPanel x:Name="EmptyLibraryView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="300" Margin="14">
+          <TextBlock Text="&#xE8D6;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="25" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/>
+          <TextBlock x:Name="EmptyLibraryTitle" FontSize="19" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" Margin="0,9,0,5"/>
+          <TextBlock x:Name="EmptyLibraryDetail" Foreground="{StaticResource Muted}" TextAlignment="Center" TextWrapping="Wrap"/>
+          <Button x:Name="EmptyLibraryAction" HorizontalAlignment="Center" Margin="0,12,0,0" Click="RunEmptyLibraryAction"/>
+        </StackPanel>
+        </Grid>
         </Border>
       </DockPanel>
       <Border x:Name="Listening" Grid.Column="2" Background="{StaticResource SettingsBackground}" BorderBrush="#27FFFFFF" BorderThickness="1" CornerRadius="12" Padding="16">
@@ -274,8 +282,8 @@
           <TextBlock x:Name="Artist" DockPanel.Dock="Top" Foreground="{StaticResource Muted}" FontSize="14" TextWrapping="Wrap" Margin="0,0,0,5"/>
           <TextBlock x:Name="AudioFormat" DockPanel.Dock="Top" Foreground="{DynamicResource AccentBrush}" FontSize="11" Margin="0,0,0,13" TextTrimming="CharacterEllipsis"/>
           <WrapPanel x:Name="ListeningActions" DockPanel.Dock="Top" Margin="0,0,0,8">
-            <Button Style="{StaticResource TransportIcon}" Content="&#xE8FD;" Click="Enqueue" AutomationProperties.Name="{local:LocalText Text=Añadir a la cola}" ToolTip="{local:LocalText Text=Añadir a la cola}"/>
-            <Button Style="{StaticResource TransportIcon}" Content="&#xE109;" Click="Playlist" AutomationProperties.Name="{local:LocalText Text=Añadir o quitar de la lista seleccionada}" ToolTip="{local:LocalText Text=Añadir o quitar de la lista seleccionada}"/>
+            <Button Content="{local:LocalText Text=＋ Cola}" Click="Enqueue" AutomationProperties.Name="{local:LocalText Text=Añadir a la cola}" ToolTip="{local:LocalText Text=Añadir a la cola}"/>
+            <Button Content="{local:LocalText Text=＋ Lista}" Click="Playlist" AutomationProperties.Name="{local:LocalText Text=Añadir o quitar de la lista seleccionada}" ToolTip="{local:LocalText Text=Añadir o quitar de la lista seleccionada}"/>
             <Button Style="{StaticResource TransportIcon}" Content="&#xE77B;" Click="ArtistProfile" AutomationProperties.Name="{local:LocalText Text=Ver perfil del artista}" ToolTip="{local:LocalText Text=Ver perfil del artista}"/>
             <Button Style="{StaticResource TransportIcon}" Content="&#xE946;" Click="Inspect" AutomationProperties.Name="{local:LocalText Text=Información del archivo}" ToolTip="{local:LocalText Text=Información del archivo}"/>
           </WrapPanel>

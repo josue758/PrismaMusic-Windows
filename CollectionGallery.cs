@@ -78,6 +78,7 @@ public partial class MainWindow
     {
         var bitmap = await Task.Run(() => ReadCollectionImage(page, artist, size));
         if (bitmap != null) return bitmap;
+        if (!autoArtwork || page.Tracks.All(IsDemo)) return null;
         if (artist)
         {
             try

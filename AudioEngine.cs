@@ -55,6 +55,8 @@ internal sealed class AudioEngine
     public static readonly int[] Frequencies = { 31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
     private float[] gains = new float[Frequencies.Length];
     public string OutputId { get; set; }
+    public string ActiveOutputId => output == null ? null : endpoint?.ID;
+    public string ActiveOutputName => output == null ? null : endpoint?.FriendlyName;
     public bool Exclusive { get; set; }
     public bool IsExclusive { get; private set; }
     public string OutputNotice { get; private set; }
@@ -157,8 +159,16 @@ internal sealed class AudioEngine
             try
             {
                 endpoint = OutputId == null ? devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia) : devices.GetDevice(OutputId);
+                if (endpoint.State != DeviceState.Active && OutputId != null && !strictDirect)
+                {
+                    endpoint.Dispose();
+                    endpoint = devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                    OutputNotice = "La salida seleccionada no está disponible. Se está usando la salida predeterminada.";
+                    allowExclusive = false;
+                }
             }
-            catch (System.Runtime.InteropServices.COMException) when (OutputId != null && !StrictDirect)
+            catch (Exception error) when (OutputId != null && !strictDirect &&
+                error is System.Runtime.InteropServices.COMException or ArgumentException)
             {
                 endpoint = devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
                 OutputNotice = "La salida seleccionada no está disponible. Se está usando la salida predeterminada.";

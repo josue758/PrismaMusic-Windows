@@ -109,14 +109,20 @@ public partial class MainWindow
                     await ApplyChanges();
                 };
                 section.Children.Add(audioDevicePicker);
-                if (snapshot.ActiveName != null) section.Children.Add(Note(snapshot.ActiveName));
+                string requestedName = options.FirstOrDefault(output => SameDevice(output.Id, player.OutputId))?.Name;
+                if (player.ActiveOutputName is string playingDevice)
+                    section.Children.Add(Note(LocalTextExtension.Format("Sonando en: {0}", playingDevice)));
+                else if (snapshot.ActiveName != null)
+                    section.Children.Add(Note(LocalTextExtension.Format("Dispositivo disponible: {0}", snapshot.ActiveName)));
+                if (player.ActiveOutputId != null && player.OutputId != null && !SameDevice(player.ActiveOutputId, player.OutputId))
+                    section.Children.Add(Note(LocalTextExtension.Format("Salida solicitada: {0}", requestedName)));
                 if (snapshot.Error != null) section.Children.Add(Note(snapshot.Error));
                 else if (snapshot.MissingDevice)
                     section.Children.Add(Note(T("La salida guardada no está disponible; se muestra la predeterminada.")));
             });
             if (snapshot.MixFormat != null)
             {
-                bool activeSignal = opened && player.OutputFormat != null && !snapshot.MissingDevice;
+                bool activeSignal = opened && player.ActiveOutputId != null && player.OutputFormat != null;
                 var format = activeSignal ? player.OutputFormat : snapshot.MixFormat;
                 Card(T(activeSignal ? "Señal de salida" : "Formato predeterminado de Windows"), section =>
                 {

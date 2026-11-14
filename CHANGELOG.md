@@ -2,6 +2,13 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.43.0
+
+- Añade estados vacíos con acciones, tres tamaños de portada y etiquetas visibles para Cola y Lista.
+- Simplifica Bienvenida y traslada estilo, FPS y sensibilidad del visualizador a Configuración.
+- Separa las búsquedas automáticas de carátulas y letras, y permite evitar el reposo durante la reproducción.
+- Muestra el dispositivo que reproduce el audio y la salida solicitada cuando difieren.
+
 ## 0.42.0
 
 - Rediseña la salida de audio como un panel con dispositivo, señal activa, modos WASAPI y frecuencias compatibles.
