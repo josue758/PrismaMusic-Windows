@@ -93,10 +93,18 @@ public record LibraryRow(string Name, string Detail, Track[] Tracks, string Foot
 			return TimeSpan.FromSeconds(Tracks[0].Seconds).ToString("m\\:ss");
 		}
 	}
+
+	public string FormatLabel => Tracks.Length == 1 ? Tracks[0].FormatLabel : "";
 }
 
-public record Track(string Path, string Name, string Artist, string Album, string AlbumArtist, string Genre, uint Year, uint Disc, uint Number, int Seconds)
+public record Track(string Path, string Name, string Artist, string Album, string AlbumArtist, string Genre, uint Year, uint Disc, uint Number, int Seconds,
+	string Codec = null, int SampleRate = 0, int BitDepth = 0)
 {
+	public bool IsLossless => Codec is "FLAC" or "ALAC" or "PCM";
+	public string FormatLabel => IsLossless && SampleRate > 0 && BitDepth > 0
+		? $"{Codec} · {BitDepth} bit / {SampleRate / 1000d:0.###} kHz"
+		: Codec ?? System.IO.Path.GetExtension(Path).TrimStart('.').ToUpperInvariant();
+
 	public string Detail => string.Join("  ·  ", new string[3]
 	{
 		Artist,
@@ -578,6 +586,36 @@ public partial class MainWindow : Window
 				throw new InvalidOperationException("Se esperaban tres demos legibles.");
 			}
 			Track track = demo.Tracks[0];
+			var verifiedLossless = track with { Codec = "FLAC", SampleRate = 96000, BitDepth = 24 };
+			library.Tracks = demo.Tracks.Select(item => item == track ? verifiedLossless : item).ToList();
+			RefreshFilters();
+			Navigation.SelectedItem = LosslessNavigation;
+			if (Rows.Items.Count != 1 || (Rows.Items[0] as LibraryRow)?.Tracks[0] != verifiedLossless)
+				throw new InvalidOperationException("Lossless view did not filter out compressed tracks.");
+			Search.Text = "orbita prisma";
+			if (Rows.Items.Count != 1) throw new InvalidOperationException("Library search did not match multiple accent-insensitive terms.");
+			Search.Text = "orbita incorrect";
+			if (Rows.Items.Count != 0) throw new InvalidOperationException("Library search did not require all terms.");
+			Search.Clear();
+			ArtistFilter.SelectedItem = verifiedLossless.Artist;
+			if (Rows.Items.Count != 1) throw new InvalidOperationException("Artist filter did not retain the matching track.");
+			ArtistFilter.SelectedItem = demo.Tracks[1].Artist;
+			if (Rows.Items.Count != 0) throw new InvalidOperationException("Artist filter did not combine with Lossless.");
+			ArtistFilter.SelectedIndex = 0;
+			if (Environment.GetEnvironmentVariable("PRISMA_LOSSLESS_PREVIEW") != null &&
+				Environment.GetEnvironmentVariable("PRISMA_LOSSLESS_FIXTURE") is string losslessFixture)
+			{
+				var scannedLossless = LibraryScanner.ReadFolder(losslessFixture).Tracks.Single(item => item.Codec == "FLAC");
+				library.Tracks = demo.Tracks.Append(scannedLossless).ToList();
+				RefreshFilters();
+				RefreshRows();
+				await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+				CaptureDesignPreview(Shell, "PRISMA_LOSSLESS_PREVIEW");
+			}
+			Navigation.SelectedIndex = 0;
+			library.Tracks = demo.Tracks;
+			RefreshFilters();
+			Console.WriteLine("Lossless navigation, format metadata and combined artist/search filters passed.");
 			string environmentVariable7 = Environment.GetEnvironmentVariable("PRISMA_PREVIEW_PATH");
 			if (!string.IsNullOrEmpty(environmentVariable7))
 			{
@@ -587,6 +625,7 @@ public partial class MainWindow : Window
 				Now.Text = track.Name;
 				Cover.Tag = track.Album;
 				Artist.Text = track.Detail;
+				AudioFormat.Text = track.FormatLabel;
 				SetArtworkAccent(ArtworkTile.AccentForCaption(track.Album, windowsAccent));
 				UpdateLayout();
 				RenderTargetBitmap renderTargetBitmap2 = new RenderTargetBitmap((int)ActualWidth, (int)ActualHeight, 96.0, 96.0, PixelFormats.Pbgra32);
@@ -1667,6 +1706,12 @@ public partial class MainWindow : Window
 
 	private void RefreshFilters()
 	{
+		string artist = ArtistFilter.SelectedItem as string;
+		ArtistFilter.ItemsSource = new[] { LocalTextExtension.Translate("Todos los artistas") }.Concat(library.Tracks
+			.Select(track => track.Artist).Where(name => !string.IsNullOrWhiteSpace(name))
+			.Distinct(StringComparer.CurrentCultureIgnoreCase).OrderBy(name => name)).ToArray();
+		ArtistFilter.SelectedItem = artist;
+		if (ArtistFilter.SelectedIndex < 0) ArtistFilter.SelectedIndex = 0;
 		string selectedItem = Genre.SelectedItem as string;
 		string selectedItem2 = Year.SelectedItem as string;
 		Genre.ItemsSource = new string[1] { LocalTextExtension.Translate("Todos los géneros") }.Concat(from g in (from t in library.Tracks
@@ -1743,6 +1788,7 @@ public partial class MainWindow : Window
 		GalleryPager.Visibility = Visibility.Collapsed;
 		QueueTools.Visibility = ((Navigation.SelectedIndex != 4) ? Visibility.Collapsed : Visibility.Visible);
 		PlaylistPicker.Visibility = ((Navigation.SelectedIndex != 6) ? Visibility.Collapsed : Visibility.Visible);
+		LosslessNotice.Visibility = Visibility.Collapsed;
 		BackToCollection.Visibility = ((collection == null) ? Visibility.Collapsed : Visibility.Visible);
 		if (collection != null)
 		{
@@ -1750,6 +1796,7 @@ public partial class MainWindow : Window
 			return;
 		}
 		Dictionary<string, Track> lookup = library.Tracks.ToDictionary((Track t) => t.Path, StringComparer.OrdinalIgnoreCase);
+		bool losslessView = ReferenceEquals(Navigation.SelectedItem, LosslessNavigation);
 		IEnumerable<Track> source = Navigation.SelectedIndex switch
 		{
 			3 => library.Tracks.Where((Track t) => library.Favorites.Contains(t.Path)), 
@@ -1760,12 +1807,16 @@ public partial class MainWindow : Window
 				select lookup[path], 
 			_ => library.Tracks, 
 		};
+		if (losslessView) source = source.Where(track => track.IsLossless);
 		if (selectedLibrarySource != null)
 		{
 			source = source.Where(track => IsTrackInSource(track.Path, selectedLibrarySource));
 		}
-		string query = Search.Text.Trim();
-		source = source.Where((Track t) => (Genre.SelectedIndex <= 0 || t.Genre.Equals((string)Genre.SelectedItem, StringComparison.CurrentCultureIgnoreCase)) && (Year.SelectedIndex <= 0 || t.Year.ToString() == (string)Year.SelectedItem) && (query.Length == 0 || (t.Name + " " + t.Detail + " " + t.Genre).Contains(query, StringComparison.CurrentCultureIgnoreCase)));
+		string[] query = Search.Text.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+		source = source.Where(t => (Genre.SelectedIndex <= 0 || t.Genre.Equals((string)Genre.SelectedItem, StringComparison.CurrentCultureIgnoreCase))
+			&& (Year.SelectedIndex <= 0 || t.Year.ToString() == (string)Year.SelectedItem)
+			&& (ArtistFilter.SelectedIndex <= 0 || string.Equals(t.Artist, ArtistFilter.SelectedItem as string, StringComparison.CurrentCultureIgnoreCase))
+			&& MatchesLibraryQuery(t, query));
 		if (Navigation.SelectedIndex == 1)
 		{
 			var source2 = from t in source
@@ -1800,7 +1851,7 @@ public partial class MainWindow : Window
 		}
 		else
 		{
-			if (Navigation.SelectedIndex < 4)
+			if (Navigation.SelectedIndex < 4 || losslessView)
 			{
 				source = Sort.SelectedIndex switch
 				{
@@ -1810,11 +1861,31 @@ public partial class MainWindow : Window
 					2 => from t in source
 						orderby t.Year descending, t.Name
 						select t, 
+					3 => source.OrderBy(t => t.Album).ThenBy(t => t.Disc).ThenBy(t => t.Number).ThenBy(t => t.Name),
 					_ => source.OrderBy((Track t) => t.Name), 
 				};
 			}
 			Rows.ItemsSource = source.Select((Track t) => new LibraryRow(t.Name, t.Detail, new Track[1] { t })).ToArray();
+			if (losslessView)
+			{
+				CollectionCount.Text = Rows.Items.Count == 1
+					? LocalTextExtension.Translate("1 pista sin pérdida")
+					: LocalTextExtension.Format("{0:N0} pistas sin pérdida", Rows.Items.Count);
+				if (Rows.Items.Count == 0)
+				{
+					LosslessNotice.Text = LocalTextExtension.Translate("No hay pistas sin pérdida en esta vista. Actualiza la biblioteca para identificar el formato de los archivos importados anteriormente.");
+					LosslessNotice.Visibility = Visibility.Visible;
+				}
+			}
 		}
+	}
+
+	private static bool MatchesLibraryQuery(Track track, string[] query)
+	{
+		if (query.Length == 0) return true;
+		string searchable = $"{track.Name} {track.Detail} {track.AlbumArtist} {track.Genre} {track.FormatLabel}";
+		return query.All(word => CultureInfo.CurrentCulture.CompareInfo.IndexOf(searchable, word,
+			CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0);
 	}
 
 	private void Activate(object sender, MouseButtonEventArgs args)

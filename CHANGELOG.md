@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.39.0
+
+- Rediseña la biblioteca con superficies más neutras, una jerarquía de lectura más clara y un indicador de formato por canción.
+- Añade la vista Sin pérdida de macOS para pistas FLAC, ALAC y PCM identificadas al escanear. Usa Actualizar biblioteca para completar los formatos de archivos importados antes de esta versión.
+- Combina filtros por artista, género y año, permite buscar varias palabras sin exigir tildes y añade el orden por álbum.
+
 ## 0.38.0
 
 - Simplifica Bienvenida con pasos claros, un resumen y tarjetas de apariencia.

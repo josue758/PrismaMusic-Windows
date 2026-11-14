@@ -19,7 +19,7 @@ public partial class MainWindow
         bool detail = page != null;
         CollectionArtTile.Visibility = CollectionKind.Visibility = CollectionActions.Visibility =
             detail ? Visibility.Visible : Visibility.Collapsed;
-        Genre.Visibility = Year.Visibility = Sort.Visibility = detail ? Visibility.Collapsed : Visibility.Visible;
+        ArtistFilter.Visibility = Genre.Visibility = Year.Visibility = Sort.Visibility = detail ? Visibility.Collapsed : Visibility.Visible;
         OpenRelatedAlbum.Visibility = detail && !albumPage ? Visibility.Visible : Visibility.Collapsed;
         OpenRelatedArtist.Visibility = detail && albumPage ? Visibility.Visible : Visibility.Collapsed;
         LibraryHeader.Background = detail ? CollectionHeaderBrush : Brushes.Transparent;

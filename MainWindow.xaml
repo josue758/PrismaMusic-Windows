@@ -51,15 +51,14 @@
     </Grid>
     <Grid x:Name="Workspace" Grid.Row="1" Margin="18,4,18,8">
       <Grid.ColumnDefinitions><ColumnDefinition x:Name="NavigationColumn" Width="210"/><ColumnDefinition Width="*"/><ColumnDefinition x:Name="ListeningColumn" Width="330"/></Grid.ColumnDefinitions>
-      <Border Padding="8,10,10,10" Background="#20FFFFFF" BorderBrush="#28FFFFFF" BorderThickness="1" CornerRadius="22">
+      <Border Padding="8,10,10,10" Background="#D21C1E26" BorderBrush="#24FFFFFF" BorderThickness="1" CornerRadius="12">
         <DockPanel>
-          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10,8,0,28">
-            <Border Background="#1EFFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" Width="40" Height="40" CornerRadius="14">
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10,8,0,20">
+            <Border Background="#1EFFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" Width="36" Height="36" CornerRadius="9">
               <TextBlock Text="&#xE8D6;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <StackPanel VerticalAlignment="Center" Margin="11,0,0,0">
-              <TextBlock x:Name="BrandTitle" Text="PRISMA" FontWeight="Bold" FontSize="15"/>
-              <TextBlock Text="MUSIC PLAYER" FontSize="9" Foreground="{StaticResource Muted}" Margin="0,2,0,0"/>
+              <TextBlock x:Name="BrandTitle" Text="Prisma Music" FontWeight="SemiBold" FontSize="15"/>
             </StackPanel>
           </StackPanel>
           <StackPanel x:Name="LibraryCommands" DockPanel.Dock="Bottom" Margin="4,10,4,2">
@@ -91,6 +90,7 @@
           <ListBox ItemContainerStyle="{StaticResource NavigationItem}" x:Name="Navigation" AutomationProperties.Name="{local:LocalText Text=Secciones de biblioteca}" SelectionChanged="Navigate" Background="Transparent" Foreground="White" BorderThickness="0">
             <ListBoxItem Tag="&#xE8D6;" Content="{local:LocalText Text=Canciones}"/><ListBoxItem Tag="&#xE93C;" Content="{local:LocalText Text=Álbumes}"/><ListBoxItem Tag="&#xE716;" Content="{local:LocalText Text=Artistas}"/>
             <ListBoxItem Tag="&#xEB51;" Content="{local:LocalText Text=Favoritos}"/><ListBoxItem Tag="&#xE8FD;" Content="{local:LocalText Text=Cola}"/><ListBoxItem Tag="&#xE81C;" Content="{local:LocalText Text=Historial}"/><ListBoxItem Tag="&#xE93F;" Content="{local:LocalText Text=Listas}"/>
+            <ListBoxItem x:Name="LosslessNavigation" Tag="&#xE9E9;" Content="{local:LocalText Text=Sin pérdida}"/>
           </ListBox>
         </DockPanel>
       </Border>
@@ -110,7 +110,6 @@
                     AutomationProperties.Name="{local:LocalText Text=Volver a la colección}" ToolTip="{local:LocalText Text=Volver a la colección}"/>
             <StackPanel VerticalAlignment="Center">
               <TextBlock x:Name="CollectionKind" FontSize="11" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" Visibility="Collapsed"/>
-              <TextBlock Text="{local:LocalText Text=TU ESPACIO MUSICAL}" Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="Bold" Margin="0,0,0,6"/>
               <TextBlock x:Name="Heading" Text="{local:LocalText Text=Canciones}" FontSize="38" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
               <TextBlock x:Name="CollectionCount" Foreground="{StaticResource Muted}" FontSize="13" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
               <WrapPanel x:Name="CollectionActions" Visibility="Collapsed" Margin="0,12,0,0">
@@ -120,8 +119,8 @@
             </StackPanel>
           </DockPanel>
         </Border>
-        <Grid DockPanel.Dock="Top" Margin="0,0,0,13">
-          <TextBox x:Name="Search" Style="{StaticResource LibrarySearch}" Height="44" Padding="42,0,14,0" Background="#1AFFFFFF" Foreground="#FFFFFF" CaretBrush="White" BorderBrush="#2AFFFFFF" TextChanged="Filter" ToolTip="{local:LocalText Text=Buscar canción\, artista\, álbum\, género o año}" AutomationProperties.Name="{local:LocalText Text=Buscar música}"/>
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
+          <TextBox x:Name="Search" Style="{StaticResource LibrarySearch}" Height="40" Padding="36,0,14,0" Background="#D9232630" Foreground="#FFFFFF" CaretBrush="White" BorderBrush="#2AFFFFFF" TextChanged="Filter" ToolTip="{local:LocalText Text=Buscar canción\, artista\, álbum\, género o año}" AutomationProperties.Name="{local:LocalText Text=Buscar música}"/>
           <TextBlock IsHitTestVisible="False" Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="#C5FFFFFF" VerticalAlignment="Center" Margin="12,0,0,0"/>
           <TextBlock IsHitTestVisible="False" Text="{local:LocalText Text=Buscar música}" Foreground="#C5FFFFFF" VerticalAlignment="Center" Margin="36,0,0,0">
             <TextBlock.Style><Style TargetType="TextBlock">
@@ -130,11 +129,12 @@
             </Style></TextBlock.Style>
           </TextBlock>
         </Grid>
-        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,13"><ComboBox Style="{StaticResource FilterCombo}" x:Name="PlaylistPicker" Width="145" Margin="0,0,6,0" Visibility="Collapsed" SelectionChanged="SelectPlaylist"/><Button x:Name="OpenRelatedArtist" Content="{local:LocalText Text=Ver artista}" Click="BrowseRelatedArtist" Visibility="Collapsed"/><Button x:Name="OpenRelatedAlbum" Content="{local:LocalText Text=Ver álbum}" Click="BrowseRelatedAlbum" Visibility="Collapsed"/>
-          <ComboBox Style="{StaticResource FilterCombo}" x:Name="Genre" Width="167" Margin="0,0,6,0" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Género}"/>
-          <ComboBox Style="{StaticResource FilterCombo}" x:Name="Year" Width="142" Margin="0,0,6,0" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Año}"/>
-          <ComboBox Style="{StaticResource FilterCombo}" x:Name="Sort" Width="115" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Orden}">
-            <ComboBoxItem Content="{local:LocalText Text=Nombre}"/><ComboBoxItem Content="{local:LocalText Text=Artista}"/><ComboBoxItem Content="{local:LocalText Text=Año}"/>
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,6"><ComboBox Style="{StaticResource FilterCombo}" x:Name="PlaylistPicker" Width="145" Margin="0,0,6,6" Visibility="Collapsed" SelectionChanged="SelectPlaylist"/><Button x:Name="OpenRelatedArtist" Content="{local:LocalText Text=Ver artista}" Click="BrowseRelatedArtist" Visibility="Collapsed"/><Button x:Name="OpenRelatedAlbum" Content="{local:LocalText Text=Ver álbum}" Click="BrowseRelatedAlbum" Visibility="Collapsed"/>
+          <ComboBox Style="{StaticResource FilterCombo}" x:Name="ArtistFilter" Width="146" Margin="0,0,6,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Artista}"/>
+          <ComboBox Style="{StaticResource FilterCombo}" x:Name="Genre" Width="165" Margin="0,0,6,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Género}"/>
+          <ComboBox Style="{StaticResource FilterCombo}" x:Name="Year" Width="139" Margin="0,0,6,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Año}"/>
+          <ComboBox Style="{StaticResource FilterCombo}" x:Name="Sort" Width="110" Margin="0,0,0,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Orden}">
+            <ComboBoxItem Content="{local:LocalText Text=Nombre}"/><ComboBoxItem Content="{local:LocalText Text=Artista}"/><ComboBoxItem Content="{local:LocalText Text=Año}"/><ComboBoxItem Content="{local:LocalText Text=Álbum}"/>
           </ComboBox>
         </WrapPanel>
                 <StackPanel x:Name="QueueTools" DockPanel.Dock="Top" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,0,8">
@@ -152,6 +152,8 @@
           <TextBlock x:Name="GalleryPageLabel" Margin="8,0,14,0" VerticalAlignment="Center"/>
           <Button x:Name="GalleryNext" AutomationProperties.Name="{local:LocalText Text=Siguiente}" Content="›" Click="NextGalleryPage" ToolTip="{local:LocalText Text=Siguiente}"/>
         </StackPanel>
+        <TextBlock x:Name="LosslessNotice" DockPanel.Dock="Top" Visibility="Collapsed" Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8"/>
+        <Border Background="#C51D2029" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="10" Padding="4">
         <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ContextMenuOpening="PrepareLibraryTagsMenu" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
           <ListBox.ContextMenu>
             <ContextMenu Style="{StaticResource PlayerMenu}">
@@ -161,7 +163,7 @@
             </ContextMenu>
           </ListBox.ContextMenu>
           <ListBox.Resources>
-<DataTemplate x:Key="SongRow">
+            <DataTemplate x:Key="SongRow">
               <DockPanel Margin="2,2">
                 <Border DockPanel.Dock="Left" Width="42" Height="42" CornerRadius="8" Background="#18FFFFFF" Margin="0,0,12,0">
                   <Grid ClipToBounds="True">
@@ -170,9 +172,11 @@
                   </Grid>
                 </Border>
                 <TextBlock DockPanel.Dock="Right" Text="{Binding DurationLabel}" Foreground="{StaticResource Muted}" Width="42" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,3,0"/>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding FormatLabel}" Foreground="{StaticResource Muted}" MaxWidth="145"
+                           TextTrimming="CharacterEllipsis" FontSize="11" VerticalAlignment="Center" Margin="10,0,4,0"/>
                 <StackPanel VerticalAlignment="Center">
-                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                <TextBlock Text="{Binding Detail}" Foreground="#C5FFFFFF" TextTrimming="CharacterEllipsis" FontSize="12" Margin="0,3,0,0"/>
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock Text="{Binding Detail}" Foreground="#C5FFFFFF" TextTrimming="CharacterEllipsis" FontSize="12" Margin="0,3,0,0"/>
                 </StackPanel>
               </DockPanel>
             </DataTemplate>
@@ -204,12 +208,12 @@
           </ListBox.Style>
 
         </ListBox>
+        </Border>
       </DockPanel>
-      <Border x:Name="Listening" Grid.Column="2" Background="#24FFFFFF" BorderBrush="#34FFFFFF" BorderThickness="1" CornerRadius="24" Padding="18">
+      <Border x:Name="Listening" Grid.Column="2" Background="#D321232D" BorderBrush="#27FFFFFF" BorderThickness="1" CornerRadius="12" Padding="16">
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Margin="0,1,0,16">
-            <TextBlock Text="{local:LocalText Text=REPRODUCIENDO AHORA}" Foreground="{DynamicResource AccentBrush}" FontSize="10" FontWeight="Bold"/>
-            <TextBlock Text="{local:LocalText Text=Tu sesión}" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,3,0,0"/>
+            <TextBlock Text="{local:LocalText Text=Reproduciendo ahora}" Foreground="{StaticResource Ink}" FontSize="13" FontWeight="SemiBold"/>
           </StackPanel>
           <Border x:Name="ArtPanel" DockPanel.Dock="Top" Height="270" CornerRadius="18" Background="#14FFFFFF" ClipToBounds="True">
             <Grid ClipToBounds="True">
