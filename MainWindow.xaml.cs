@@ -1,0 +1,573 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+
+namespace PrismaMusic;
+
+public record Track(string Path, string Name, string Artist, string Album, string AlbumArtist,
+    string Genre, uint Year, uint Disc, uint Number, int Seconds)
+{
+    public string Detail => string.Join("  ·  ", new[] { Artist, Album, Year == 0 ? "" : Year.ToString() }.Where(x => x.Length > 0));
+}
+
+public record LibraryRow(string Name, string Detail, Track[] Tracks);
+
+public sealed class Library
+{
+    public List<string> Folders { get; set; } = new();
+    public List<Track> Tracks { get; set; } = new();
+    public HashSet<string> Favorites { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<string> Playlist { get; set; } = new();
+    public List<string> History { get; set; } = new();
+}
+
+public partial class MainWindow : Window
+{
+    private static readonly string DataDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PrismaMusic.Windows");
+    private static readonly string LibraryFile = Path.Combine(DataDirectory, "library.json");
+    private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
+        { ".mp3", ".wav", ".flac", ".m4a", ".aac", ".wma", ".aiff", ".aif", ".ogg", ".opus" };
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(12) };
+    private readonly MediaPlayer player = new();
+    private readonly Queue<Track> queue = new();
+    private readonly Stack<Track> previous = new();
+    private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(200) };
+    private Library library = new();
+    private Track current;
+    private Track[] context = Array.Empty<Track>();
+    private bool ready, scanning, playing, opened, updatingSeek;
+    private WindowState previousWindowState;
+    private (double Time, string Text)[] lyricLines = Array.Empty<(double, string)>();
+    private Window mini;
+    private TextBlock miniTitle;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        try
+        {
+            if (File.Exists(LibraryFile))
+                library = JsonSerializer.Deserialize<Library>(File.ReadAllText(LibraryFile)) ?? new Library();
+        }
+        catch (Exception error) { Status.Text = "No se pudo leer la biblioteca. " + error.Message; }
+
+        player.Volume = Volume.Value;
+        player.MediaOpened += (_, _) => { opened = true; Tick(); };
+        player.MediaEnded += (_, _) => Advance();
+        player.MediaFailed += (_, e) =>
+        {
+            SetPlaying(false);
+            Status.Text = "Windows no pudo reproducir el archivo. " + e.ErrorException?.Message;
+        };
+        timer.Tick += (_, _) => Tick();
+        timer.Start();
+        Closed += (_, _) => { timer.Stop(); player.Close(); };
+        SourceInitialized += (_, _) => EnableDarkTitleBar();
+        Navigation.SelectedIndex = 0;
+        Sort.SelectedIndex = 0;
+        ready = true;
+        if (Environment.GetCommandLineArgs().Contains("--smoke-test"))
+            Loaded += async (_, _) => await SmokeTest();
+        RefreshFilters();
+        RefreshRows();
+    }
+
+    private async Task SmokeTest()
+    {
+        try
+        {
+            var demo = await Task.Run(() => ReadFolder(Path.Combine(AppContext.BaseDirectory, "Demo")));
+            if (demo.Errors != 0 || demo.Tracks.Count != 3)
+                throw new InvalidOperationException("Se esperaban tres demos legibles.");
+            var track = demo.Tracks[0];
+            player.Volume = 0;
+            player.Open(new Uri(track.Path));
+            player.Play();
+            for (int retry = 0; retry < 40 && player.Position.TotalMilliseconds < 300; retry++)
+                await Task.Delay(250);
+            if (!opened || player.Position.TotalMilliseconds < 300)
+                throw new InvalidOperationException("No avanzó la reproducción de la demo.");
+            Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
+            System.Windows.Application.Current.Shutdown(0);
+        }
+        catch (Exception error)
+        {
+            Console.Error.WriteLine(error);
+            System.Windows.Application.Current.Shutdown(1);
+        }
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+
+    private void EnableDarkTitleBar()
+    {
+        int enabled = 1;
+        DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 20, ref enabled, sizeof(int));
+    }
+
+    private void Save()
+    {
+        try
+        {
+            Directory.CreateDirectory(DataDirectory);
+            File.WriteAllText(LibraryFile + ".tmp", JsonSerializer.Serialize(library));
+            File.Move(LibraryFile + ".tmp", LibraryFile, true);
+        }
+        catch (Exception error) { Status.Text = "No se guardó la biblioteca. " + error.Message; }
+    }
+
+    private async void AddFolder(object sender, RoutedEventArgs args)
+    {
+        if (scanning) return;
+        using var picker = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = "Elige una carpeta local o una carpeta compartida SMB",
+            ShowNewFolderButton = false,
+            UseDescriptionForTitle = true
+        };
+        if (picker.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            await Scan(new[] { picker.SelectedPath }, true);
+    }
+
+    private async void AddDemos(object sender, RoutedEventArgs args) =>
+        await Scan(new[] { Path.Combine(AppContext.BaseDirectory, "Demo") }, true);
+
+    private async void Rescan(object sender, RoutedEventArgs args) =>
+        await Scan(library.Folders.ToArray(), false);
+
+    private async Task Scan(string[] folders, bool add)
+    {
+        if (scanning || folders.Length == 0) return;
+        scanning = true;
+        Status.Text = "Leyendo carpetas…";
+        var indexed = library.Tracks.ToDictionary(t => t.Path, StringComparer.OrdinalIgnoreCase);
+        var errors = new List<string>();
+        try
+        {
+            foreach (string folder in folders)
+            {
+                try
+                {
+                    var result = await Task.Run(() => ReadFolder(folder));
+                    foreach (var track in result.Tracks) indexed[track.Path] = track;
+                    if (result.Errors == 0)
+                    {
+                        var seen = result.Tracks.Select(t => t.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                        string prefix = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
+                        foreach (string path in indexed.Keys.Where(path =>
+                            path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && !seen.Contains(path)).ToArray())
+                            indexed.Remove(path);
+                    }
+                    else errors.Add($"{result.Errors} archivos con errores en {folder}");
+                    if (add && !library.Folders.Contains(folder, StringComparer.OrdinalIgnoreCase))
+                        library.Folders.Add(folder);
+                }
+                catch (Exception error) { errors.Add(error.Message); }
+            }
+            library.Tracks = indexed.Values.ToList();
+            RefreshFilters();
+            RefreshRows();
+            Status.Text = errors.Count == 0
+                ? $"{indexed.Count:N0} canciones en la biblioteca"
+                : $"Escaneo parcial. Se conservaron las referencias de las carpetas afectadas. {errors[0]}";
+            Save();
+        }
+        finally { scanning = false; }
+    }
+
+    private static (List<Track> Tracks, int Errors) ReadFolder(string folder)
+    {
+        var tracks = new List<Track>();
+        int errors = 0;
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = false,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+        foreach (string path in Directory.EnumerateFiles(folder, "*", options))
+        {
+            if (!Extensions.Contains(Path.GetExtension(path))) continue;
+            try
+            {
+                using var file = TagLib.File.Create(path);
+                var tag = file.Tag;
+                string name = string.IsNullOrWhiteSpace(tag.Title) ? Path.GetFileNameWithoutExtension(path) : tag.Title;
+                tracks.Add(new Track(path, name, tag.FirstPerformer ?? "Artista desconocido",
+                    tag.Album ?? "Sin álbum", tag.FirstAlbumArtist ?? "", tag.FirstGenre ?? "",
+                    tag.Year, tag.Disc, tag.Track, (int)file.Properties.Duration.TotalSeconds));
+            }
+            catch (Exception) { errors++; }
+        }
+        return (tracks, errors);
+    }
+
+    private void RefreshFilters()
+    {
+        string genre = Genre.SelectedItem as string;
+        string year = Year.SelectedItem as string;
+        Genre.ItemsSource = new[] { "Todos los géneros" }.Concat(library.Tracks.Select(t => t.Genre)
+            .Where(g => g.Length > 0).Distinct(StringComparer.CurrentCultureIgnoreCase).OrderBy(g => g)).ToArray();
+        Year.ItemsSource = new[] { "Todos los años" }.Concat(library.Tracks.Select(t => t.Year)
+            .Where(y => y > 0).Distinct().OrderByDescending(y => y).Select(y => y.ToString())).ToArray();
+        Genre.SelectedItem = genre;
+        Year.SelectedItem = year;
+        if (Genre.SelectedIndex < 0) Genre.SelectedIndex = 0;
+        if (Year.SelectedIndex < 0) Year.SelectedIndex = 0;
+    }
+
+    private void Navigate(object sender, SelectionChangedEventArgs args)
+    {
+        if (!ready) return;
+        Heading.Text = (Navigation.SelectedItem as ListBoxItem)?.Content?.ToString() ?? "Canciones";
+        RefreshRows();
+    }
+
+    private void Filter(object sender, RoutedEventArgs args) { if (ready) RefreshRows(); }
+
+    private void RefreshRows()
+    {
+        var lookup = library.Tracks.ToDictionary(t => t.Path, StringComparer.OrdinalIgnoreCase);
+        IEnumerable<Track> tracks = Navigation.SelectedIndex switch
+        {
+            3 => library.Tracks.Where(t => library.Favorites.Contains(t.Path)),
+            4 => queue,
+            5 => library.History.Where(lookup.ContainsKey).Select(path => lookup[path]),
+            6 => library.Playlist.Where(lookup.ContainsKey).Select(path => lookup[path]),
+            _ => library.Tracks
+        };
+        string query = Search.Text.Trim();
+        tracks = tracks.Where(t =>
+            (Genre.SelectedIndex <= 0 || t.Genre.Equals((string)Genre.SelectedItem, StringComparison.CurrentCultureIgnoreCase)) &&
+            (Year.SelectedIndex <= 0 || t.Year.ToString() == (string)Year.SelectedItem) &&
+            (query.Length == 0 || (t.Name + " " + t.Detail + " " + t.Genre).Contains(query, StringComparison.CurrentCultureIgnoreCase)));
+
+        if (Navigation.SelectedIndex == 1)
+        {
+            var albums = tracks.GroupBy(t => (t.Album, Artist: t.AlbumArtist.Length > 0 ? t.AlbumArtist : t.Artist))
+                .Select(g => new { g.Key, Tracks = g.OrderBy(t => t.Disc).ThenBy(t => t.Number).ThenBy(t => t.Name).ToArray() });
+            var sorted = Sort.SelectedIndex switch
+            {
+                1 => albums.OrderBy(g => g.Key.Artist).ThenBy(g => g.Key.Album),
+                2 => albums.OrderByDescending(g => g.Tracks[0].Year).ThenBy(g => g.Key.Album),
+                _ => albums.OrderBy(g => g.Key.Album).ThenBy(g => g.Key.Artist)
+            };
+            Rows.ItemsSource = sorted.Select(g => new LibraryRow(g.Key.Album,
+                $"{g.Key.Artist}  ·  {g.Tracks.Length} pistas  ·  {g.Tracks[0].Year}", g.Tracks)).ToArray();
+            return;
+        }
+
+        if (Navigation.SelectedIndex == 2)
+        {
+            Rows.ItemsSource = tracks.GroupBy(t => t.Artist).OrderBy(g => g.Key)
+                .Select(g => new LibraryRow(g.Key, $"{g.Count()} pistas", g.OrderBy(t => t.Album).ThenBy(t => t.Number).ToArray())).ToArray();
+            return;
+        }
+
+        if (Navigation.SelectedIndex < 4)
+            tracks = Sort.SelectedIndex switch
+            {
+                1 => tracks.OrderBy(t => t.Artist).ThenBy(t => t.Name),
+                2 => tracks.OrderByDescending(t => t.Year).ThenBy(t => t.Name),
+                _ => tracks.OrderBy(t => t.Name)
+            };
+        Rows.ItemsSource = tracks.Select(t => new LibraryRow(t.Name, t.Detail, new[] { t })).ToArray();
+    }
+
+    private Track Selected => (Rows.SelectedItem as LibraryRow)?.Tracks.FirstOrDefault() ?? current;
+
+    private void Activate(object sender, MouseButtonEventArgs args) => ActivateSelection();
+
+    private void ActivateSelection()
+    {
+        if (Rows.SelectedItem is not LibraryRow row) return;
+        context = row.Tracks.Length > 1
+            ? row.Tracks
+            : ((IEnumerable<LibraryRow>)Rows.ItemsSource).SelectMany(r => r.Tracks).ToArray();
+        Play(row.Tracks[0]);
+    }
+
+    private void Play(Track track, bool remember = true)
+    {
+        if (remember && current != null && current != track) previous.Push(current);
+        current = track;
+        opened = false;
+        player.Close();
+        player.Open(new Uri(track.Path));
+        player.Volume = Volume.Value;
+        player.Play();
+        SetPlaying(true);
+        Now.Text = track.Name;
+        Artist.Text = track.Detail;
+        if (miniTitle != null) miniTitle.Text = track.Name;
+        library.History.Remove(track.Path);
+        library.History.Insert(0, track.Path);
+        if (library.History.Count > 500) library.History.RemoveAt(500);
+        Save();
+        if (Navigation.SelectedIndex == 5) RefreshRows();
+        LoadPresentation(track);
+    }
+
+    private async void LoadPresentation(Track track)
+    {
+        Cover.Source = null;
+        Shell.Background = new SolidColorBrush(Color.FromRgb(22, 22, 33));
+        SetLyrics("");
+        var result = await Task.Run(() =>
+        {
+            string lyrics = "";
+            BitmapImage image = null;
+            try
+            {
+                string lrc = Path.ChangeExtension(track.Path, ".lrc");
+                if (File.Exists(lrc)) lyrics = File.ReadAllText(lrc);
+                using var file = TagLib.File.Create(track.Path);
+                if (lyrics.Length == 0) lyrics = file.Tag.Lyrics ?? "";
+                var picture = file.Tag.Pictures.FirstOrDefault();
+                if (picture != null)
+                {
+                    using var stream = new MemoryStream(picture.Data.Data);
+                    image = new BitmapImage();
+                    image.BeginInit();
+                    image.StreamSource = stream;
+                    image.DecodePixelWidth = 500;
+                    image.CacheOption = BitmapCacheOption.OnLoad;
+                    image.EndInit();
+                    image.Freeze();
+                }
+            }
+            catch (Exception) { }
+            return (lyrics, image);
+        });
+        if (current != track) return;
+        Cover.Source = result.image;
+        if (result.image is { IsFrozen: true })
+        {
+            var pixel = new byte[4];
+            var sample = result.image;
+            var rgb = new FormatConvertedBitmap(sample, PixelFormats.Bgra32, null, 0);
+            rgb.CopyPixels(new Int32Rect(rgb.PixelWidth / 2, rgb.PixelHeight / 2, 1, 1), pixel, 4, 0);
+            var accent = Color.FromRgb((byte)(24 + pixel[2] / 4), (byte)(24 + pixel[1] / 4), (byte)(32 + pixel[0] / 4));
+            Shell.Background = new LinearGradientBrush(accent, Color.FromRgb(19, 19, 29), 120);
+        }
+        SetLyrics(result.lyrics);
+    }
+
+    private void SetLyrics(string text)
+    {
+
+        lyricLines = text.Split('\n').SelectMany(line =>
+        {
+            var stamps = Regex.Matches(line, @"\[(\d+):(\d+(?:[.:]\d+)?)\]");
+            string words = Regex.Replace(line, @"\[[^\]]+\]", "").Trim();
+            return stamps.Cast<Match>().Select(match =>
+                (int.Parse(match.Groups[1].Value) * 60 + double.Parse(match.Groups[2].Value.Replace(':', '.'),
+                    System.Globalization.CultureInfo.InvariantCulture), words));
+        }).OrderBy(line => line.Item1).ToArray();
+        Lyrics.Text = text.Length == 0 ? "Sin letras disponibles" : text;
+    }
+
+    private async void LookupLyrics(object sender, RoutedEventArgs args)
+    {
+        Track track = current;
+        if (track == null) return;
+        if (MessageBox.Show(this, "Se enviarán el título, artista y álbum a LRCLIB para buscar la letra.",
+            "Buscar letras", MessageBoxButton.OKCancel) != MessageBoxResult.OK) return;
+        try
+        {
+            string url = $"https://lrclib.net/api/get?track_name={Uri.EscapeDataString(track.Name)}&artist_name={Uri.EscapeDataString(track.Artist)}&album_name={Uri.EscapeDataString(track.Album)}&duration={track.Seconds}";
+            using var response = await Http.GetAsync(url);
+            if (current != track) return;
+            if (!response.IsSuccessStatusCode) { Status.Text = "No se encontró una letra para esta pista."; return; }
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            if (current != track) return;
+            var root = doc.RootElement;
+            string text = root.TryGetProperty("syncedLyrics", out var sync) ? sync.GetString() : null;
+            text ??= root.TryGetProperty("plainLyrics", out var plain) ? plain.GetString() : null;
+            if (!string.IsNullOrWhiteSpace(text)) SetLyrics(text);
+            else Status.Text = "No se encontró una letra para esta pista.";
+        }
+        catch (Exception error) { Status.Text = "Error al buscar letras. " + error.Message; }
+    }
+
+    private void Tick()
+    {
+        if (!opened) return;
+        double position = player.Position.TotalSeconds;
+        double duration = player.NaturalDuration.HasTimeSpan ? player.NaturalDuration.TimeSpan.TotalSeconds : 0;
+        updatingSeek = true;
+        Seek.Maximum = duration;
+        if (!Seek.IsMouseCaptureWithin) Seek.Value = position;
+        updatingSeek = false;
+        TimeLabel.Text = $"{TimeSpan.FromSeconds(position):m\\:ss} / {TimeSpan.FromSeconds(duration):m\\:ss}";
+        if (lyricLines.Length > 0)
+        {
+            int index = Array.FindLastIndex(lyricLines, line => line.Time <= position);
+            Lyrics.Text = index < 0 ? "…" : string.Join("\n\n", lyricLines.Skip(index).Take(5).Select(line => line.Text));
+        }
+    }
+
+    private void SetPlaying(bool value)
+    {
+        playing = value;
+        PlayButton.Content = value ? "⏸" : "▶";
+    }
+
+    private void Toggle(object sender, RoutedEventArgs args)
+    {
+        if (current == null) { ActivateSelection(); return; }
+        if (playing) player.Pause(); else player.Play();
+        SetPlaying(!playing);
+    }
+
+    private void Advance()
+    {
+        if (queue.TryDequeue(out Track next))
+        {
+            Play(next);
+            if (Navigation.SelectedIndex == 4) RefreshRows();
+            return;
+        }
+        int index = Array.IndexOf(context, current);
+        if (index + 1 < context.Length) Play(context[index + 1]);
+        else { player.Pause(); SetPlaying(false); }
+    }
+
+    private void Next(object sender, RoutedEventArgs args) => Advance();
+
+    private void Previous(object sender, RoutedEventArgs args)
+    {
+        if (opened && player.Position.TotalSeconds > 3) player.Position = TimeSpan.Zero;
+        else if (previous.TryPop(out Track track)) Play(track, false);
+    }
+
+    private void ChangeVolume(object sender, RoutedPropertyChangedEventArgs<double> args) => player.Volume = args.NewValue;
+
+    private void SeekChanged(object sender, RoutedPropertyChangedEventArgs<double> args)
+    {
+        if (opened && !updatingSeek) player.Position = TimeSpan.FromSeconds(args.NewValue);
+    }
+
+    private void Favorite(object sender, RoutedEventArgs args)
+    {
+        if (Selected is not Track track) return;
+        bool added = library.Favorites.Add(track.Path);
+        if (!added) library.Favorites.Remove(track.Path);
+        Status.Text = added ? $"Añadida a favoritos: {track.Name}" : $"Retirada de favoritos: {track.Name}";
+        Save();
+        if (Navigation.SelectedIndex == 3) RefreshRows();
+    }
+
+    private void Playlist(object sender, RoutedEventArgs args)
+    {
+        if (Selected is not Track track) return;
+        bool removed = library.Playlist.Remove(track.Path);
+        if (!removed) library.Playlist.Add(track.Path);
+        Status.Text = removed ? $"Retirada de Mi lista: {track.Name}" : $"Añadida a Mi lista: {track.Name}";
+        Save();
+        if (Navigation.SelectedIndex == 6) RefreshRows();
+    }
+
+    private void Enqueue(object sender, RoutedEventArgs args)
+    {
+        if (Selected is not Track track) return;
+        queue.Enqueue(track);
+        Status.Text = $"Añadida a la cola: {track.Name}";
+        if (Navigation.SelectedIndex == 4) RefreshRows();
+    }
+
+    private async void Inspect(object sender, RoutedEventArgs args)
+    {
+        if (Selected is not Track track) return;
+        string information = await Task.Run(() =>
+        {
+            try
+            {
+                using var file = TagLib.File.Create(track.Path);
+                var audio = file.Properties;
+                return $"{Path.GetExtension(track.Path).TrimStart('.').ToUpperInvariant()} · {audio.Description}\n" +
+                    $"{audio.AudioBitrate} kb/s · {audio.AudioSampleRate:N0} Hz · {audio.AudioChannels} canales\n" +
+                    (audio.BitsPerSample > 0 ? $"{audio.BitsPerSample} bits\n" : "") +
+                    $"{new FileInfo(track.Path).Length:N0} bytes\n\n{track.Path}";
+            }
+            catch (Exception error) { return error.Message; }
+        });
+        MessageBox.Show(this, information, track.Name);
+    }
+
+    private void Fullscreen(object sender, RoutedEventArgs args)
+    {
+        if (WindowStyle == WindowStyle.None)
+        {
+            WindowState = WindowState.Normal;
+            WindowStyle = WindowStyle.SingleBorderWindow;
+            Grid.SetColumn(Listening, 2);
+            Grid.SetColumnSpan(Listening, 1);
+            ArtPanel.Height = 190;
+            WindowState = previousWindowState;
+        }
+        else
+        {
+            previousWindowState = WindowState;
+            WindowState = WindowState.Normal;
+            WindowStyle = WindowStyle.None;
+            Grid.SetColumn(Listening, 0);
+            Grid.SetColumnSpan(Listening, 3);
+            ArtPanel.Height = Math.Clamp(SystemParameters.PrimaryScreenHeight * .45, 200, 480);
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    private void Mini(object sender, RoutedEventArgs args)
+    {
+        if (mini != null) { mini.Activate(); return; }
+        miniTitle = new TextBlock { Text = current?.Name ?? "Prisma Music", Margin = new Thickness(0, 0, 0, 8) };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+        var back = new Button { Content = "⏮" };
+        var toggle = new Button { Content = "▶ / ⏸" };
+        var forward = new Button { Content = "⏭" };
+        back.Click += Previous;
+        toggle.Click += Toggle;
+        forward.Click += Next;
+        buttons.Children.Add(back);
+        buttons.Children.Add(toggle);
+        buttons.Children.Add(forward);
+        var panel = new StackPanel { Margin = new Thickness(12) };
+        panel.Children.Add(miniTitle);
+        panel.Children.Add(buttons);
+        mini = new Window { Owner = this, Title = "Prisma Music · Mini", Width = 290, Height = 125,
+            Topmost = true, Content = panel, Background = new SolidColorBrush(Color.FromRgb(34, 34, 48)) };
+        mini.Closed += (_, _) => { mini = null; miniTitle = null; };
+        mini.Show();
+    }
+
+    private void Shortcuts(object sender, KeyEventArgs args)
+    {
+        if (Keyboard.Modifiers == ModifierKeys.Control && args.Key == Key.F)
+        {
+            Search.Focus();
+            Search.SelectAll();
+            args.Handled = true;
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Control && args.Key == Key.I) Inspect(sender, args);
+        else if (args.Key == Key.F11 || (args.Key == Key.Escape && WindowStyle == WindowStyle.None)) Fullscreen(sender, args);
+        else if (args.Key == Key.Enter && Rows.IsKeyboardFocusWithin) ActivateSelection();
+    }
+}
+
+
