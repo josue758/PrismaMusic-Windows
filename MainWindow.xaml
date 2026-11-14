@@ -1,0 +1,92 @@
+<Window xmlns:local="clr-namespace:PrismaMusic" x:Class="PrismaMusic.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Prisma Music" Width="1180" Height="760" MinWidth="820" MinHeight="560" FontFamily="Segoe UI" FontSize="14" KeyDown="Shortcuts">
+  <Grid x:Name="Shell" Background="#161621">
+    <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <Grid x:Name="Workspace" Margin="12,8,18,14">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="188"/><ColumnDefinition Width="*"/><ColumnDefinition Width="294"/></Grid.ColumnDefinitions>
+      <Border Padding="4,0,8,0">
+        <DockPanel>
+                              <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="9,9,0,22">
+            <Border Background="#FFB397" Width="32" Height="32" CornerRadius="8">
+              <TextBlock Text="&#xE8D6;" FontFamily="Segoe MDL2 Assets" FontSize="17" Foreground="#2A1916" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <TextBlock Text="Prisma Music" FontWeight="SemiBold" FontSize="17" VerticalAlignment="Center" Margin="10,0,0,0"/>
+          </StackPanel>
+          <StackPanel DockPanel.Dock="Bottom">
+            <Button Content="{local:LocalText Text=＋  Carpeta}" Click="AddFolder" Margin="0,0,0,6"/>
+            <Button Content="{local:LocalText Text=↻  Actualizar}" Click="Rescan" Margin="0,0,0,6"/>
+            <Button Content="♫  Demos" Click="AddDemos" Margin="0,0,0,6"/><Button Content="{local:LocalText Text=⚙  Configuración}" Click="Settings"/>
+          </StackPanel>
+          <ListBox ItemContainerStyle="{StaticResource NavigationItem}" x:Name="Navigation" SelectionChanged="Navigate" Background="Transparent" Foreground="White" BorderThickness="0">
+            <ListBoxItem Tag="&#xE8D6;" Content="{local:LocalText Text=Canciones}"/><ListBoxItem Tag="&#xE93C;" Content="{local:LocalText Text=Álbumes}"/><ListBoxItem Tag="&#xE716;" Content="{local:LocalText Text=Artistas}"/>
+            <ListBoxItem Tag="&#xEB51;" Content="{local:LocalText Text=Favoritos}"/><ListBoxItem Tag="&#xE8FD;" Content="{local:LocalText Text=Cola}"/><ListBoxItem Tag="&#xE81C;" Content="{local:LocalText Text=Historial}"/><ListBoxItem Tag="&#xE93F;" Content="{local:LocalText Text=Listas}"/>
+          </ListBox>
+        </DockPanel>
+      </Border>
+      <DockPanel Grid.Column="1" Margin="12,0,18,0">
+                        <StackPanel DockPanel.Dock="Top" Margin="2,10,0,17">
+          <TextBlock x:Name="Heading" Text="{local:LocalText Text=Canciones}" FontSize="36" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+          <TextBlock x:Name="CollectionCount" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
+        </StackPanel>
+        <TextBox x:Name="Search" DockPanel.Dock="Top" Padding="12" Background="#29272B" Foreground="#F4F0F3" CaretBrush="White" BorderBrush="#555056" TextChanged="Filter" ToolTip="{local:LocalText Text=Buscar canción\, artista\, álbum\, género o año}" AutomationProperties.Name="{local:LocalText Text=Buscar música}" Margin="0,0,0,9"/>
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,10"><ComboBox Style="{StaticResource FilterCombo}" x:Name="PlaylistPicker" Width="145" Margin="0,0,6,0" Visibility="Collapsed" SelectionChanged="SelectPlaylist"/><Button x:Name="NewPlaylistButton" Content="{local:LocalText Text=Nueva lista}" Click="NewPlaylist" Visibility="Collapsed"/><Button x:Name="BackToCollection" Content="{local:LocalText Text=‹ Volver}" Click="CloseCollection" Visibility="Collapsed"/>
+          <ComboBox Style="{StaticResource FilterCombo}" x:Name="Genre" Width="167" Margin="0,0,6,0" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Género}"/>
+          <ComboBox Style="{StaticResource FilterCombo}" x:Name="Year" Width="142" Margin="0,0,6,0" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Año}"/>
+          <ComboBox Style="{StaticResource FilterCombo}" x:Name="Sort" Width="115" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Orden}">
+            <ComboBoxItem Content="{local:LocalText Text=Nombre}"/><ComboBoxItem Content="{local:LocalText Text=Artista}"/><ComboBoxItem Content="{local:LocalText Text=Año}"/>
+          </ComboBox>
+        </WrapPanel>
+        <TextBlock x:Name="Status" DockPanel.Dock="Bottom" TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,9,0,0"/>
+        <ListBox x:Name="Rows" Background="Transparent" Foreground="White" BorderThickness="0" MouseDoubleClick="Activate" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Margin="3,2">
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding Detail}" Foreground="#A9BDCA" TextTrimming="CharacterEllipsis" FontSize="12"/>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+      <Border x:Name="Listening" Grid.Column="2" Background="#E6252327" BorderBrush="#423D43" BorderThickness="1" CornerRadius="12" Padding="14">
+        <DockPanel>
+          <Border x:Name="ArtPanel" DockPanel.Dock="Top" Height="242" CornerRadius="10" Background="#30232C" ClipToBounds="True">
+            <Grid><Grid.Background><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#765061"/><GradientStop Color="#241E2A" Offset="1"/></LinearGradientBrush></Grid.Background><TextBlock Text="♫" FontSize="72" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#FFC0AA"/><Image x:Name="Cover" Stretch="Uniform"/></Grid>
+          </Border>
+          <TextBlock x:Name="Now" DockPanel.Dock="Top" Text="{local:LocalText Text=Escuchando}" FontWeight="SemiBold" FontSize="20" TextWrapping="Wrap" Margin="0,12,0,3"/>
+          <TextBlock x:Name="Artist" DockPanel.Dock="Top" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,9"/>
+          <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,9">
+            <Button Style="{StaticResource CompactButton}" Content="♡" Click="Favorite" ToolTip="{local:LocalText Text=Favorito}"/>
+            <Button Content="{local:LocalText Text=＋ Cola}" Click="Enqueue"/><Button Content="{local:LocalText Text=＋ Lista}" Click="Playlist" ToolTip="{local:LocalText Text=Añadir o quitar de la lista seleccionada}"/>
+            <Button Style="{StaticResource CompactButton}" Content="ⓘ" Click="Inspect" ToolTip="{local:LocalText Text=Información del archivo}"/>
+          </WrapPanel>
+          <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,9">
+            <Button Content="{local:LocalText Text=Letras web}" Click="LookupLyrics"/><Button Content="{local:LocalText Text=Traducir}" Click="TranslateLyrics"/><Button Content="{local:LocalText Text=Artista}" Click="ArtistProfile"/><Button x:Name="CastButton" Content="{local:LocalText Text=Transmitir}" Click="CastTrack"/>
+            <Button Style="{StaticResource CompactButton}" Content="Mini" Click="Mini"/>
+            <Button Style="{StaticResource CompactButton}" Content="⛶" Click="Fullscreen" ToolTip="{local:LocalText Text=Pantalla completa}"/>
+          </WrapPanel>
+          <UniformGrid x:Name="SpectrumView" DockPanel.Dock="Top" Rows="1" Height="28" Margin="0,2,0,12" ToolTip="{local:LocalText Text=Espectro de la pista}" AutomationProperties.Name="{local:LocalText Text=Espectro de diez bandas}"/>
+          <ScrollViewer VerticalScrollBarVisibility="Auto"><TextBlock x:Name="Lyrics" TextWrapping="Wrap" Foreground="{StaticResource Muted}"/></ScrollViewer>
+        </DockPanel>
+      </Border>
+    </Grid>
+    <Border Grid.Row="1" Background="#28252B" BorderBrush="#454047" BorderThickness="0,1,0,0" Padding="20,10">
+      <Grid>
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Slider x:Name="Seek" Grid.ColumnSpan="3" Margin="0,0,0,6" IsMoveToPointEnabled="True" ValueChanged="SeekChanged" AutomationProperties.Name="{local:LocalText Text=Posición}"/>
+        <TextBlock Grid.Row="1" x:Name="TimeLabel" Text="0:00 / 0:00" VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
+        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal">
+          <Button Style="{StaticResource CompactButton}" Content="⏮" Click="Previous" ToolTip="{local:LocalText Text=Anterior}"/>
+          <Button x:Name="PlayButton" Background="#FFB397" Foreground="#241A16" Width="48" Height="38" Padding="0" Content="▶" Click="Toggle" ToolTip="{local:LocalText Text=Reproducir o pausar}"/>
+          <Button Style="{StaticResource CompactButton}" Content="⏭" Click="Next" ToolTip="{local:LocalText Text=Siguiente}"/>
+        </StackPanel>
+        <StackPanel Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock Text="&#xE767;" FontFamily="Segoe MDL2 Assets" VerticalAlignment="Center" Margin="0,0,9,0"/>
+          <Slider x:Name="Volume" Width="94" Minimum="0" Maximum="1" Value=".7" ValueChanged="ChangeVolume" AutomationProperties.Name="{local:LocalText Text=Volumen}"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>
+
