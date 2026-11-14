@@ -1,5 +1,11 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Automation;
+using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -10,260 +16,241 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
-    private sealed record AudioOutputInfo(string Name, string Id);
-
-    private void ShowAudioOutputMenu(object sender, RoutedEventArgs args)
+    private sealed record AudioOutputInfo(string Name, string Id)
     {
-        var menu = new ContextMenu
-        {
-            Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(37, 36, 44)),
-            Foreground = System.Windows.Media.Brushes.White,
-            Padding = new Thickness(8),
-            BorderBrush = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromArgb(0x55, 255, 255, 255)),
-            BorderThickness = new Thickness(1),
-            MinWidth = 390,
-            MaxWidth = 510,
-            MaxHeight = SystemParameters.WorkArea.Height - 32
-        };
-        var menuItemStyle = new Style(typeof(MenuItem));
-        menuItemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(12, 8, 12, 8)));
-        menuItemStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(2, 1, 2, 1)));
-        menuItemStyle.Setters.Add(new Setter(Control.FontSizeProperty, 12d));
-        menuItemStyle.Setters.Add(new Setter(Control.ForegroundProperty, System.Windows.Media.Brushes.White));
-        menuItemStyle.Setters.Add(new Setter(Control.BackgroundProperty, System.Windows.Media.Brushes.Transparent));
-        menuItemStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
-        var headerText = new FrameworkElementFactory(typeof(TextBlock));
-        headerText.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding());
-        headerText.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
-        headerText.SetValue(TextBlock.MaxWidthProperty, 450d);
-        menuItemStyle.Setters.Add(new Setter(MenuItem.HeaderTemplateProperty, new DataTemplate { VisualTree = headerText }));
-        var highlighted = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
-        highlighted.Setters.Add(new Setter(Control.BackgroundProperty,
-            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x34, 180, 150, 255))));
-        menuItemStyle.Triggers.Add(highlighted);
-        var disabled = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
-        disabled.Setters.Add(new Setter(Control.ForegroundProperty,
-            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(155, 153, 165))));
-        menuItemStyle.Triggers.Add(disabled);
-        menu.Resources.Add(typeof(MenuItem), menuItemStyle);
-        var separatorStyle = new Style(typeof(Separator));
-        separatorStyle.Setters.Add(new Setter(FrameworkElement.HeightProperty, 1d));
-        separatorStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(10, 5, 10, 5)));
-        separatorStyle.Setters.Add(new Setter(Control.BackgroundProperty,
-            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x35, 255, 255, 255))));
-        menu.Resources.Add(typeof(Separator), separatorStyle);
-        menu.Items.Add(new MenuItem
-        {
-            Header = LocalTextExtension.Translate("Salida de audio"),
-            FontWeight = FontWeights.SemiBold,
-            IsEnabled = false
-        });
-        menu.Items.Add(new MenuItem
-        {
-            Header = LocalTextExtension.Translate("Los DAC deben estar habilitados como salida de audio en Windows."),
-            IsEnabled = false
-        });
+        public override string ToString() => Name;
+    }
+    private sealed record AudioOutputSnapshot(AudioOutputInfo[] Devices, string ActiveName, WaveFormat MixFormat,
+        int[] Rates, int[] ExclusiveRates, bool MissingDevice, string Error);
 
-        int[] supportedOutputRates = Array.Empty<int>();
+    private Popup audioOutputPopup;
+    private Border audioOutputSurface;
+    private ComboBox audioDevicePicker;
+    private ComboBox audioRatePicker;
+
+    private async void ShowAudioOutputMenu(object sender, RoutedEventArgs args)
+    {
+        if (audioOutputPopup?.IsOpen == true)
+        {
+            audioOutputPopup.IsOpen = false;
+            return;
+        }
+
+        var anchor = (FrameworkElement)sender;
+        var layout = new DockPanel { Margin = new Thickness(16) };
+        TextElement.SetFontFamily(layout, new FontFamily("Segoe UI Variable Text, Segoe UI"));
+        TextElement.SetFontSize(layout, 13);
+        KeyboardNavigation.SetTabNavigation(layout, KeyboardNavigationMode.Cycle);
+        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
+        var refresh = new Button { Content = "", Style = (Style)FindResource("TransportIcon"),
+            ToolTip = T("Actualizar dispositivos"), Width = 32, Height = 32 };
+        AutomationProperties.SetName(refresh, T("Actualizar dispositivos"));
+        DockPanel.SetDock(refresh, Dock.Right);
+        header.Children.Add(refresh);
+        header.Children.Add(new TextBlock { Text = T("Salida de audio"), FontSize = 23, FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center });
+        DockPanel.SetDock(header, Dock.Top);
+        layout.Children.Add(header);
+
+        var content = new StackPanel();
+        var scroll = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Style = (Style)FindResource("LyricsScroll") };
+        layout.Children.Add(scroll);
+        var surface = new Border { Width = Math.Min(436, SystemParameters.WorkArea.Width - 24),
+            MaxHeight = Math.Min(560, SystemParameters.WorkArea.Height - 44), Background = (Brush)FindResource("SettingsBackground"),
+            BorderBrush = (Brush)FindResource("SettingsStroke"), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(13), Child = layout };
+        var popup = new Popup { PlacementTarget = anchor, Placement = PlacementMode.Top,
+            VerticalOffset = -6, AllowsTransparency = true, StaysOpen = false, Child = surface };
+        audioOutputPopup = popup;
+        audioOutputSurface = surface;
+        popup.Closed += (_, _) =>
+        {
+            audioOutputPopup = null;
+            audioOutputSurface = null;
+            audioDevicePicker = null;
+            audioRatePicker = null;
+        };
+        layout.PreviewKeyDown += (_, key) =>
+        {
+            if (key.Key != Key.Escape || audioDevicePicker?.IsDropDownOpen == true || audioRatePicker?.IsDropDownOpen == true) return;
+            key.Handled = true;
+            popup.IsOpen = false;
+            anchor.Focus();
+        };
+        refresh.Click += async (_, _) => await Populate();
+        popup.IsOpen = true;
+        refresh.Focus();
+        await Populate();
+
+        async Task Populate()
+        {
+            refresh.IsEnabled = false;
+            content.Children.Clear();
+            content.Children.Add(Note(T("Consultando dispositivos…")));
+            string outputId = player.OutputId;
+            var snapshot = await Task.Run(() => ReadAudioOutputs(outputId));
+            if (!popup.IsOpen) return;
+            content.Children.Clear();
+            refresh.IsEnabled = true;
+
+            Card(T("Dispositivo"), section =>
+            {
+                var options = new[] { new AudioOutputInfo(T("Predeterminada del sistema"), null) }
+                    .Concat(snapshot.Devices).ToList();
+                if (player.OutputId != null && options.All(output => !SameDevice(output.Id, player.OutputId)))
+                    options.Add(new AudioOutputInfo(T("Dispositivo guardado no disponible"), player.OutputId));
+                audioDevicePicker = Picker(T("Dispositivo"), options, options.FindIndex(output => SameDevice(output.Id, player.OutputId)));
+                audioDevicePicker.DisplayMemberPath = nameof(AudioOutputInfo.Name);
+                audioDevicePicker.SelectionChanged += async (_, _) =>
+                {
+                    if (audioDevicePicker?.SelectedItem is not AudioOutputInfo output) return;
+                    player.OutputId = output.Id;
+                    await ApplyChanges();
+                };
+                section.Children.Add(audioDevicePicker);
+                if (snapshot.ActiveName != null) section.Children.Add(Note(snapshot.ActiveName));
+                if (snapshot.Error != null) section.Children.Add(Note(snapshot.Error));
+                else if (snapshot.MissingDevice)
+                    section.Children.Add(Note(T("La salida guardada no está disponible; se muestra la predeterminada.")));
+            });
+            if (snapshot.MixFormat != null)
+            {
+                bool activeSignal = opened && player.OutputFormat != null && !snapshot.MissingDevice;
+                var format = activeSignal ? player.OutputFormat : snapshot.MixFormat;
+                Card(T(activeSignal ? "Señal de salida" : "Formato predeterminado de Windows"), section =>
+                {
+                    var signal = new DockPanel { Margin = new Thickness(0, 1, 0, 0) };
+                    var mode = new TextBlock { Text = AudioOutputMode(), FontSize = 11,
+                        Foreground = (Brush)FindResource("AccentBrush"), VerticalAlignment = VerticalAlignment.Center };
+                    DockPanel.SetDock(mode, Dock.Right);
+                    signal.Children.Add(mode);
+                    signal.Children.Add(new TextBlock { Text = $"{format.SampleRate / 1000d:0.###} kHz · {format.BitsPerSample} bit",
+                        FontSize = 19, FontWeight = FontWeights.SemiBold });
+                    section.Children.Add(signal);
+                    section.Children.Add(Note(format.Channels == 1 ? T("1 canal") : LocalTextExtension.Format("{0} canales", format.Channels)));
+                });
+            }
+            Card(T("Modo de salida"), section =>
+            {
+                Toggle(T("Solicitar acceso exclusivo"), player.Exclusive, !player.StrictDirect, value => player.Exclusive = value);
+                Toggle(T("PCM directo"), player.StrictDirect, true, value => { player.StrictDirect = value; UpdateVolumeControls(); });
+                if (player.StrictDirect)
+                    section.Children.Add(Note(T("PCM directo sin volumen ni procesamiento; requiere un formato y dispositivo compatibles.")));
+
+                if (!player.StrictDirect)
+                {
+                    var rateValues = new[] { 0 }.Concat(snapshot.Rates).ToList();
+                    if (!rateValues.Contains(player.OutputSampleRate)) rateValues.Add(player.OutputSampleRate);
+                    var labels = rateValues.Select(rate => rate == 0
+                        ? T("Automática · seguir la frecuencia de la pista")
+                        : $"{rate / 1000d:0.###} kHz").ToArray();
+                    var rateLabel = Note(T("Frecuencia de salida WASAPI exclusivo"));
+                    section.Children.Add(rateLabel);
+                    audioRatePicker = Picker(rateLabel.Text, labels, rateValues.IndexOf(player.OutputSampleRate));
+                    audioRatePicker.Margin = new Thickness(0, 6, 0, 0);
+                    audioRatePicker.SelectionChanged += async (_, _) =>
+                    {
+                        if (audioRatePicker == null || audioRatePicker.SelectedIndex < 0) return;
+                        player.OutputSampleRate = rateValues[audioRatePicker.SelectedIndex];
+                        player.Exclusive = true;
+                        await ApplyChanges();
+                    };
+                    section.Children.Add(audioRatePicker);
+                    if (player.OutputSampleRate > 0 && !snapshot.Rates.Contains(player.OutputSampleRate))
+                        section.Children.Add(Note(LocalTextExtension.Format("La salida actual no anuncia {0} kHz", (player.OutputSampleRate / 1000d).ToString("0.###"))));
+                }
+                else audioRatePicker = null;
+
+                if (snapshot.ExclusiveRates.Length > 0)
+                {
+                    var details = Note(string.Join(" · ", snapshot.ExclusiveRates.Select(rate => $"{rate / 1000d:0.###} kHz")));
+                    details.Visibility = Visibility.Collapsed;
+                    var disclosure = new Button { Content = T("Frecuencias PCM compatibles"),
+                        HorizontalAlignment = HorizontalAlignment.Left, Background = Brushes.Transparent,
+                        Margin = new Thickness(0, 9, 0, 0) };
+                    AutomationProperties.SetItemStatus(disclosure, T("Contraído"));
+                    disclosure.Click += (_, _) =>
+                    {
+                        bool expand = details.Visibility != Visibility.Visible;
+                        details.Visibility = expand ? Visibility.Visible : Visibility.Collapsed;
+                        AutomationProperties.SetItemStatus(disclosure, T(expand ? "Expandido" : "Contraído"));
+                    };
+                    section.Children.Add(disclosure);
+                    section.Children.Add(details);
+                }
+
+                void Toggle(string label, bool value, bool enabled, Action<bool> change)
+                {
+                    var toggle = new CheckBox { Content = label, IsChecked = value, IsEnabled = enabled,
+                        Style = (Style)FindResource("SettingsToggle") };
+                    toggle.Click += async (_, _) => { change(toggle.IsChecked == true); await ApplyChanges(); };
+                    section.Children.Add(toggle);
+                }
+            });
+        }
+
+        async Task ApplyChanges()
+        {
+            content.IsEnabled = refresh.IsEnabled = false;
+            if (!smokeTest) SaveAudioSettings();
+            await ReopenOutput();
+            UpdateAudioOutputTooltip();
+            if (!popup.IsOpen) return;
+            content.IsEnabled = true;
+            await Populate();
+            refresh.Focus();
+        }
+
+        void Card(string title, Action<StackPanel> add)
+        {
+            var section = new StackPanel();
+            section.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 7) });
+            add(section);
+            content.Children.Add(new Border { Background = (Brush)FindResource("SettingsCard"),
+                CornerRadius = new CornerRadius(8), Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 8), Child = section });
+        }
+
+        ComboBox Picker(string label, System.Collections.IEnumerable items, int index)
+        {
+            var picker = new ComboBox { Style = (Style)FindResource("FilterCombo"), ItemsSource = items,
+                SelectedIndex = index };
+            AutomationProperties.SetName(picker, label);
+            return picker;
+        }
+        TextBlock Note(string value) => new() { Text = value, TextWrapping = TextWrapping.Wrap, FontSize = 11,
+            Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 6, 0, 0) };
+    }
+
+    private static AudioOutputSnapshot ReadAudioOutputs(string outputId)
+    {
+        var outputs = new System.Collections.Generic.List<AudioOutputInfo>();
         try
         {
             using var devices = new MMDeviceEnumerator();
-            var outputs = devices.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active)
-                .Select(device => { using (device) return new AudioOutputInfo(device.FriendlyName, device.ID); })
-                .ToList();
-            MMDevice selectedDevice;
-            try
-            {
-                selectedDevice = player.OutputId == null
-                    ? devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia)
-                    : devices.GetDevice(player.OutputId);
-            }
-            catch (COMException) when (player.OutputId != null)
-            {
-                menu.Items.Add(new MenuItem
-                {
-                    Header = LocalTextExtension.Translate("La salida guardada no está disponible; se muestra la predeterminada."),
-                    IsEnabled = false
-                });
-                selectedDevice = devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-            }
-            using (var activeDevice = selectedDevice)
-            {
-                WaveFormat mixFormat;
-                using (var client = activeDevice.AudioClient) mixFormat = client.MixFormat;
-                string activeName = outputs.FirstOrDefault(output => output.Id == activeDevice.ID)?.Name
-                    ?? activeDevice.FriendlyName;
-                menu.Items.Add(new MenuItem
-                {
-                    Header = LocalTextExtension.Format("Salida activa: {0}", activeName),
-                    IsEnabled = false
-                });
-                menu.Items.Add(new MenuItem
-                {
-                    Header = player.StrictDirect && player.IsExclusive && !string.IsNullOrEmpty(player.OutputNotice)
-                        ? LocalTextExtension.Format("Formato actual del dispositivo: {0}", player.OutputNotice)
-                        : opened && player.OutputFormat is WaveFormat outputFormat
-                            ? LocalTextExtension.Format("Formato actual del dispositivo: {0} Hz · {1} canales · {2} bits",
-                                outputFormat.SampleRate.ToString("N0"), outputFormat.Channels, outputFormat.BitsPerSample)
-                            : LocalTextExtension.Format("Formato actual del dispositivo: {0} Hz · {1} canales · {2} bits",
-                                mixFormat.SampleRate.ToString("N0"), mixFormat.Channels, mixFormat.BitsPerSample),
-                    IsEnabled = false
-                });
-                menu.Items.Add(new MenuItem
-                {
-                    Header = LocalTextExtension.Format("Modo de salida actual: {0}",
-                        player.StrictDirect ? LocalTextExtension.Translate("PCM directo") :
-                        player.IsExclusive ? LocalTextExtension.Translate("WASAPI exclusivo") :
-                        LocalTextExtension.Translate("WASAPI compartido")),
-                    IsEnabled = false
-                });
-                try
-                {
-                    using var client = activeDevice.AudioClient;
-                    supportedOutputRates = SupportedOutputRates(client, mixFormat.Channels);
-                    string rates = string.Join(" · ", SupportedExclusiveRates(client, mixFormat)
-                        .Select(rate => (rate / 1000d).ToString("0.#") + " kHz"));
-                    menu.Items.Add(new MenuItem
-                    {
-                        Header = LocalTextExtension.Format("Frecuencias PCM exclusivas compatibles: {0}",
-                            string.IsNullOrEmpty(rates) ? LocalTextExtension.Translate("No se pudieron consultar") : rates),
-                        IsEnabled = false
-                    });
-                }
-                catch (COMException error)
-                {
-                    menu.Items.Add(new MenuItem
-                    {
-                        Header = LocalTextExtension.Translate("No se pudieron consultar las frecuencias del dispositivo.") + " " + error.Message,
-                        IsEnabled = false
-                    });
-                }
-            }
-            outputs.Insert(0, new AudioOutputInfo(LocalTextExtension.Translate("Predeterminada del sistema"), null));
-            menu.Items.Add(new Separator());
-
-            foreach (var output in outputs)
-            {
-                bool selected = string.Equals(output.Id, player.OutputId, StringComparison.OrdinalIgnoreCase);
-                var item = new MenuItem { Header = (selected ? "✓  " : "    ") + output.Name };
-                item.Click += (_, _) =>
-                {
-                    player.OutputId = output.Id;
-                    SaveAudioSettings();
-                    _ = ReopenOutput();
-                    Status.Text = LocalTextExtension.Format("Salida de audio seleccionada: {0}", output.Name);
-                    UpdateAudioOutputTooltip();
-                };
-                menu.Items.Add(item);
-            }
-            menu.Items.Add(new Separator());
-            menu.Items.Add(new MenuItem
-            {
-                Header = LocalTextExtension.Translate("Frecuencia de salida WASAPI exclusivo"),
-                IsEnabled = false
-            });
-            var automaticRate = new MenuItem
-            {
-                Header = LocalTextExtension.Translate("Automática · seguir la frecuencia de la pista") +
-                    (player.OutputSampleRate == 0 ? "  ✓" : ""),
-                IsEnabled = !player.StrictDirect,
-                Tag = 0
-            };
-            void SelectOutputRate(MenuItem choice)
-            {
-                choice.Click += (_, _) =>
-                {
-                    player.OutputSampleRate = (int)choice.Tag;
-                    player.Exclusive = true;
-                    SaveAudioSettings();
-                    _ = ReopenOutput();
-                    Status.Text = player.OutputSampleRate == 0
-                        ? LocalTextExtension.Translate("La frecuencia exclusiva seguirá automáticamente la frecuencia de cada pista.")
-                        : LocalTextExtension.Format("Frecuencia WASAPI exclusiva solicitada: {0} kHz",
-                            (player.OutputSampleRate / 1000d).ToString("0.#"));
-                };
-                menu.Items.Add(choice);
-            }
-            SelectOutputRate(automaticRate);
-            foreach (int rate in supportedOutputRates)
-                SelectOutputRate(new MenuItem
-                {
-                    Header = $"{rate / 1000d:0.#} kHz" + (player.OutputSampleRate == rate ? "  ✓" : ""),
-                    IsEnabled = !player.StrictDirect,
-                    Tag = rate
-                });
-            if (player.OutputSampleRate != 0 && !supportedOutputRates.Contains(player.OutputSampleRate))
-                menu.Items.Add(new MenuItem
-                {
-                    Header = LocalTextExtension.Format("La salida actual no anuncia {0} kHz",
-                        (player.OutputSampleRate / 1000d).ToString("0.#")),
-                    IsEnabled = false
-                });
-            menu.Items.Add(new MenuItem
-            {
-                Header = LocalTextExtension.Translate("La frecuencia manual convierte la pista; PCM directo conserva el formato original."),
-                IsEnabled = false
-            });
-            var refresh = new MenuItem { Header = LocalTextExtension.Translate("Actualizar dispositivos") };
-            refresh.Click += (_, _) =>
-            {
-                menu.IsOpen = false;
-                ShowAudioOutputMenu(AudioOutputButton, new RoutedEventArgs());
-            };
-            menu.Items.Insert(2, refresh);
+            foreach (var device in devices.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+                using (device) outputs.Add(new AudioOutputInfo(device.FriendlyName, device.ID));
+            bool missing = outputId != null && outputs.All(device => !SameDevice(device.Id, outputId));
+            using var active = outputId == null || missing
+                ? devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia) : devices.GetDevice(outputId);
+            using var client = active.AudioClient;
+            var format = client.MixFormat;
+            return new(outputs.ToArray(), active.FriendlyName, format, SupportedOutputRates(client, format.Channels),
+                SupportedExclusiveRates(client, format), missing, null);
         }
         catch (Exception error)
         {
-            menu.Items.Add(new MenuItem
-            {
-                Header = LocalTextExtension.Translate("No se pudieron consultar las salidas de audio.") + " " + error.Message,
-                IsEnabled = false
-            });
+            return new(outputs.ToArray(), null, null, Array.Empty<int>(), Array.Empty<int>(), false,
+                T("No se pudieron consultar las salidas de audio.") + " " + error.Message);
         }
-
-        menu.Items.Add(new Separator());
-        var exclusive = new MenuItem
-        {
-            Header = LocalTextExtension.Translate("Solicitar acceso exclusivo"),
-            IsCheckable = true,
-            IsChecked = player.Exclusive
-        };
-        exclusive.Click += (_, _) =>
-        {
-            player.Exclusive = exclusive.IsChecked;
-            SaveAudioSettings();
-            _ = ReopenOutput();
-        };
-        menu.Items.Add(exclusive);
-
-        var direct = new MenuItem
-        {
-            Header = LocalTextExtension.Translate("PCM directo exclusivo (WAV, AIFF y FLAC)"),
-            IsCheckable = true,
-            IsChecked = player.StrictDirect
-        };
-        direct.Click += (_, _) =>
-        {
-            player.StrictDirect = direct.IsChecked;
-            UpdateVolumeControls();
-            SaveAudioSettings();
-            _ = ReopenOutput();
-        };
-        menu.Items.Add(direct);
-        menu.Items.Add(new MenuItem
-        {
-            Header = LocalTextExtension.Translate(player.StrictDirect
-                ? "PCM directo sin volumen ni procesamiento; requiere un formato y dispositivo compatibles."
-                : "PCM directo evita el procesamiento y solo admite formatos compatibles."),
-            IsEnabled = false
-        });
-
-        menu.PlacementTarget = (FrameworkElement)sender;
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
-        AudioOutputButton.ContextMenu = menu;
-        menu.IsOpen = true;
     }
+
+    private static string T(string label) => LocalTextExtension.Translate(label);
+    private static bool SameDevice(string left, string right) => string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+
+    private string AudioOutputMode() => player.StrictDirect && player.IsExclusive
+        ? T("PCM directo") : player.IsExclusive ? T("WASAPI exclusivo") : T("WASAPI compartido");
 
     private static int[] SupportedExclusiveRates(AudioClient client, WaveFormat mixFormat)
     {
@@ -290,11 +277,7 @@ public partial class MainWindow
 
     private void UpdateAudioOutputTooltip()
     {
-        string mode = player.StrictDirect
-            ? LocalTextExtension.Translate("PCM directo")
-            : player.IsExclusive
-                ? LocalTextExtension.Translate("WASAPI exclusivo")
-                : LocalTextExtension.Translate("WASAPI compartido");
+        string mode = AudioOutputMode();
         AudioOutputButton.ToolTip = LocalTextExtension.Format("Salida de audio · {0}", mode);
         System.Windows.Automation.AutomationProperties.SetName(AudioOutputButton,
             LocalTextExtension.Translate("Salida de audio") + " · " + mode);

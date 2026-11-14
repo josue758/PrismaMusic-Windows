@@ -51,7 +51,7 @@
     </Grid>
     <Grid x:Name="Workspace" Grid.Row="1" Margin="18,4,18,8">
       <Grid.ColumnDefinitions><ColumnDefinition x:Name="NavigationColumn" Width="210"/><ColumnDefinition Width="*"/><ColumnDefinition x:Name="ListeningColumn" Width="330"/></Grid.ColumnDefinitions>
-      <Border Padding="8,10,10,10" Background="#D21C1E26" BorderBrush="#24FFFFFF" BorderThickness="1" CornerRadius="12">
+      <Border Padding="8,10,10,10" Background="{StaticResource SettingsBackground}" BorderBrush="#24FFFFFF" BorderThickness="1" CornerRadius="12">
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="10,8,0,20">
             <Border Background="#1EFFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1" Width="36" Height="36" CornerRadius="9">
@@ -178,7 +178,7 @@
           <Button x:Name="GalleryNext" AutomationProperties.Name="{local:LocalText Text=Siguiente}" Content="›" Click="NextGalleryPage" ToolTip="{local:LocalText Text=Siguiente}"/>
         </StackPanel>
         <TextBlock x:Name="LosslessNotice" DockPanel.Dock="Top" Visibility="Collapsed" Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8"/>
-        <Border Background="#C51D2029" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="10" Padding="4">
+        <Border Background="{StaticResource SettingsBackground}" BorderBrush="#22FFFFFF" BorderThickness="1" CornerRadius="10" Padding="4">
         <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ContextMenuOpening="PrepareLibraryTagsMenu" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
           <ListBox.ContextMenu>
             <ContextMenu Style="{StaticResource PlayerMenu}">
@@ -238,7 +238,7 @@
         </ListBox>
         </Border>
       </DockPanel>
-      <Border x:Name="Listening" Grid.Column="2" Background="#D321232D" BorderBrush="#27FFFFFF" BorderThickness="1" CornerRadius="12" Padding="16">
+      <Border x:Name="Listening" Grid.Column="2" Background="{StaticResource SettingsBackground}" BorderBrush="#27FFFFFF" BorderThickness="1" CornerRadius="12" Padding="16">
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Margin="0,1,0,16">
             <TextBlock Text="{local:LocalText Text=Reproduciendo ahora}" Foreground="{StaticResource Ink}" FontSize="13" FontWeight="SemiBold"/>
@@ -273,13 +273,14 @@
           <TextBlock x:Name="Now" DockPanel.Dock="Top" Text="{local:LocalText Text=Sin pista}" FontWeight="Bold" FontSize="25" TextTrimming="CharacterEllipsis" Margin="0,17,0,4"/>
           <TextBlock x:Name="Artist" DockPanel.Dock="Top" Foreground="{StaticResource Muted}" FontSize="14" TextWrapping="Wrap" Margin="0,0,0,5"/>
           <TextBlock x:Name="AudioFormat" DockPanel.Dock="Top" Foreground="{DynamicResource AccentBrush}" FontSize="11" Margin="0,0,0,13" TextTrimming="CharacterEllipsis"/>
-          <WrapPanel x:Name="ListeningActions" DockPanel.Dock="Top" Margin="0,0,0,12">
-            <Button Content="{local:LocalText Text=＋ Cola}" Click="Enqueue"/><Button Content="{local:LocalText Text=＋ Lista}" Click="Playlist" AutomationProperties.Name="{local:LocalText Text=Añadir o quitar de la lista seleccionada}" ToolTip="{local:LocalText Text=Añadir o quitar de la lista seleccionada}"/>
-            <Button Content="{local:LocalText Text=Artista}" Click="ArtistProfile" AutomationProperties.Name="{local:LocalText Text=Ver perfil del artista}" ToolTip="{local:LocalText Text=Ver perfil del artista}"/>
-            <Button Style="{StaticResource CompactButton}" Content="ⓘ" Click="Inspect" AutomationProperties.Name="{local:LocalText Text=Información del archivo}" ToolTip="{local:LocalText Text=Información del archivo}"/>
+          <WrapPanel x:Name="ListeningActions" DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Button Style="{StaticResource TransportIcon}" Content="&#xE8FD;" Click="Enqueue" AutomationProperties.Name="{local:LocalText Text=Añadir a la cola}" ToolTip="{local:LocalText Text=Añadir a la cola}"/>
+            <Button Style="{StaticResource TransportIcon}" Content="&#xE109;" Click="Playlist" AutomationProperties.Name="{local:LocalText Text=Añadir o quitar de la lista seleccionada}" ToolTip="{local:LocalText Text=Añadir o quitar de la lista seleccionada}"/>
+            <Button Style="{StaticResource TransportIcon}" Content="&#xE77B;" Click="ArtistProfile" AutomationProperties.Name="{local:LocalText Text=Ver perfil del artista}" ToolTip="{local:LocalText Text=Ver perfil del artista}"/>
+            <Button Style="{StaticResource TransportIcon}" Content="&#xE946;" Click="Inspect" AutomationProperties.Name="{local:LocalText Text=Información del archivo}" ToolTip="{local:LocalText Text=Información del archivo}"/>
           </WrapPanel>
           <UniformGrid x:Name="SpectrumView" DockPanel.Dock="Top" Rows="1" Height="28" Margin="0,2,0,12" ToolTip="{local:LocalText Text=Espectro de la pista}" AutomationProperties.Name="{local:LocalText Text=Espectro de diez bandas}"/>
-          <Border Background="#252630" BorderBrush="#23FFFFFF" BorderThickness="1" CornerRadius="12" Padding="13,9">
+          <Border Background="{StaticResource SettingsCard}" BorderBrush="#23FFFFFF" BorderThickness="1" CornerRadius="9" Padding="13,9">
             <DockPanel>
               <Grid DockPanel.Dock="Top" Margin="0,0,0,5">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

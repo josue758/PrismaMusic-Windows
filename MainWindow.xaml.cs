@@ -1083,36 +1083,15 @@ public partial class MainWindow : Window
 				throw new InvalidOperationException("Windows no creó la fuente de transmisión.");
 			}
 			Console.WriteLine("Casting: selector y fuente inicializados");
-			ShowAudioOutputMenu(AudioOutputButton, new RoutedEventArgs());
-			ContextMenu contextMenu2 = AudioOutputButton.ContextMenu ?? throw new InvalidOperationException("The audio output selector did not open.");
-			string formatPrefix = LocalTextExtension.Translate("Formato actual del dispositivo: {0} Hz · {1} canales · {2} bits").Split("{0}")[0];
-			string ratesPrefix = LocalTextExtension.Translate("Frecuencias PCM exclusivas compatibles: {0}").Split("{0}")[0];
-			string modePrefix = LocalTextExtension.Translate("Modo de salida actual: {0}").Split("{0}")[0];
-			if (!contextMenu2.Items.OfType<MenuItem>().Any((MenuItem item) => item.Header?.ToString().StartsWith(formatPrefix, StringComparison.Ordinal) ?? false) || !contextMenu2.Items.OfType<MenuItem>().Any((MenuItem item) => item.Header?.ToString().StartsWith(ratesPrefix, StringComparison.Ordinal) ?? false) || !contextMenu2.Items.OfType<MenuItem>().Any((MenuItem item) => item.Header?.ToString().StartsWith(modePrefix, StringComparison.Ordinal) ?? false) || !contextMenu2.Items.OfType<MenuItem>().Any((MenuItem item) => item.Header?.ToString() == LocalTextExtension.Translate("Actualizar dispositivos")))
-			{
-				throw new InvalidOperationException("The audio output menu did not show the current mode, device capabilities and refresh action.");
-			}
-			if (contextMenu2.Items.OfType<MenuItem>().FirstOrDefault((MenuItem item) => item.Header?.ToString() == LocalTextExtension.Translate("Frecuencia de salida WASAPI exclusivo")) == null || !contextMenu2.Items.OfType<MenuItem>().Any((MenuItem item) => item.Header?.ToString().StartsWith(LocalTextExtension.Translate("Automática · seguir la frecuencia de la pista"), StringComparison.Ordinal) ?? false))
-			{
-				throw new InvalidOperationException("The exclusive output sample-rate selector did not offer track-following mode.");
-			}
-			string environmentVariable12 = Environment.GetEnvironmentVariable("PRISMA_AUDIO_MENU_PREVIEW");
-			if (environmentVariable12 != null)
-			{
-				contextMenu2.UpdateLayout();
-				if (contextMenu2.ActualWidth <= 0.0 || contextMenu2.ActualHeight <= 0.0)
-				{
-					throw new InvalidOperationException("The audio output menu has no renderable size.");
-				}
-				RenderTargetBitmap renderTargetBitmap7 = new RenderTargetBitmap((int)Math.Ceiling(contextMenu2.ActualWidth), (int)Math.Ceiling(contextMenu2.ActualHeight), 96.0, 96.0, PixelFormats.Pbgra32);
-				renderTargetBitmap7.Render(contextMenu2);
-				PngBitmapEncoder pngBitmapEncoder7 = new PngBitmapEncoder();
-				pngBitmapEncoder7.Frames.Add(BitmapFrame.Create(renderTargetBitmap7));
-				using FileStream stream8 = System.IO.File.Create(environmentVariable12);
-				pngBitmapEncoder7.Save(stream8);
-			}
-			contextMenu2.IsOpen = false;
-			Console.WriteLine("Audio output selector: mode, device format, compatible rates, track-following and refresh action shown.");
+            ShowAudioOutputMenu(AudioOutputButton, new RoutedEventArgs());
+            for (int attempt = 0; attempt < 50 && audioDevicePicker == null; attempt++) await Task.Delay(50);
+            if (audioOutputPopup?.IsOpen != true || audioOutputSurface == null || audioDevicePicker is not { Items.Count: > 0 } ||
+                audioRatePicker is not { Items.Count: > 0 } || audioRatePicker.Items[0]?.ToString() !=
+                    LocalTextExtension.Translate("Automática · seguir la frecuencia de la pista"))
+                throw new InvalidOperationException("The audio output panel did not expose device and exclusive-rate choices.");
+            CaptureDesignPreview(audioOutputSurface, "PRISMA_AUDIO_MENU_PREVIEW");
+            audioOutputPopup.IsOpen = false;
+            Console.WriteLine("Audio output panel opened and exposed device and sample-rate choices.");
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
 			System.Windows.Application.Current.Shutdown(0);
