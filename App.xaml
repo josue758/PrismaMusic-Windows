@@ -9,6 +9,27 @@
     <SolidColorBrush x:Key="SettingsBackground" Color="#191B22"/>
     <SolidColorBrush x:Key="SettingsCard" Color="#23262F"/>
     <SolidColorBrush x:Key="SettingsStroke" Color="#38FFFFFF"/>
+    <Style x:Key="ListeningTab" TargetType="TabItem">
+      <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TabItem">
+            <Border x:Name="Surface" CornerRadius="5" Background="Transparent" Padding="8,6" Margin="2"
+                    BorderBrush="Transparent" BorderThickness="0,0,0,2">
+              <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" HorizontalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="#15FFFFFF"/></Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Surface" Property="Background" Value="#25FFFFFF"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="SettingsToggle" TargetType="CheckBox">
       <Setter Property="Foreground" Value="{StaticResource Ink}"/>
       <Setter Property="HorizontalContentAlignment" Value="Stretch"/>

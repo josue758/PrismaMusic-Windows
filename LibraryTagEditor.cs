@@ -31,7 +31,7 @@ public partial class MainWindow
             }
             Rows.SelectedItem = row.Content;
         }
-        args.Handled = Rows.SelectedItem is not LibraryRow { Tracks.Length: 1 };
+        args.Handled = Equals(Rows.Tag, "Gallery") || Rows.SelectedItem is not LibraryRow { Tracks.Length: 1 };
     }
 
     private void EditLibraryTags(object sender, RoutedEventArgs args)

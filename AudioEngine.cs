@@ -61,6 +61,7 @@ internal sealed class AudioEngine
     public bool IsExclusive { get; private set; }
     public string OutputNotice { get; private set; }
     public WaveFormat OutputFormat => output?.OutputWaveFormat;
+    public WaveFormat SourceFormat => ActiveReader?.WaveFormat;
     public double Level => meter?.Level ?? 0;
     public float[] Spectrum => meter?.Spectrum ?? Array.Empty<float>();
     public event EventHandler MediaOpened;

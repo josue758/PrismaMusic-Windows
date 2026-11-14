@@ -116,7 +116,7 @@ public record Track(string Path, string Name, string Artist, string Album, strin
 public partial class MainWindow : Window
 {
 
-	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0, bool CompactRows = false, bool ShowTrackQuality = true, bool MiniAlwaysOnTop = true, bool FollowLyrics = true, int AlbumSize = 1, bool AutoArtwork = true, bool AutoLyrics = false, bool KeepAwake = false);
+	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0, bool CompactRows = false, bool ShowTrackQuality = true, bool MiniAlwaysOnTop = true, bool FollowLyrics = true, int AlbumSize = 1, bool AutoArtwork = true, bool AutoLyrics = false, bool KeepAwake = false, int StartupSection = 0);
 
 	private enum RepeatMode
 	{
@@ -176,7 +176,7 @@ public partial class MainWindow : Window
 
 	private LibraryRow artRequest;
 
-	private readonly Stack<(LibraryRow Collection, int Selection, bool Album)> collectionHistory = new Stack<(LibraryRow, int, bool)>();
+	private readonly Stack<(LibraryRow Collection, int Selection, bool Album, int GalleryPage, LibraryFilters Filters)> collectionHistory = new();
 
 	private string playlistName = "Mi lista";
 
@@ -366,7 +366,7 @@ public partial class MainWindow : Window
 		{
 			bool flag = ActualWidth < 1120.0;
 			NavigationColumn.Width = new GridLength(flag ? 168 : 210);
-			ListeningColumn.Width = new GridLength(flag ? 280 : 330);
+			UpdateListeningPanelWidth();
 			BrandTitle.FontSize = (flag ? 14 : 17);
 			Heading.FontSize = (flag ? 32 : 38);
 			System.Windows.Controls.ComboBox genre = Genre;
@@ -389,10 +389,10 @@ public partial class MainWindow : Window
 					((DependencyObject)item2).ClearValue(System.Windows.Controls.Control.PaddingProperty);
 				}
 			}
-			ArtPanel.Height = Math.Clamp(ActualHeight - 490.0, 114.0, 254.0);
+			ArtPanel.Height = Math.Clamp(ActualHeight - 540.0, 98.0, 226.0);
 		};
 		UpdatePlaylistPicker();
-		Navigation.SelectedIndex = 0;
+		Navigation.SelectedIndex = startupSection == 1 ? 1 : 0;
 		Sort.SelectedIndex = 0;
 		ready = true;
 		ApplyLibraryPresentation();
@@ -725,6 +725,24 @@ public partial class MainWindow : Window
 				throw new InvalidOperationException("Back did not restore library.");
 			}
 			Console.WriteLine("Album/artist navigation and back selection passed.");
+			Navigation.SelectedIndex = 0;
+			Search.Text = demo.Tracks[0].Name;
+			Rows.SelectedIndex = 0;
+			var sourceSong = Selected;
+			var songMenu = Rows.ContextMenu;
+			if (songMenu.Items.OfType<MenuItem>().Count() != 6)
+				throw new InvalidOperationException("The song menu did not expose all six commands.");
+			BrowseRelatedAlbum(this, new RoutedEventArgs());
+			if (collection?.Name != sourceSong.Album || !albumPage)
+				throw new InvalidOperationException("Song did not open its album.");
+			restoringLibraryFilters = true;
+			Search.Clear();
+			restoringLibraryFilters = false;
+			CloseCollection(this, new RoutedEventArgs());
+			if (collection != null || Selected != sourceSong || Search.Text != sourceSong.Name)
+				throw new InvalidOperationException("Back did not restore the selected song.");
+			Search.Clear();
+			Console.WriteLine("Song menu commands and navigation from Songs passed.");
 			if (Environment.GetEnvironmentVariable("PRISMA_PROFILE_PROBE") == "1")
 			{
 				string[] originals = new string[3] { "es", "pt", "en" };
@@ -768,6 +786,22 @@ public partial class MainWindow : Window
 			PlayNextInQueue(this, new RoutedEventArgs());
 			if (queue.Count != 2 || queue[0] != nextTrack)
 				throw new InvalidOperationException("Play next did not prioritize the selected track without duplicating it.");
+			MoveQueueTrack(nextTrack, 1);
+			RemoveQueuedTrack(1);
+			UndoQueueRemoval(this, new RoutedEventArgs());
+			if (queue.Count != 2 || queue[1] != nextTrack || SideQueue.Items.Count != 2)
+				throw new InvalidOperationException("The side queue did not reorder and undo a removal.");
+			ToggleListeningPanel(this, new RoutedEventArgs());
+			if (Listening.Visibility != Visibility.Collapsed || ListeningColumn.Width.Value != 0)
+				throw new InvalidOperationException("The playback panel did not release its column.");
+			ToggleListeningPanel(this, new RoutedEventArgs());
+			if (Listening.Visibility != Visibility.Visible || ListeningColumn.Width.Value <= 0)
+				throw new InvalidOperationException("The playback panel did not reopen.");
+			ListeningTabs.SelectedIndex = 1;
+			if (Environment.GetEnvironmentVariable("PRISMA_SIDE_QUEUE_PREVIEW") != null)
+				await Task.Delay(250);
+			CaptureDesignPreview(Shell, "PRISMA_SIDE_QUEUE_PREVIEW");
+			ListeningTabs.SelectedIndex = 0;
 			queue.Clear();
 			player.Speed = 1.5;
 			await Play(track, remember: false, 1.0);
@@ -1602,6 +1636,8 @@ public partial class MainWindow : Window
 			tracks.RemoveAll(removedPaths.Contains);
 		}
 		queue.RemoveAll(track => removedPaths.Contains(track.Path));
+		if (removedQueueTrack != null && removedPaths.Contains(removedQueueTrack.Path))
+			removedQueueTrack = null;
 		context = context.Where(track => !removedPaths.Contains(track.Path)).ToArray();
 		originalContext = originalContext.Where(track => !removedPaths.Contains(track.Path)).ToArray();
 		if (string.Equals(selectedLibrarySource, path, StringComparison.OrdinalIgnoreCase))
@@ -1801,7 +1837,7 @@ public partial class MainWindow : Window
 
 	private void Filter(object sender, RoutedEventArgs args)
 	{
-		if (!ready)
+		if (!ready || restoringLibraryFilters)
 		{
 			return;
 		}
@@ -1825,6 +1861,7 @@ public partial class MainWindow : Window
 
 	private void RefreshRows()
 	{
+		RefreshSideQueue();
 		galleryExportTracks = null;
 		UpdateCollectionHeader();
 		System.Windows.Controls.ListBox rows = Rows;
@@ -1948,13 +1985,17 @@ public partial class MainWindow : Window
 
 	private void CloseCollection(object sender, RoutedEventArgs args)
 	{
-		if (collectionHistory.TryPop(out (LibraryRow, int, bool) result))
+		if (collectionHistory.TryPop(out var result))
 		{
-			(collection, _, albumPage) = result;
+			collection = result.Collection;
+			albumPage = result.Album;
+			galleryPage = result.GalleryPage;
+			RestoreLibraryFilters(result.Filters);
 			UpdateCollectionHeading();
-			if (result.Item2 < Rows.Items.Count)
+			if (result.Selection >= 0 && result.Selection < Rows.Items.Count)
 			{
-				Rows.SelectedIndex = result.Item2;
+				Rows.SelectedIndex = result.Selection;
+				Rows.ScrollIntoView(Rows.SelectedItem);
 			}
 		}
 		else
@@ -1978,13 +2019,17 @@ public partial class MainWindow : Window
 
 	private void OpenCollection(LibraryRow row, bool album)
 	{
-		collectionHistory.Push((collection, Rows.SelectedIndex, albumPage));
+		collectionHistory.Push((collection, Rows.SelectedIndex, albumPage, galleryPage,
+			new LibraryFilters(Search.Text, ArtistFilter.SelectedItem as string, Genre.SelectedItem as string,
+				Year.SelectedItem as string, Sort.SelectedIndex)));
 		albumPage = album;
 		collection = row;
 		UpdateCollectionHeading();
 		Rows.SelectedIndex = 0;
 		Rows.Focus();
 	}
+
+	private void PlaySelectedSong(object sender, RoutedEventArgs args) => ActivateSelection();
 
 	private void BrowseRelatedArtist(object sender, RoutedEventArgs args)
 	{
@@ -2314,6 +2359,7 @@ public partial class MainWindow : Window
 		{
 			Track track = queue[0];
 			queue.RemoveAt(0);
+			RefreshSideQueue();
 			Play(track);
 			if (Navigation.SelectedIndex == 4)
 			{
@@ -2587,6 +2633,7 @@ public partial class MainWindow : Window
 		if ((object)track != null && !queue.Any((Track item) => string.Equals(item.Path, track.Path, StringComparison.OrdinalIgnoreCase)))
 		{
 			queue.Add(track);
+			RefreshSideQueue();
 			Status.Text = LocalTextExtension.Format("Añadida a la cola: {0}", track.Name);
 			if (Navigation.SelectedIndex == 4)
 			{
@@ -2601,6 +2648,7 @@ public partial class MainWindow : Window
 		int existing = queue.FindIndex(item => StringComparer.OrdinalIgnoreCase.Equals(item.Path, track.Path));
 		if (existing >= 0) queue.RemoveAt(existing);
 		queue.Insert(0, track);
+		RefreshSideQueue();
 		Status.Text = LocalTextExtension.Format("Siguiente en la cola: {0}", track.Name);
 		if (Navigation.SelectedIndex == 4)
 		{
@@ -2644,6 +2692,7 @@ public partial class MainWindow : Window
 			autoArtwork = audioSettings.AutoArtwork;
 			autoLyrics = audioSettings.AutoLyrics;
 			keepAwake = audioSettings.KeepAwake;
+			startupSection = Math.Clamp(audioSettings.StartupSection, 0, 2);
 			repeat = (Enum.IsDefined(audioSettings.Repeat) ? audioSettings.Repeat : RepeatMode.Off);
 			MarkPlaybackToggle(ShuffleButton, shuffle);
 			UpdateRepeatButton();
@@ -2695,7 +2744,7 @@ public partial class MainWindow : Window
 		try
 		{
 			Directory.CreateDirectory(DataDirectory);
-			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics, albumSize, autoArtwork, autoLyrics, keepAwake)));
+			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics, albumSize, autoArtwork, autoLyrics, keepAwake, startupSection)));
 			System.IO.File.Move(AudioSettingsFile + ".tmp", AudioSettingsFile, overwrite: true);
 			return true;
 		}
@@ -3179,6 +3228,8 @@ public partial class MainWindow : Window
 		AddLibraryAction("Biblioteca JSON", "Incluye las pistas, fuentes, listas y etiquetas editadas.", exportLibrary);
 		AddLibraryAction("Lista M3U8", "Incluye las pistas de la vista actual en el orden mostrado.", exportPlaylist);
 		panel = libraryPage;
+		AddOption(libraryPage, "Al iniciar Prisma", new[] { "Canciones", "Álbumes", "Última sección" }, startupSection,
+			index => startupSection = index);
 		AddPreference("Buscar carátulas automáticamente", autoArtwork, enabled => autoArtwork = enabled);
 		AddPreference("Buscar letras automáticamente", autoLyrics, enabled => autoLyrics = enabled);
 		libraryPage.Children.Add(new TextBlock { Text = T("La búsqueda automática usa el título y el artista para consultar los catálogos en línea."),

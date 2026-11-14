@@ -135,6 +135,15 @@ public partial class MainWindow
                         FontSize = 19, FontWeight = FontWeights.SemiBold });
                     section.Children.Add(signal);
                     section.Children.Add(Note(format.Channels == 1 ? T("1 canal") : LocalTextExtension.Format("{0} canales", format.Channels)));
+                    if (activeSignal && player.SourceFormat is WaveFormat source)
+                    {
+                        section.Children.Add(Note(LocalTextExtension.Format("Ruta de frecuencia: {0} → {1} kHz",
+                            (source.SampleRate / 1000d).ToString("0.###"), (format.SampleRate / 1000d).ToString("0.###"))));
+                        if (source.SampleRate != format.SampleRate) section.Children.Add(Note(T("Conversión de frecuencia")));
+                        if (!player.IsExclusive) section.Children.Add(Note(T("Windows puede volver a convertir la señal en modo compartido.")));
+                        if (player.OutputId != null && !SameDevice(player.ActiveOutputId, player.OutputId))
+                            section.Children.Add(Note(T("Se está usando la salida predeterminada.")));
+                    }
                 });
             }
             Card(T("Modo de salida"), section =>

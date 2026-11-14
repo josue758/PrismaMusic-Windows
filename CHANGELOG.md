@@ -2,6 +2,14 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.46.0
+
+- Añade pestañas de letras, cola e información y permite plegar el panel de reproducción.
+- Permite reordenar la cola lateral con el ratón o los botones y deshacer la última eliminación.
+- Permite iniciar en Canciones, Álbumes o la última sección y recuperar filtros al volver de una ficha.
+- El selector de salida muestra las frecuencias de origen y salida y avisa cuando difieren o se usa la salida predeterminada.
+- Agrupa reproducción, navegación y metadatos en el menú contextual de las canciones.
+
 ## 0.45.0
 
 - Integra los controles multimedia de Windows con el motor local, incluidos reproducir, pausar, anterior, siguiente y cambiar de posición.

@@ -11,9 +11,12 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
-    private async void Inspect(object sender, RoutedEventArgs args)
+    private async void Inspect(object sender, RoutedEventArgs args) => await InspectTrack(Selected);
+
+    private async void InspectPlayingTrack(object sender, RoutedEventArgs args) => await InspectTrack(current);
+
+    private async Task InspectTrack(Track track)
     {
-        var track = Selected;
         if (track == null) return;
         try
         {

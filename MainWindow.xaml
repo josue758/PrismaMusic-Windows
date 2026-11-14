@@ -183,11 +183,25 @@
         <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" SizeChanged="GalleryViewportChanged" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ContextMenuOpening="PrepareLibraryTagsMenu" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
           <ListBox.ContextMenu>
             <ContextMenu Style="{StaticResource PlayerMenu}">
-              <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Editar etiquetas de biblioteca}" Click="EditLibraryTags">
-                <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE70F;"/></MenuItem.Icon>
+              <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Reproducir ahora}" Click="PlaySelectedSong">
+                <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE768;"/></MenuItem.Icon>
               </MenuItem>
               <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Reproducir a continuación}" Click="PlayNextInQueue">
                 <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8FD;"/></MenuItem.Icon>
+              </MenuItem>
+              <Separator/>
+              <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Ver álbum}" Click="BrowseRelatedAlbum">
+                <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE93C;"/></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Ver artista}" Click="BrowseRelatedArtist">
+                <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE716;"/></MenuItem.Icon>
+              </MenuItem>
+              <Separator/>
+              <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Información del archivo}" Click="Inspect">
+                <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE946;"/></MenuItem.Icon>
+              </MenuItem>
+              <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Editar etiquetas de biblioteca}" Click="EditLibraryTags">
+                <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE70F;"/></MenuItem.Icon>
               </MenuItem>
             </ContextMenu>
           </ListBox.ContextMenu>
@@ -205,8 +219,8 @@
                 <TextBlock DockPanel.Dock="Right" Text="{Binding FormatLabel}" Visibility="{DynamicResource TrackQualityVisibility}" Foreground="{StaticResource Muted}" MaxWidth="145"
                            TextTrimming="CharacterEllipsis" FontSize="11" VerticalAlignment="Center" Margin="10,0,4,0"/>
                 <StackPanel VerticalAlignment="Center">
-                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                  <TextBlock Text="{Binding Detail}" Foreground="#C5FFFFFF" TextTrimming="CharacterEllipsis" FontSize="12" Margin="0,3,0,0"/>
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                  <TextBlock Text="{Binding Detail}" Foreground="#C5FFFFFF" TextTrimming="CharacterEllipsis" FontSize="12" Margin="0,3,0,0" ToolTip="{Binding Detail}"/>
                 </StackPanel>
               </DockPanel>
             </DataTemplate>
@@ -289,11 +303,11 @@
             <Button Style="{StaticResource TransportIcon}" Content="&#xE946;" Click="Inspect" AutomationProperties.Name="{local:LocalText Text=Información del archivo}" ToolTip="{local:LocalText Text=Información del archivo}"/>
           </WrapPanel>
           <UniformGrid x:Name="SpectrumView" DockPanel.Dock="Top" Rows="1" Height="28" Margin="0,2,0,12" ToolTip="{local:LocalText Text=Espectro de la pista}" AutomationProperties.Name="{local:LocalText Text=Espectro de diez bandas}"/>
-          <Border Background="{StaticResource SettingsCard}" BorderBrush="#23FFFFFF" BorderThickness="1" CornerRadius="9" Padding="13,9">
+          <TabControl x:Name="ListeningTabs" Background="{StaticResource SettingsCard}" Foreground="White" BorderBrush="#23FFFFFF">
+            <TabItem Header="{local:LocalText Text=Letras}" Style="{StaticResource ListeningTab}">
             <DockPanel>
               <Grid DockPanel.Dock="Top" Margin="0,0,0,5">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <TextBlock Text="{local:LocalText Text=Letras}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 <Button Grid.Column="1" Style="{StaticResource TransportIcon}" Width="30" Height="30" Content="&#xE721;"
                         Click="LookupLyrics" ToolTip="{local:LocalText Text=Buscar letras}" AutomationProperties.Name="{local:LocalText Text=Buscar letras}"/>
               </Grid>
@@ -301,7 +315,54 @@
                 <TextBlock x:Name="Lyrics" TextWrapping="Wrap" Foreground="{StaticResource Muted}"/>
               </ScrollViewer>
             </DockPanel>
-          </Border>
+            </TabItem>
+            <TabItem Header="{local:LocalText Text=Cola}" Style="{StaticResource ListeningTab}">
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal">
+                  <Button Content="↑" Click="MoveSideQueueUp" AutomationProperties.Name="{local:LocalText Text=Subir en la cola}"/>
+                  <Button Content="↓" Click="MoveSideQueueDown" AutomationProperties.Name="{local:LocalText Text=Bajar en la cola}"/>
+                  <Button Content="{local:LocalText Text=Quitar}" Click="RemoveSideQueueTrack"/>
+                  <Button x:Name="UndoQueueButton" Content="{local:LocalText Text=Deshacer}" Click="UndoQueueRemoval" IsEnabled="False"/>
+                </StackPanel>
+                <Grid>
+                  <ListBox x:Name="SideQueue" AutomationProperties.Name="{local:LocalText Text=Cola}" Background="Transparent"
+                           Foreground="White" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.Resources>
+                      <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinVerticalScrollBar}"/>
+                    </ListBox.Resources>
+                    <ListBox.ItemContainerStyle>
+                      <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                        <Setter Property="AllowDrop" Value="True"/>
+                        <Setter Property="Padding" Value="8,5"/>
+                        <EventSetter Event="PreviewMouseLeftButtonDown" Handler="QueueDragStart"/>
+                        <EventSetter Event="PreviewMouseMove" Handler="QueueDragMove"/>
+                        <EventSetter Event="DragOver" Handler="QueueDragOver"/>
+                        <EventSetter Event="Drop" Handler="QueueDrop"/>
+                      </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <StackPanel>
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                          <TextBlock Text="{Binding Artist}" Foreground="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <TextBlock x:Name="SideQueueEmpty" IsHitTestVisible="False" Text="{local:LocalText Text=La cola está vacía}" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Grid>
+              </DockPanel>
+            </TabItem>
+            <TabItem Header="{local:LocalText Text=Información}" Style="{StaticResource ListeningTab}">
+              <ScrollViewer Style="{StaticResource LyricsScroll}" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="5">
+                  <TextBlock Text="{local:LocalText Text=Formato de audio}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                  <TextBlock Text="{Binding Text, ElementName=AudioFormat}" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                  <Button Content="{local:LocalText Text=Información del archivo}" Click="InspectPlayingTrack" HorizontalAlignment="Left" Margin="0,10,0,0"/>
+                </StackPanel>
+              </ScrollViewer>
+            </TabItem>
+          </TabControl>
         </DockPanel>
       </Border>
     </Grid>
@@ -343,6 +404,8 @@
         </StackPanel>
         <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0,0,0">
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="ListeningPanelButton" Content="&#xE8A1;" Style="{StaticResource TransportIcon}" Click="ToggleListeningPanel"
+                    AutomationProperties.Name="{local:LocalText Text=Plegar panel de reproducción}" ToolTip="{local:LocalText Text=Plegar panel de reproducción}"/>
             <Button x:Name="StopAfterTrackIndicator" Style="{StaticResource TransportIcon}" Width="30" Content="&#xE71A;"
                     Foreground="{DynamicResource AccentBrush}" Visibility="Collapsed" Click="ToggleStopAfterTrack"
                     ToolTip="{local:LocalText Text=Cancelar pausa al final de la canción}" AutomationProperties.Name="{local:LocalText Text=Cancelar pausa al final de la canción}"/>

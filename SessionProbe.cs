@@ -33,6 +33,8 @@ public partial class MainWindow
                 context = new[] { tracks[1], tracks[2], tracks[0] };
                 shuffle = true;
                 repeat = RepeatMode.Track;
+                startupSection = 2;
+                Navigation.SelectedIndex = 1;
                 await Play(tracks[1], false, 1.5);
                 if (!opened) throw new InvalidOperationException("Cannot open demo for session probe.");
                 Console.WriteLine("Closing process with paused track, playback order and settings.");
@@ -41,7 +43,8 @@ public partial class MainWindow
             {
                 if (!opened || playing || current != tracks[1] || Math.Abs(player.Position.TotalSeconds - 1.5) > .15 ||
                     !queue.SequenceEqual(new[] { tracks[2] }) || !originalContext.SequenceEqual(tracks) ||
-                    !context.SequenceEqual(new[] { tracks[1], tracks[2], tracks[0] }) || !shuffle || repeat != RepeatMode.Track)
+                    !context.SequenceEqual(new[] { tracks[1], tracks[2], tracks[0] }) || !shuffle || repeat != RepeatMode.Track ||
+                    startupSection != 2 || Navigation.SelectedIndex != 1)
                     throw new InvalidOperationException("Session did not survive a process restart.");
                 Console.WriteLine("Reopened: paused track, position, queue, both playback orders, shuffle and repeat verified.");
             }
