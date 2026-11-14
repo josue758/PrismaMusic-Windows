@@ -2,6 +2,13 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.41.0
+
+- Unifica los iconos de la navegación y añade interruptores Fluent en Configuración y Bienvenida.
+- Añade filas compactas, visibilidad de formato y una opción para mantener el minirreproductor flotante.
+- Permite leer las letras completas sin seguimiento, carga archivos laterales TXT y conserva el salto por verso para LRC.
+- Añade Reproducir a continuación desde el menú de una pista. Mueve una pista ya en cola al primer lugar.
+
 ## 0.40.0
 
 - Añade la página Biblioteca en Configuración y un menú junto a los filtros de la colección.

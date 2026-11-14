@@ -38,6 +38,7 @@ public partial class MainWindow
         };
         var animatedSpectrum = new CheckBox
         {
+            Style = (Style)FindResource("SettingsToggle"),
             Content = T("Mostrar espectro animado"),
             IsChecked = animateSpectrum,
             Foreground = Brushes.White

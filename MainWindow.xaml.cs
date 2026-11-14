@@ -115,7 +115,7 @@ public record Track(string Path, string Name, string Artist, string Album, strin
 public partial class MainWindow : Window
 {
 
-	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0);
+	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0, bool CompactRows = false, bool ShowTrackQuality = true, bool MiniAlwaysOnTop = true, bool FollowLyrics = true);
 
 	private enum RepeatMode
 	{
@@ -394,6 +394,7 @@ public partial class MainWindow : Window
 		Navigation.SelectedIndex = 0;
 		Sort.SelectedIndex = 0;
 		ready = true;
+		ApplyLibraryPresentation();
 		Shell.Background = DefaultShellBrush();
 		if (smokeTest)
 		{
@@ -741,6 +742,12 @@ public partial class MainWindow : Window
 			{
 				throw new InvalidOperationException("Queue removal failed.");
 			}
+			var nextTrack = queue[1];
+			Rows.SelectedIndex = 1;
+			PlayNextInQueue(this, new RoutedEventArgs());
+			PlayNextInQueue(this, new RoutedEventArgs());
+			if (queue.Count != 2 || queue[0] != nextTrack)
+				throw new InvalidOperationException("Play next did not prioritize the selected track without duplicating it.");
 			queue.Clear();
 			player.Speed = 1.5;
 			await Play(track, remember: false, 1.0);
@@ -918,6 +925,15 @@ public partial class MainWindow : Window
 			lyricScale = 1;
 			RefreshLyrics();
 			Console.WriteLine("Lyric scaling, sync offset and offset-aware seek passed.");
+			followLyrics = false;
+			SetLyrics("[00:01]One\n[00:02]Two\n[00:03]Three\n[00:04]Four\n[00:05]Five\n[00:06]Six");
+			if (Lyrics.Inlines.OfType<Hyperlink>().Count() != 6 || lyricDisplayIndex != -1)
+				throw new InvalidOperationException("Lyrics manual mode did not show the full text.");
+			followLyrics = true;
+			RefreshLyrics();
+			if (Lyrics.Inlines.OfType<Hyperlink>().Count() >= 6)
+				throw new InvalidOperationException("Lyrics follow mode did not restore the listening window.");
+			Console.WriteLine("Full lyrics and automatic verse modes passed.");
 			string portrait = Environment.GetEnvironmentVariable("PRISMA_PORTRAIT_PROBE");
 			if (portrait != null)
 			{
@@ -2019,6 +2035,11 @@ public partial class MainWindow : Window
 				{
 					text = System.IO.File.ReadAllText(path);
 				}
+				if (string.IsNullOrWhiteSpace(text))
+				{
+					string plainPath = Path.ChangeExtension(track.Path, ".txt");
+					if (System.IO.File.Exists(plainPath)) text = System.IO.File.ReadAllText(plainPath);
+				}
 				TagLib.File file = TagLib.File.Create(track.Path);
 				try
 				{
@@ -2534,6 +2555,20 @@ public partial class MainWindow : Window
 		}
 	}
 
+	private void PlayNextInQueue(object sender, RoutedEventArgs args)
+	{
+		if (Selected is not Track track) return;
+		int existing = queue.FindIndex(item => StringComparer.OrdinalIgnoreCase.Equals(item.Path, track.Path));
+		if (existing >= 0) queue.RemoveAt(existing);
+		queue.Insert(0, track);
+		Status.Text = LocalTextExtension.Format("Siguiente en la cola: {0}", track.Name);
+		if (Navigation.SelectedIndex == 4)
+		{
+			RefreshRows();
+			Rows.SelectedItem = Rows.Items.OfType<LibraryRow>().FirstOrDefault(row => row.Tracks[0] == track);
+		}
+	}
+
 	private void LoadAudioSettings()
 	{
 		try
@@ -2561,6 +2596,10 @@ public partial class MainWindow : Window
 			lyricOffset = Math.Clamp(audioSettings.LyricOffset, -10, 10);
 			lyricScale = Math.Clamp(audioSettings.LyricScale, .85, 1.35);
 			ApplyAppearanceProfile(audioSettings.AppearanceProfile);
+			compactRows = audioSettings.CompactRows;
+			showTrackQuality = audioSettings.ShowTrackQuality;
+			miniAlwaysOnTop = audioSettings.MiniAlwaysOnTop;
+			followLyrics = audioSettings.FollowLyrics;
 			repeat = (Enum.IsDefined(audioSettings.Repeat) ? audioSettings.Repeat : RepeatMode.Off);
 			MarkPlaybackToggle(ShuffleButton, shuffle);
 			UpdateRepeatButton();
@@ -2612,7 +2651,7 @@ public partial class MainWindow : Window
 		try
 		{
 			Directory.CreateDirectory(DataDirectory);
-			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile)));
+			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics)));
 			System.IO.File.Move(AudioSettingsFile + ".tmp", AudioSettingsFile, overwrite: true);
 			return true;
 		}
@@ -2947,6 +2986,11 @@ public partial class MainWindow : Window
 			SaveSettingsSoon();
 		});
 		AddPreference("Continuar con la siguiente canción", continueAfterTrack, enabled => continueAfterTrack = enabled);
+		AddPreference("Mantener el minirreproductor encima", miniAlwaysOnTop, enabled =>
+		{
+			miniAlwaysOnTop = enabled;
+			if (mini != null) mini.Topmost = enabled;
+		});
 		AddPreference("Recordar posición de la pista", rememberPosition, enabled => rememberPosition = enabled);
 		var sleep = new System.Windows.Controls.Button
 		{
@@ -2963,6 +3007,7 @@ public partial class MainWindow : Window
 			value => { lyricScale = value; RefreshLyrics(); SaveSettingsSoon(); }));
 		panel.Children.Add(CreateLyricSetting("Ajuste de sincronización", -10, 10, .1, lyricOffset, "+0.0 s;-0.0 s;0.0 s",
 			value => { lyricOffset = value; RefreshLyrics(); SaveSettingsSoon(); }));
+		AddPreference("Seguir el verso activo", followLyrics, enabled => { followLyrics = enabled; RefreshLyrics(); });
 		panel = appearancePage;
 		var appearanceAnchor = new TextBlock
 		{
@@ -2977,6 +3022,8 @@ public partial class MainWindow : Window
 			ApplyAppearanceProfile(profile);
 			SaveSettingsSoon();
 		}));
+		AddPreference("Filas compactas en la biblioteca", compactRows, enabled => { compactRows = enabled; ApplyLibraryPresentation(); });
+		AddPreference("Mostrar formato en la biblioteca y la barra", showTrackQuality, enabled => { showTrackQuality = enabled; ApplyLibraryPresentation(); });
 		panel.Children.Add(new TextBlock
 		{
 			Text = LocalTextExtension.Translate("Color de la aplicación"),
@@ -3316,9 +3363,10 @@ public partial class MainWindow : Window
 			System.Windows.Controls.CheckBox control = new System.Windows.Controls.CheckBox
 			{
 				Content = LocalTextExtension.Translate(label),
+				Style = (Style)FindResource("SettingsToggle"),
 				IsChecked = value2,
 				Foreground = Brushes.White,
-				Margin = new Thickness(0.0, 8.0, 0.0, 2.0)
+				Margin = new Thickness(0, 4, 0, 1)
 			};
 			control.Click += (object _, RoutedEventArgs _) =>
 			{
@@ -3512,7 +3560,7 @@ public partial class MainWindow : Window
 			Width = 400,
 			Height = 184,
 			ResizeMode = ResizeMode.NoResize,
-			Topmost = true,
+			Topmost = miniAlwaysOnTop,
 			WindowStyle = WindowStyle.None,
 			AllowsTransparency = true,
 			ShowInTaskbar = false,

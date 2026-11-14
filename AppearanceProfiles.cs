@@ -20,6 +20,16 @@ public partial class MainWindow
         Color.FromRgb(112, 98, 175), Color.FromRgb(66, 119, 128), Color.FromRgb(50, 53, 64)
     };
     private int appearanceProfile;
+    private bool compactRows;
+    private bool showTrackQuality = true;
+    private bool miniAlwaysOnTop = true;
+
+    private void ApplyLibraryPresentation()
+    {
+        var resources = Application.Current.Resources;
+        resources["SongThumbnailSize"] = compactRows ? 30d : 42d;
+        resources["TrackQualityVisibility"] = showTrackQuality ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     private void ApplyAppearanceProfile(int profile)
     {

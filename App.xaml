@@ -9,6 +9,37 @@
     <SolidColorBrush x:Key="SettingsBackground" Color="#191B22"/>
     <SolidColorBrush x:Key="SettingsCard" Color="#23262F"/>
     <SolidColorBrush x:Key="SettingsStroke" Color="#38FFFFFF"/>
+    <Style x:Key="SettingsToggle" TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <Border x:Name="Row" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="7" Padding="8,7">
+              <DockPanel>
+                <Border x:Name="Switch" DockPanel.Dock="Right" Width="36" Height="19" Margin="12,0,0,0"
+                        VerticalAlignment="Center" CornerRadius="10" Background="#22252D" BorderThickness="1" BorderBrush="#8AFFFFFF">
+                  <Ellipse x:Name="Thumb" Width="9" Height="9" HorizontalAlignment="Left" Margin="4,0"
+                           Fill="{StaticResource Ink}"/>
+                </Border>
+                <TextBlock Text="{TemplateBinding Content}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+              </DockPanel>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Switch" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                <Setter TargetName="Switch" Property="BorderBrush" Value="Transparent"/>
+                <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
+                <Setter TargetName="Thumb" Property="Fill" Value="{DynamicResource OnAccentBrush}"/>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="#12FFFFFF"/></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Row" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Row" Property="Opacity" Value=".45"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="AppearanceChoice" TargetType="RadioButton">
       <Setter Property="Margin" Value="2,0,5,0"/>
       <Setter Property="Template">

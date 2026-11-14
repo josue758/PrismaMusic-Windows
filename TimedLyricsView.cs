@@ -18,6 +18,7 @@ public partial class MainWindow
     private IReadOnlyDictionary<string, string> lyricDisplayTranslation;
     private double lyricOffset;
     private double lyricScale = 1;
+    private bool followLyrics = true;
 
     private void RefreshLyrics()
     {
@@ -52,7 +53,7 @@ public partial class MainWindow
             roomLyricsLiveLabel.Visibility = lyricLines.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         if (roomLyricsLiveDot != null)
             roomLyricsLiveDot.Visibility = lyricLines.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        int index = Array.FindLastIndex(lyricLines, line => line.Time <= position + lyricOffset);
+        int index = followLyrics ? Array.FindLastIndex(lyricLines, line => line.Time <= position + lyricOffset) : -1;
         if (index == lyricDisplayIndex && ReferenceEquals(lyricDisplayTranslation, translatedLines)) return;
         lyricDisplayIndex = index;
         lyricDisplayTranslation = translatedLines;
@@ -71,8 +72,9 @@ public partial class MainWindow
             view.Text = sourceLyrics.Length == 0 ? LocalTextExtension.Translate("Sin letras disponibles") : sourceLyrics;
             return;
         }
-        int start = Math.Max(0, index - 1);
-        for (int i = start; i < Math.Min(start + 5, lyricLines.Length); i++)
+        int start = followLyrics ? Math.Max(0, index - 1) : 0;
+        int end = followLyrics ? Math.Min(start + 5, lyricLines.Length) : lyricLines.Length;
+        for (int i = start; i < end; i++)
         {
             var line = lyricLines[i];
             bool active = i == index;
