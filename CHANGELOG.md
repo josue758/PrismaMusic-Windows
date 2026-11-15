@@ -2,6 +2,10 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.56.1
+
+- Encaja la ventana maximizada en el área de trabajo de su monitor para que la barra de tareas de Windows no tape los controles de reproducción. La Sala de escucha utiliza el monitor completo.
+
 ## 0.56.0
 
 - Busca nuevas versiones en segundo plano y muestra «Actualizar» cuando hay un instalador disponible.

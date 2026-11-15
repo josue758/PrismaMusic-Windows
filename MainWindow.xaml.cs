@@ -338,6 +338,7 @@ public partial class MainWindow : Window
 		};
 		SourceInitialized += (object? _, EventArgs _) =>
 		{
+			WindowPlacement.FitMaximizedClient(new WindowInteropHelper(this).Handle);
 			ApplyFluentBackdrop();
 			if (!smokeTest || Environment.GetEnvironmentVariable("PRISMA_SYSTEM_CONTROLS_PROBE") == "1")
 				InitializeSystemPlaybackControls();
@@ -1231,6 +1232,7 @@ public partial class MainWindow : Window
 				if (!WideLibraryColumns) throw new InvalidOperationException("Wide library did not reveal album and year columns.");
 				CaptureDesignPreview(Shell, "PRISMA_WIDE_PREVIEW");
 			}
+			VerifyWindowPlacement();
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
 			System.Windows.Application.Current.Shutdown(0);
