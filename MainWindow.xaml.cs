@@ -375,7 +375,7 @@ public partial class MainWindow : Window
 			ArtPanel.Height = Math.Clamp(ActualHeight - 540.0, 98.0, 226.0);
 		};
 		UpdatePlaylistPicker();
-		Navigation.SelectedIndex = startupSection == 1 ? 1 : 0;
+		LibrarySectionIndex = startupSection == 1 ? 1 : 0;
 		if (startupSection == 3 && !smokeTest) Navigation.SelectedItem = HomeNavigation;
 		Sort.SelectedIndex = 0;
 		ready = true;
@@ -434,6 +434,12 @@ public partial class MainWindow : Window
 		string text = LocalTextExtension.Translate(flag ? "Restaurar" : "Maximizar");
 		MaximizeWindowButton.ToolTip = text;
 		AutomationProperties.SetName((DependencyObject)(object)MaximizeWindowButton, text);
+	}
+
+	private static bool HasDefaultSmokeAudioEndpoint()
+	{
+		using var enumerator = new MMDeviceEnumerator();
+		return enumerator.HasDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
 	}
 
 	private async Task SmokeTest()
@@ -591,7 +597,7 @@ public partial class MainWindow : Window
 			Search.Clear();
 			await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
 			CaptureDesignPreview(Shell, "PRISMA_HOME_PREVIEW");
-			Navigation.SelectedIndex = 0;
+			LibrarySectionIndex = 0;
 			Console.WriteLine("Home dashboard and title-bar search passed.");
 			var verifiedLossless = track with { Codec = "FLAC", SampleRate = 96000, BitDepth = 24 };
 			library.Tracks = demo.Tracks.Select(item => item == track ? verifiedLossless : item).ToList();
@@ -619,7 +625,7 @@ public partial class MainWindow : Window
 				await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
 				CaptureDesignPreview(Shell, "PRISMA_LOSSLESS_PREVIEW");
 			}
-			Navigation.SelectedIndex = 0;
+			LibrarySectionIndex = 0;
 			library.Tracks = demo.Tracks;
 			RefreshFilters();
 			Console.WriteLine("Lossless navigation, format metadata and combined artist/search filters passed.");
@@ -643,7 +649,7 @@ public partial class MainWindow : Window
 				pngBitmapEncoder2.Save(stream2);
 			}
 			library.Tracks = demo.Tracks;
-			Navigation.SelectedIndex = 1;
+			LibrarySectionIndex = 1;
 			Rows.SelectedIndex = 0;
 			LibraryRow libraryRow = (LibraryRow)Rows.SelectedItem;
 			string environmentVariable8 = Environment.GetEnvironmentVariable("PRISMA_GALLERY_PREVIEW");
@@ -725,7 +731,7 @@ public partial class MainWindow : Window
 				throw new InvalidOperationException("Back did not restore library.");
 			}
 			Console.WriteLine("Album/artist navigation and back selection passed.");
-			Navigation.SelectedIndex = 0;
+			LibrarySectionIndex = 0;
 			Search.Text = demo.Tracks[0].Name;
 			Rows.SelectedIndex = 0;
 			var sourceSong = Selected;
@@ -765,7 +771,7 @@ public partial class MainWindow : Window
 					Console.WriteLine("Wikipedia profile: " + root);
 				}
 			}
-			Navigation.SelectedIndex = 4;
+			LibrarySectionIndex = 4;
 			queue.Clear();
 			queue.AddRange(demo.Tracks);
 			RefreshRows();
@@ -810,12 +816,18 @@ public partial class MainWindow : Window
 			LyricsHeaderButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 			if (Listening.Visibility != Visibility.Visible || ListeningTabs.SelectedIndex != 0)
 				throw new InvalidOperationException("The lyrics shortcut did not restore the listening panel.");
+			if (Environment.GetEnvironmentVariable("PRISMA_SMOKE_UI_ONLY_WITHOUT_AUDIO") == "1" && !HasDefaultSmokeAudioEndpoint())
+			{
+				Console.WriteLine("UI smoke passed. Playback smoke skipped because the runner has no default WASAPI output.");
+				System.Windows.Application.Current.Shutdown(0);
+				return;
+			}
 			queue.Clear();
 			player.Speed = 1.5;
 			await Play(track, remember: false, 1.0);
 			if (!opened || playing || Math.Abs(player.Position.TotalSeconds - 1.0) > 0.15)
 			{
-				throw new InvalidOperationException("Paused session restore failed.");
+				throw new InvalidOperationException($"Paused session restore failed (opened={opened}, playing={playing}, position={player.Position.TotalSeconds:0.00}). {Status.Text}");
 			}
 			bool flag = library.Favorites.Contains(track.Path);
 			FavoriteToolbarButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
@@ -979,7 +991,7 @@ public partial class MainWindow : Window
 				throw new InvalidOperationException("Lyrics size, synchronization or offset-aware seek failed.");
 			if (Environment.GetEnvironmentVariable("PRISMA_LYRIC_PANEL_PREVIEW") != null)
 			{
-				Navigation.SelectedIndex = 0;
+				LibrarySectionIndex = 0;
 				SetLyrics("[00:00]Las luces de la ciudad\n[00:04]Se reflejan sobre el agua\n[00:08]Y nos marcan el camino");
 				CaptureDesignPreview(Shell, "PRISMA_LYRIC_PANEL_PREVIEW");
 			}
@@ -1193,6 +1205,22 @@ public partial class MainWindow : Window
 			{
 				Settings(this, new RoutedEventArgs());
 			}
+			if (Environment.GetEnvironmentVariable("PRISMA_LIBRARY_POLISH_PREVIEW") != null)
+			{
+				LibrarySectionIndex = 0;
+				await Task.Delay(200);
+				UpdateLayout();
+				CaptureDesignPreview(Shell, "PRISMA_LIBRARY_POLISH_PREVIEW");
+				Navigation.SelectedItem = HomeNavigation;
+				await Task.Delay(220);
+				UpdateLayout();
+				CaptureDesignPreview(Shell, "PRISMA_HOME_POLISH_PREVIEW");
+				Width = MinWidth;
+				Height = MinHeight;
+				await Task.Delay(200);
+				UpdateLayout();
+				CaptureDesignPreview(Shell, "PRISMA_SMALL_POLISH_PREVIEW");
+			}
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
 			System.Windows.Application.Current.Shutdown(0);
@@ -1268,9 +1296,8 @@ public partial class MainWindow : Window
 	{
 		//IL_0116: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0133: Unknown result type (might be due to invalid IL or missing references)
-		double num = (0.2126 * (double)(int)accent.R + 0.7152 * (double)(int)accent.G + 0.0722 * (double)(int)accent.B) / 255.0;
 		System.Windows.Application.Current.Resources["AccentBrush"] = new SolidColorBrush(accent);
-		System.Windows.Application.Current.Resources["OnAccentBrush"] = new SolidColorBrush((num > 0.58) ? Colors.Black : Colors.White);
+		System.Windows.Application.Current.Resources["OnAccentBrush"] = new SolidColorBrush(ColorContrast(accent));
 		Border[] array = spectrumBars;
 		for (int i = 0; i < array.Length; i++)
 		{
@@ -1552,9 +1579,9 @@ public partial class MainWindow : Window
 		collectionHistory.Clear();
 		galleryPage = 0;
 		RefreshLibrarySources();
-		if (Navigation.SelectedIndex != 0)
+		if (LibrarySectionIndex != 0)
 		{
-			Navigation.SelectedIndex = 0;
+			LibrarySectionIndex = 0;
 		}
 		else
 		{
@@ -1824,9 +1851,9 @@ public partial class MainWindow : Window
 		galleryPage = 0;
 		if (sender == Search && collection != null && !string.IsNullOrWhiteSpace(Search.Text))
 		{
-			if (Navigation.SelectedIndex != 0)
+			if (LibrarySectionIndex != 0)
 			{
-				Navigation.SelectedIndex = 0;
+				LibrarySectionIndex = 0;
 				return;
 			}
 			collection = null;
@@ -1854,19 +1881,22 @@ public partial class MainWindow : Window
 		bool flag = collection == null;
 		if (flag)
 		{
-			int selectedIndex = Navigation.SelectedIndex;
+			int selectedIndex = LibrarySectionIndex;
 			bool flag2 = (uint)(selectedIndex - 1) <= 1u;
 			flag = flag2;
 		}
 		rows.Tag = (flag ? "Gallery" : null);
 		GalleryPager.Visibility = Visibility.Collapsed;
-		QueueTools.Visibility = ((Navigation.SelectedIndex != 4) ? Visibility.Collapsed : Visibility.Visible);
-		PlaylistPicker.Visibility = ((Navigation.SelectedIndex != 6) ? Visibility.Collapsed : Visibility.Visible);
+		QueueTools.Visibility = ((LibrarySectionIndex != 4) ? Visibility.Collapsed : Visibility.Visible);
+		PlaylistPicker.Visibility = ((LibrarySectionIndex != 6) ? Visibility.Collapsed : Visibility.Visible);
 		LosslessNotice.Visibility = Visibility.Collapsed;
 		BackToCollection.Visibility = ((collection == null) ? Visibility.Collapsed : Visibility.Visible);
 		bool showHome = collection == null && ReferenceEquals(Navigation.SelectedItem, HomeNavigation) &&
 			string.IsNullOrWhiteSpace(Search.Text);
 		HomeView.Visibility = showHome ? Visibility.Visible : Visibility.Collapsed;
+		CollectionCount.Visibility = showHome ? Visibility.Collapsed : Visibility.Visible;
+		LibraryImportCommand.Visibility = !showHome && collection == null && library.Tracks.Count > 0 && LibrarySectionIndex is >= 0 and <= 2
+			? Visibility.Visible : Visibility.Collapsed;
 		LibraryFilterBar.Visibility = showHome ? Visibility.Collapsed : Visibility.Visible;
 		rows.Visibility = showHome ? Visibility.Collapsed : Visibility.Visible;
 		if (showHome)
@@ -1884,7 +1914,7 @@ public partial class MainWindow : Window
 		}
 		Dictionary<string, Track> lookup = library.Tracks.ToDictionary((Track t) => t.Path, StringComparer.OrdinalIgnoreCase);
 		bool losslessView = ReferenceEquals(Navigation.SelectedItem, LosslessNavigation);
-		IEnumerable<Track> source = Navigation.SelectedIndex switch
+		IEnumerable<Track> source = LibrarySectionIndex switch
 		{
 			3 => library.Tracks.Where((Track t) => library.Favorites.Contains(t.Path)), 
 			4 => queue, 
@@ -1904,7 +1934,7 @@ public partial class MainWindow : Window
 			&& (Year.SelectedIndex <= 0 || t.Year.ToString() == (string)Year.SelectedItem)
 			&& (ArtistFilter.SelectedIndex <= 0 || string.Equals(t.Artist, ArtistFilter.SelectedItem as string, StringComparison.CurrentCultureIgnoreCase))
 			&& MatchesLibraryQuery(t, query));
-		if (Navigation.SelectedIndex == 1)
+		if (LibrarySectionIndex == 1)
 		{
 			var source2 = from t in source
 				group t by (Album: t.Album, Artist: (t.AlbumArtist.Length > 0) ? t.AlbumArtist : t.Artist) into g
@@ -1927,7 +1957,7 @@ public partial class MainWindow : Window
 				(g.Tracks.Length == 1) ? LocalTextExtension.Translate("1 pista") : LocalTextExtension.Format("{0:N0} pistas", g.Tracks.Length)
 			}.Where((string item) => item.Length > 0)))).ToArray());
 		}
-		else if (Navigation.SelectedIndex == 2)
+		else if (LibrarySectionIndex == 2)
 		{
 			SetGalleryRows((from t in source
 				group t by t.Artist into g
@@ -1938,7 +1968,7 @@ public partial class MainWindow : Window
 		}
 		else
 		{
-			if (Navigation.SelectedIndex < 4 || losslessView)
+			if (LibrarySectionIndex < 4 || losslessView)
 			{
 				source = Sort.SelectedIndex switch
 				{
@@ -2079,13 +2109,13 @@ public partial class MainWindow : Window
 		bool flag = collection == null;
 		if (flag)
 		{
-			int selectedIndex = Navigation.SelectedIndex;
+			int selectedIndex = LibrarySectionIndex;
 			bool flag2 = (uint)(selectedIndex - 1) <= 1u;
 			flag = flag2;
 		}
 		if (flag)
 		{
-			OpenCollection(libraryRow, Navigation.SelectedIndex == 1);
+			OpenCollection(libraryRow, LibrarySectionIndex == 1);
 			return;
 		}
 		context = ((libraryRow.Tracks.Length > 1) ? libraryRow.Tracks : ((IEnumerable<LibraryRow>)Rows.ItemsSource).SelectMany((LibraryRow r) => r.Tracks).ToArray());
@@ -2338,7 +2368,7 @@ public partial class MainWindow : Window
 			queue.RemoveAt(0);
 			RefreshSideQueue();
 			Play(track);
-			if (Navigation.SelectedIndex == 4)
+			if (LibrarySectionIndex == 4)
 			{
 				RefreshRows();
 			}
@@ -2484,7 +2514,7 @@ public partial class MainWindow : Window
 			Status.Text = (flag ? LocalTextExtension.Format("Añadida a favoritos: {0}", track.Name) : LocalTextExtension.Format("Retirada de favoritos: {0}", track.Name));
 			UpdateFavoriteToolbarButton();
 			Save();
-			if (Navigation.SelectedIndex == 3)
+			if (LibrarySectionIndex == 3)
 			{
 				RefreshRows();
 			}
@@ -2597,7 +2627,7 @@ public partial class MainWindow : Window
 			}
 			Status.Text = (flag ? LocalTextExtension.Format("Retirada de {0}: {1}", playlistName, selected.Name) : LocalTextExtension.Format("Añadida a {0}: {1}", playlistName, selected.Name));
 			Save();
-			if (Navigation.SelectedIndex == 6)
+			if (LibrarySectionIndex == 6)
 			{
 				RefreshRows();
 			}
@@ -2612,7 +2642,7 @@ public partial class MainWindow : Window
 			queue.Add(track);
 			RefreshSideQueue();
 			Status.Text = LocalTextExtension.Format("Añadida a la cola: {0}", track.Name);
-			if (Navigation.SelectedIndex == 4)
+			if (LibrarySectionIndex == 4)
 			{
 				RefreshRows();
 			}
@@ -2627,7 +2657,7 @@ public partial class MainWindow : Window
 		queue.Insert(0, track);
 		RefreshSideQueue();
 		Status.Text = LocalTextExtension.Format("Siguiente en la cola: {0}", track.Name);
-		if (Navigation.SelectedIndex == 4)
+		if (LibrarySectionIndex == 4)
 		{
 			RefreshRows();
 			Rows.SelectedItem = Rows.Items.OfType<LibraryRow>().FirstOrDefault(row => row.Tracks[0] == track);

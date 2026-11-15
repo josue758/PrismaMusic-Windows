@@ -39,7 +39,7 @@ public partial class MainWindow
         try
         {
             Directory.CreateDirectory(DataDirectory);
-            var session = new ListeningSession(current?.Path, player.Position.TotalSeconds, queue.Select(t => t.Path).ToArray(), originalContext.Select(t => t.Path).ToArray(), context.Select(t => t.Path).ToArray(), Math.Max(0, Navigation.SelectedIndex));
+            var session = new ListeningSession(current?.Path, player.Position.TotalSeconds, queue.Select(t => t.Path).ToArray(), originalContext.Select(t => t.Path).ToArray(), context.Select(t => t.Path).ToArray(), Math.Max(0, LibrarySectionIndex));
             File.WriteAllText(SessionFile + ".tmp", JsonSerializer.Serialize(session));
             File.Move(SessionFile + ".tmp", SessionFile, true);
         }
@@ -54,7 +54,7 @@ public partial class MainWindow
             var session = JsonSerializer.Deserialize<ListeningSession>(File.ReadAllText(SessionFile));
             if (session == null) return;
             if (startupSection == 2 && session.Section >= 0 && session.Section < Navigation.Items.Count)
-                Navigation.SelectedIndex = session.Section;
+                LibrarySectionIndex = session.Section;
             var tracks = library.Tracks.ToDictionary(t => t.Path, StringComparer.OrdinalIgnoreCase);
             foreach (var path in (session.Queue ?? Array.Empty<string>()).Distinct(StringComparer.OrdinalIgnoreCase))
                 if (tracks.TryGetValue(path, out var queued)) queue.Add(queued);

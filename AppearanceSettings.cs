@@ -166,8 +166,13 @@ public partial class MainWindow
 
     private static Color ColorContrast(Color color)
     {
-        double brightness = .2126 * color.R + .7152 * color.G + .0722 * color.B;
-        return brightness > 135 ? Colors.Black : Colors.White;
+        static double Linear(byte component)
+        {
+            double value = component / 255d;
+            return value <= .04045 ? value / 12.92 : Math.Pow((value + .055) / 1.055, 2.4);
+        }
+        double luminance = .2126 * Linear(color.R) + .7152 * Linear(color.G) + .0722 * Linear(color.B);
+        return luminance > .179 ? Colors.Black : Colors.White;
     }
 
     private static Color Mix(Color from, Color toward, double ratio) => Color.FromRgb(

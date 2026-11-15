@@ -185,8 +185,9 @@ public partial class MainWindow
             bool fallback = activeSignal && player.OutputId != null && !SameDevice(player.OutputId, player.ActiveOutputId);
             active.Text = activeSignal ? LocalTextExtension.Format(playing ? "Sonando en: {0}" : "Salida abierta · {0}", player.ActiveOutputName)
                 : snapshot?.ActiveName is string available ? LocalTextExtension.Format("Dispositivo disponible: {0}", available) : T("Sin dispositivo activo");
-            format.Text = currentFormat == null ? "" : LocalTextExtension.Format("{0:0.###} kHz · {1} bit · {2} canales",
-                currentFormat.SampleRate / 1000d, currentFormat.BitsPerSample, currentFormat.Channels);
+            format.Text = currentFormat == null ? "" : LocalTextExtension.Format("{0:0.###} kHz · {1} bit · {2}",
+                currentFormat.SampleRate / 1000d, currentFormat.BitsPerSample,
+                currentFormat.Channels == 1 ? T("1 canal") : LocalTextExtension.Format("{0} canales", currentFormat.Channels));
             format.Visibility = currentFormat == null ? Visibility.Collapsed : Visibility.Visible;
             status.Text = applying ? T("Aplicando salida…") : updatingDevices ? T("Consultando dispositivos…")
                 : fallback ? LocalTextExtension.Format("Salida solicitada: {0}", (choice.SelectedItem as AudioOutputInfo)?.Name)

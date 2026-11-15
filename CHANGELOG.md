@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.53.0
+
+- Separa la navegación, biblioteca, panel de escucha y controles de reproducción en superficies Fluent con bordes y espaciado comunes.
+- Rediseña Inicio con una pista destacada, portadas que se adaptan a la ventana y accesos a canciones recientes.
+- Añade un indicador de la pista actual en la biblioteca y simplifica la barra en pantalla completa.
+
 ## 0.52.0
 
 - Amplía Apariencia con controles de movimiento, paleta de carátula, colores de acento, temas y materiales ajustables.

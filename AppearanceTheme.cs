@@ -22,6 +22,7 @@ public partial class MainWindow
         ("SettingsCard", 0xFF292929, 0xFFFFFFFF),
         ("SettingsStroke", 0x38FFFFFF, 0x3D000000),
         ("WorkspaceStroke", 0x28FFFFFF, 0x23000000),
+        ("SidebarSurface", 0x7D202127, 0xB8F5F5F7),
         ("NavigationBackdrop", 0x89191919, 0xC7F3F3F4),
         ("WorkspaceText", 0xFFF5F5F5, 0xFF1B1B1B),
         ("WorkspaceMuted", 0xC5FFFFFF, 0xC5222222),
@@ -71,6 +72,7 @@ public partial class MainWindow
             SetThemeBrush(key, lightTheme ? light : dark);
         ApplySurfaceMaterial();
         RefreshArtworkTheme();
+        if (ready && collection != null) UpdateCollectionHeader();
         foreach (Window window in Application.Current.Windows) UpdateWindowCaptionTheme(window);
     }
 

@@ -54,10 +54,10 @@ public partial class MainWindow
         EmptyLibraryView.Visibility = empty ? Visibility.Visible : Visibility.Collapsed;
         if (!empty) return;
         bool filtered = Search.Text.Length != 0 || ArtistFilter.SelectedIndex > 0 || Genre.SelectedIndex > 0 || Year.SelectedIndex > 0;
-        bool vacant = library.Tracks.Count == 0 && Navigation.SelectedIndex != 4;
-        string title = filtered ? "No se encontraron canciones" : Navigation.SelectedIndex == 4 ? "La cola está vacía"
+        bool vacant = library.Tracks.Count == 0 && LibrarySectionIndex != 4;
+        string title = filtered ? "No se encontraron canciones" : LibrarySectionIndex == 4 ? "La cola está vacía"
             : vacant ? "Añade tu música" : "Esta vista está vacía";
-        string detail = filtered ? "Prueba con otra búsqueda o limpia los filtros." : Navigation.SelectedIndex == 4
+        string detail = filtered ? "Prueba con otra búsqueda o limpia los filtros." : LibrarySectionIndex == 4
             ? "Usa Reproducir a continuación desde el menú de una canción." : vacant ? "Elige una carpeta para empezar tu biblioteca." : "";
         EmptyLibraryTitle.Text = T(title);
         EmptyLibraryDetail.Text = T(detail);

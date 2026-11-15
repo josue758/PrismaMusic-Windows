@@ -84,6 +84,7 @@ public partial class MainWindow
             if (remember && current != null && current != track) previous.Push(current);
             bool trackChanged = !ReferenceEquals(current, track);
             current = track;
+            CurrentTrackPath = track.Path;
             UpdateFavoriteToolbarButton();
             player.Volume = Volume.Value;
             if (player.NaturalDuration.HasTimeSpan)
@@ -99,7 +100,7 @@ public partial class MainWindow
                 library.History.Insert(0, track.Path);
                 if (library.History.Count > 500) library.History.RemoveAt(500);
                 Save();
-                if (Navigation.SelectedIndex == 5 || ReferenceEquals(Navigation.SelectedItem, HomeNavigation)) RefreshRows();
+                if (LibrarySectionIndex == 5 || ReferenceEquals(Navigation.SelectedItem, HomeNavigation)) RefreshRows();
             }
             if (trackChanged) LoadPresentation(track);
             PublishSystemPlayback();

@@ -122,7 +122,7 @@ public partial class MainWindow
 
     private void RefreshQueueViews(Track selected = null)
     {
-        if (Navigation.SelectedIndex == 4) RefreshRows();
+        if (LibrarySectionIndex == 4) RefreshRows();
         else RefreshSideQueue();
         if (selected != null) SideQueue.SelectedItem = selected;
     }

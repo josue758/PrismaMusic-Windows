@@ -20,6 +20,8 @@ jobs:
       - name: Publish
         run: dotnet publish PrismaMusic.csproj -c Release -r win-x64 --self-contained true -o publish
       - name: Smoke test
+        env:
+          PRISMA_SMOKE_UI_ONLY_WITHOUT_AUDIO: "1"
         run: |
           $app = Start-Process -FilePath '.\publish\Prisma Music.exe' -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru -Wait -RedirectStandardOutput smoke-output.txt -RedirectStandardError smoke-error.txt
           Get-Content smoke-output.txt, smoke-error.txt

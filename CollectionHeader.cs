@@ -10,9 +10,6 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
-    private static readonly Brush CollectionHeaderBrush = new LinearGradientBrush(
-        Color.FromRgb(44, 62, 92), Color.FromRgb(23, 33, 53), 105);
-
     private void UpdateCollectionHeader()
     {
         var page = collection;
@@ -22,7 +19,7 @@ public partial class MainWindow
         ArtistFilter.Visibility = Genre.Visibility = Year.Visibility = Sort.Visibility = detail ? Visibility.Collapsed : Visibility.Visible;
         OpenRelatedAlbum.Visibility = detail && !albumPage ? Visibility.Visible : Visibility.Collapsed;
         OpenRelatedArtist.Visibility = detail && albumPage ? Visibility.Visible : Visibility.Collapsed;
-        LibraryHeader.Background = detail ? CollectionHeaderBrush : Brushes.Transparent;
+        LibraryHeader.Background = detail ? CollectionBackdrop(page) : Brushes.Transparent;
         LibraryHeader.Padding = detail ? new Thickness(15) : new Thickness(2, 15, 0, 0);
         if (!detail)
         {
@@ -31,6 +28,12 @@ public partial class MainWindow
             int count = selectedLibrarySource == null
                 ? library.Tracks.Count
                 : library.Tracks.Count(track => IsTrackInSource(track.Path, selectedLibrarySource));
+            if (LibrarySectionIndex == 4)
+            {
+                CollectionCount.Text = queue.Count == 1 ? LocalTextExtension.Translate("1 canción en cola")
+                    : LocalTextExtension.Format("{0:N0} canciones en cola", queue.Count);
+                return;
+            }
             CollectionCount.Text = selectedLibrarySource == null
                 ? string.Format(LocalTextExtension.Translate("{0:N0} canciones en tu biblioteca"), count)
                 : LocalTextExtension.Format("{0:N0} pistas en esta fuente", count);
@@ -52,6 +55,13 @@ public partial class MainWindow
             CollectionArt.Source = null;
             LoadCollectionArtwork(page);
         }
+    }
+
+    private Brush CollectionBackdrop(LibraryRow page)
+    {
+        Color tone = ArtworkTile.AccentForCaption(page.Name, windowsAccent);
+        var baseColor = lightTheme ? Color.FromRgb(249, 249, 250) : Color.FromRgb(38, 39, 43);
+        return new LinearGradientBrush(Mix(baseColor, tone, lightTheme ? .12 : .28), baseColor, 28);
     }
 
     private async void LoadCollectionArtwork(LibraryRow page)

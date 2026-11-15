@@ -50,7 +50,7 @@ public partial class MainWindow
     private async void LoadGalleryCard(object sender, RoutedEventArgs args)
     {
         if (sender is not Image image || image.DataContext is not LibraryRow row) return;
-        bool artist = Navigation.SelectedIndex == 2;
+        bool artist = LibrarySectionIndex == 2;
         await artworkWorkers.WaitAsync();
         try
         {

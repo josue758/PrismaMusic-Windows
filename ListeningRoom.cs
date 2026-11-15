@@ -193,6 +193,11 @@ public partial class MainWindow
         RefreshLyrics();
 
         Visibility artworkButtonVisibility = TransportArtworkButton.Visibility;
+        Visibility panelButtonVisibility = ListeningPanelButton.Visibility;
+        GridLength trackColumn = TransportMetadataColumn.Width;
+        TransportMetadata.Visibility = Visibility.Collapsed;
+        TransportMetadataColumn.Width = new GridLength(0);
+        ListeningPanelButton.Visibility = Visibility.Collapsed;
         TransportArtworkButton.Visibility = Visibility.Collapsed;
         var room = new Window
         {
@@ -225,6 +230,9 @@ public partial class MainWindow
             Shell.Children.Add(Transport);
             Transport.Margin = transportMargin;
             TransportArtworkButton.Visibility = artworkButtonVisibility;
+            TransportMetadata.Visibility = Visibility.Visible;
+            TransportMetadataColumn.Width = trackColumn;
+            ListeningPanelButton.Visibility = panelButtonVisibility;
             listeningRoom = null;
             roomLyrics = null;
             roomLyricsLiveDot = null;
@@ -246,6 +254,9 @@ public partial class MainWindow
             if (Transport.Parent == null) Shell.Children.Add(Transport);
             Transport.Margin = transportMargin;
             TransportArtworkButton.Visibility = artworkButtonVisibility;
+            TransportMetadata.Visibility = Visibility.Visible;
+            TransportMetadataColumn.Width = trackColumn;
+            ListeningPanelButton.Visibility = panelButtonVisibility;
             listeningRoom = null;
             roomLyrics = null;
             roomLyricsLiveDot = null;

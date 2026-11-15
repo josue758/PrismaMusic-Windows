@@ -17,6 +17,7 @@
     <SolidColorBrush x:Key="WorkspaceText" Color="#F5F5F5"/>
     <SolidColorBrush x:Key="WorkspaceMuted" Color="#C5FFFFFF"/>
     <SolidColorBrush x:Key="TitleSearchSurface" Color="#13FFFFFF"/>
+    <SolidColorBrush x:Key="SidebarSurface" Color="#7D202127"/>
     <SolidColorBrush x:Key="ControlFill" Color="#10FFFFFF"/>
     <SolidColorBrush x:Key="ControlHover" Color="#26FFFFFF"/>
     <SolidColorBrush x:Key="ControlStroke" Color="#32FFFFFF"/>
@@ -238,7 +239,7 @@
               </Grid>
             </Border>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Row" Property="Background" Value="#16FFFFFF"/></Trigger>
+              <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Row" Property="Background" Value="{DynamicResource ControlFill}"/></Trigger>
               <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Row" Property="Opacity" Value=".45"/></Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -332,8 +333,8 @@
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="#16FFFFFF"/></Trigger>
-              <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Background" Value="#28FFFFFF"/><Setter TargetName="Surface" Property="Opacity" Value=".75"/></Trigger>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource ControlFill}"/></Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource ControlHover}"/><Setter TargetName="Surface" Property="Opacity" Value=".75"/></Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
               <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Surface" Property="Opacity" Value=".42"/></Trigger>
             </ControlTemplate.Triggers>
@@ -554,7 +555,7 @@
       </Setter>
     </Style>
     <Style x:Key="NavigationItem" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-      <Setter Property="Padding" Value="10,8"/>
+      <Setter Property="Padding" Value="9,7"/>
       <Setter Property="ContentTemplate">
         <Setter.Value>
           <DataTemplate>
