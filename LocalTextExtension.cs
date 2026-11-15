@@ -638,7 +638,26 @@ public sealed class LocalTextExtension : MarkupExtension
         ["{0:N0} canciones en tu biblioteca"] = ("{0:N0} songs in your library", "{0:N0} músicas na sua biblioteca"),
         ["Leyendo carpetas…"] = ("Reading folders…", "Lendo pastas…"),
         ["Crear"] = ("Create", "Criar"),
-        ["Nombre de la lista"] = ("Playlist name", "Nome da lista")
+        ["Nombre de la lista"] = ("Playlist name", "Nome da lista"),
+        ["Actualizaciones de Prisma Music"] = ("Prisma Music updates", "Atualizações do Prisma Music"),
+        ["Hay una actualización disponible"] = ("An update is available", "Uma atualização está disponível"),
+        ["Buscar actualizaciones"] = ("Check for updates", "Verificar atualizações"),
+        ["Buscando actualizaciones…"] = ("Checking for updates…", "Verificando atualizações…"),
+        ["Descargando actualización…"] = ("Downloading update…", "Baixando atualização…"),
+        ["Descargar e instalar"] = ("Download and install", "Baixar e instalar"),
+        ["Versión instalada {0}"] = ("Installed version {0}", "Versão instalada {0}"),
+        ["Tienes la versión más reciente."] = ("You have the latest version.", "Você tem a versão mais recente."),
+        ["Ya está disponible Prisma Music {0}. La aplicación se cerrará y volverá a abrir al terminar."] =
+            ("Prisma Music {0} is available. The app will close and reopen after installation.",
+             "Prisma Music {0} está disponível. O aplicativo será fechado e reaberto após a instalação."),
+        ["No se pudo buscar actualizaciones. Comprueba tu conexión y vuelve a intentarlo."] =
+            ("Could not check for updates. Check your connection and try again.",
+             "Não foi possível verificar atualizações. Verifique a conexão e tente novamente."),
+        ["No se pudo preparar la actualización. Vuelve a intentarlo."] =
+            ("Could not prepare the update. Try again.", "Não foi possível preparar a atualização. Tente novamente."),
+        ["Espera a que termine el escaneo de la biblioteca para instalar la actualización."] =
+            ("Wait for the library scan to finish before installing the update.",
+             "Aguarde o fim da verificação da biblioteca para instalar a atualização.")
     };
 }
 

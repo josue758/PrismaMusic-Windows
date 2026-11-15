@@ -60,6 +60,13 @@
         </Grid>
       </DockPanel>
       <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+        <Button x:Name="UpdateAvailableButton" Style="{StaticResource CompactButton}" Click="OpenUpdateDialog"
+                Visibility="Collapsed" Height="29" Margin="0,8,6,0" Padding="8,2" VerticalAlignment="Top"
+                Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource OnAccentBrush}"
+                Content="{local:LocalText Text=Actualizar}"
+                ToolTip="{local:LocalText Text=Hay una actualización disponible}"
+                AutomationProperties.Name="{local:LocalText Text=Hay una actualización disponible}"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
         <Button x:Name="MinimizeWindowButton" Style="{StaticResource TitleBarButton}" Click="MinimizeMainWindow"
                 shell:WindowChrome.IsHitTestVisibleInChrome="True" AutomationProperties.Name="{local:LocalText Text=Minimizar}">
           <TextBlock Text="&#xE921;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10"/>

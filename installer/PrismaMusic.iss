@@ -49,8 +49,38 @@ Name: "{autoprograms}\Prisma Music"; Filename: "{app}\Prisma Music.exe"; Working
 
 [Run]
 Filename: "{app}\Prisma Music.exe"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,Prisma Music}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Prisma Music.exe"; WorkingDir: "{app}"; Flags: nowait skipifnotsilent; Check: IsPrismaUpdate
 
 [Code]
+function OpenProcess(Access: LongWord; InheritHandle: Boolean; ProcessId: LongWord): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(Handle: THandle; Milliseconds: LongWord): LongWord;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(Handle: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+function IsPrismaUpdate: Boolean;
+begin
+  Result := StrToIntDef(ExpandConstant('{param:PRISMAUPDATEPID|0}'), 0) > 0;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ProcessHandle: THandle;
+begin
+  Result := '';
+  if IsPrismaUpdate then
+  begin
+    ProcessHandle := OpenProcess($00100000, False, StrToIntDef(ExpandConstant('{param:PRISMAUPDATEPID|0}'), 0));
+    if ProcessHandle <> 0 then
+    begin
+      if WaitForSingleObject(ProcessHandle, 30000) <> 0 then
+        Result := FmtMessage(CustomMessage('CloseForUpdate'), ['Prisma Music']);
+      CloseHandle(ProcessHandle);
+    end;
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   LegacyLocation: String;
@@ -61,3 +91,8 @@ begin
      (CompareText(RemoveBackslashUnlessRoot(LegacyLocation), RemoveBackslashUnlessRoot(ExpandConstant('{app}'))) = 0) then
     RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\PrismaMusic.Windows');
 end;
+
+[CustomMessages]
+spanish.CloseForUpdate=Cierra %1 y vuelve a intentar la actualización.
+english.CloseForUpdate=Close %1 and try the update again.
+brazilianportuguese.CloseForUpdate=Feche o %1 e tente atualizar novamente.

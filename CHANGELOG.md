@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.56.0
+
+- Busca nuevas versiones en segundo plano y muestra «Actualizar» cuando hay un instalador disponible.
+- Permite buscar, descargar y verificar actualizaciones desde Configuración. El instalador vuelve a abrir Prisma Music al terminar.
+
 ## 0.55.0
 
 - Usa el logo de Prisma Music en los ejecutables de Windows, el instalador, el acceso directo, la ventana y la barra de tareas.

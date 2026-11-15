@@ -397,6 +397,7 @@ public partial class MainWindow : Window
 		{
 			return;
 		}
+		InitializeUpdates();
 		Loaded += async (object _, RoutedEventArgs _) =>
 		{
 			await RestoreSession();
@@ -3229,6 +3230,8 @@ public partial class MainWindow : Window
 		AddShortcutRow(panel, "Reproducir canción seleccionada", "Enter");
 		panel = AddSettingsCard(aboutPage, "Prisma Music");
 		panel.Children.Add(SettingsHint($"Windows · {typeof(MainWindow).Assembly.GetName().Version?.ToString(3)}"));
+		if (updater != null)
+			panel.Children.Add(SettingsButton("Buscar actualizaciones", OpenUpdateDialog));
 
 		var visualizerCard = AddSettingsCard(lyricsPage, "Visualizador", "Ajusta el movimiento del visualizador.");
 		string[] styles = { "bars", "mirror", "centered" };
