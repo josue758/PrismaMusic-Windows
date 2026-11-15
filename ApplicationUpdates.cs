@@ -160,7 +160,7 @@ internal sealed class ApplicationUpdates(HttpClient client)
         var start = new ProcessStartInfo(path) { WorkingDirectory = installation };
         foreach (string argument in new[]
         {
-            "/SP-", "/SILENT", "/NORESTART", "/NOCLOSEAPPLICATIONS", $"/DIR={installation}", $"/LANG={language}",
+            "/SP-", "/SILENT", "/NORESTART", "/NORESTARTAPPLICATIONS", $"/DIR={installation}", $"/LANG={language}",
             $"/PRISMAUPDATEPID={Environment.ProcessId}"
         })
             start.ArgumentList.Add(argument);

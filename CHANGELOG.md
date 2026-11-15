@@ -2,6 +2,10 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.57.3
+
+- Espera a que todas las instancias de Prisma de la instalación de destino cierren antes de reemplazar archivos. Esto corrige el error de acceso denegado al actualizar desde versiones anteriores.
+
 ## 0.57.2
 
 - Usa una onda de audio para identificar el Visualizador en la barra superior y el menú de reproducción.

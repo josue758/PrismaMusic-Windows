@@ -26,6 +26,8 @@ MinVersion=10.0.19041
 OutputDir={#SetupOutput}
 OutputBaseFilename=Prisma-Music-Windows-{#AppVersion}-Setup-x64
 SetupLogging=yes
+CloseApplications=yes
+RestartApplications=no
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern dynamic
@@ -58,10 +60,95 @@ function WaitForSingleObject(Handle: THandle; Milliseconds: LongWord): LongWord;
   external 'WaitForSingleObject@kernel32.dll stdcall';
 function CloseHandle(Handle: THandle): Boolean;
   external 'CloseHandle@kernel32.dll stdcall';
+function EnumWindows(Callback: NativeInt; ProcessId: NativeInt): Boolean;
+  external 'EnumWindows@user32.dll stdcall';
+function GetWindowThreadProcessId(Window: HWND; var ProcessId: LongWord): LongWord;
+  external 'GetWindowThreadProcessId@user32.dll stdcall';
+function GetWindow(Window: HWND; Command: LongWord): HWND;
+  external 'GetWindow@user32.dll stdcall';
+function IsWindowVisible(Window: HWND): Boolean;
+  external 'IsWindowVisible@user32.dll stdcall';
+function PostMessage(Window: HWND; MessageId: LongWord; WParam: NativeUInt; LParam: NativeInt): Boolean;
+  external 'PostMessageW@user32.dll stdcall';
 
 function IsPrismaUpdate: Boolean;
 begin
   Result := StrToIntDef(ExpandConstant('{param:PRISMAUPDATEPID|0}'), 0) > 0;
+end;
+
+function RequestPrismaClose(Window: HWND; ProcessId: NativeInt): Boolean;
+var
+  OwnerProcess: LongWord;
+begin
+  Result := True;
+  GetWindowThreadProcessId(Window, OwnerProcess);
+  { WM_CLOSE on visible, unowned windows allows Prisma to save its playback session. }
+  if (OwnerProcess = LongWord(ProcessId)) and (GetWindow(Window, 4) = 0) and IsWindowVisible(Window) then
+    PostMessage(Window, $0010, 0, 0);
+end;
+
+function CloseInstalledPrisma: Boolean;
+var
+  Locator, Service, Processes, Entry, ImagePath: Variant;
+  InstalledExe, RunningExe: String;
+  I: Integer;
+  ProcessId: LongWord;
+  ProcessHandle: THandle;
+  Callback: NativeInt;
+  VerifyOnly: Boolean;
+begin
+  Result := False;
+  InstalledExe := ExpandConstant('{app}\Prisma Music.exe');
+  if not FileExists(InstalledExe) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  Callback := CreateCallback(@RequestPrismaClose);
+  try
+    Locator := CreateOleObject('WbemScripting.SWbemLocator');
+    Service := Locator.ConnectServer('.', 'root\cimv2');
+    VerifyOnly := False;
+    repeat
+      Processes := Service.ExecQuery('SELECT ProcessId, ExecutablePath FROM Win32_Process WHERE Name = ''Prisma Music.exe''');
+      for I := 0 to Processes.Count - 1 do
+      begin
+        Entry := Processes.ItemIndex(I);
+        ImagePath := Entry.ExecutablePath;
+        RunningExe := '';
+        if not VarIsNull(ImagePath) then
+          RunningExe := ImagePath;
+        if CompareText(RunningExe, InstalledExe) = 0 then
+        begin
+          ProcessId := Entry.ProcessId;
+          ProcessHandle := OpenProcess($00100000, False, ProcessId);
+          if ProcessHandle <> 0 then
+          begin
+            try
+              if VerifyOnly then
+              begin
+                if WaitForSingleObject(ProcessHandle, 0) <> 0 then Exit;
+              end
+              else
+              begin
+                Log(Format('Closing Prisma Music process %d in the target installation.', [ProcessId]));
+                EnumWindows(Callback, ProcessId);
+                if WaitForSingleObject(ProcessHandle, 15000) <> 0 then Exit;
+              end;
+            finally
+              CloseHandle(ProcessHandle);
+            end;
+          end
+          else if VerifyOnly then Exit;
+        end;
+      end;
+      if VerifyOnly then Break;
+      VerifyOnly := True;
+    until False;
+    Result := True;
+  except
+    Log('Could not check running Prisma Music processes: ' + GetExceptionMessage);
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -79,6 +166,10 @@ begin
       CloseHandle(ProcessHandle);
     end;
   end;
+  { Older in-app updaters pass /NOCLOSEAPPLICATIONS. Check all copies in this
+    installation before touching any files, regardless of that option. }
+  if (Result = '') and not CloseInstalledPrisma then
+    Result := FmtMessage(CustomMessage('CloseForUpdate'), ['Prisma Music']);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
