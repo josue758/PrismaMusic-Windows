@@ -95,6 +95,8 @@ internal sealed class AudioEngine
 
     internal static WaveStream Prepare(string path, bool strictDirect)
     {
+        if (!path.StartsWith(@"\\", StringComparison.Ordinal))
+            path = NetworkMusicSource.Normalize(path) ?? path;
         if (!strictDirect)
         {
             string extension = Path.GetExtension(path).ToLowerInvariant();

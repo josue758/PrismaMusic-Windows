@@ -1,12 +1,57 @@
+using System.Collections.Generic;
+using System.Linq;
 using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace PrismaMusic;
 
 public partial class MainWindow
 {
+    private DispatcherTimer searchDebounce;
+
+    private void SearchTextChanged(object sender, TextChangedEventArgs args)
+    {
+        if (!ready || restoringLibraryFilters) return;
+        if (smokeTest || !Search.IsKeyboardFocusWithin)
+        {
+            searchDebounce?.Stop();
+            Filter(sender, args);
+            return;
+        }
+        if (searchDebounce == null)
+        {
+            searchDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(145) };
+            searchDebounce.Tick += (_, _) =>
+            {
+                searchDebounce.Stop();
+                Filter(Search, new RoutedEventArgs());
+            };
+            Closed += (_, _) => searchDebounce.Stop();
+        }
+        searchDebounce.Stop();
+        searchDebounce.Start();
+    }
+
+    private static readonly DependencyPropertyKey WideLibraryColumnsPropertyKey =
+        DependencyProperty.RegisterReadOnly(nameof(WideLibraryColumns), typeof(bool), typeof(MainWindow), new PropertyMetadata(false));
+
+    public static readonly DependencyProperty WideLibraryColumnsProperty = WideLibraryColumnsPropertyKey.DependencyProperty;
+
+    public bool WideLibraryColumns => (bool)GetValue(WideLibraryColumnsProperty);
+
+    private void UpdateWideLibraryColumns() =>
+        SetValue(WideLibraryColumnsPropertyKey, Rows.ActualWidth >= 780);
+
+    private IEnumerable<Track> ResolveSavedTracks(IEnumerable<string> paths)
+    {
+        var byPath = library.Tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
+        return paths.Where(byPath.ContainsKey).Select(path => byPath[path]);
+    }
+
     private int LibrarySectionIndex
     {
         get => int.TryParse(Navigation.SelectedValue as string, NumberStyles.None, CultureInfo.InvariantCulture, out int index)

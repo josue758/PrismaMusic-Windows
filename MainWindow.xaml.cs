@@ -95,7 +95,7 @@ public record LibraryRow(string Name, string Detail, Track[] Tracks, string Foot
 }
 
 public record Track(string Path, string Name, string Artist, string Album, string AlbumArtist, string Genre, uint Year, uint Disc, uint Number, int Seconds,
-	string Codec = null, int SampleRate = 0, int BitDepth = 0)
+	string Codec = null, int SampleRate = 0, int BitDepth = 0, long FileLength = -1, long LastWriteUtcTicks = 0)
 {
 	public bool IsLossless => Codec is "FLAC" or "ALAC" or "PCM";
 	public string DurationLabel => Seconds > 0 ? TimeSpan.FromSeconds(Seconds).ToString(Seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss") : "";
@@ -349,7 +349,7 @@ public partial class MainWindow : Window
 		SizeChanged += (object _, SizeChangedEventArgs _) =>
 		{
 			bool flag = ActualWidth < 1120.0;
-			NavigationColumn.Width = new GridLength(flag ? 168 : 210);
+			NavigationColumn.Width = new GridLength(flag ? 168 : Math.Clamp(ActualWidth * .155, 210, 258));
 			UpdateListeningPanelWidth();
 			Heading.FontSize = (flag ? 32 : 38);
 			System.Windows.Controls.ComboBox genre = Genre;
@@ -372,7 +372,6 @@ public partial class MainWindow : Window
 					((DependencyObject)item2).ClearValue(System.Windows.Controls.Control.PaddingProperty);
 				}
 			}
-			ArtPanel.Height = Math.Clamp(ActualHeight - 540.0, 98.0, 226.0);
 		};
 		UpdatePlaylistPicker();
 		LibrarySectionIndex = startupSection == 1 ? 1 : 0;
@@ -1221,6 +1220,16 @@ public partial class MainWindow : Window
 				UpdateLayout();
 				CaptureDesignPreview(Shell, "PRISMA_SMALL_POLISH_PREVIEW");
 			}
+			if (Environment.GetEnvironmentVariable("PRISMA_WIDE_PREVIEW") != null)
+			{
+				Width = 1680;
+				Height = 950;
+				LibrarySectionIndex = 0;
+				await Task.Delay(220);
+				UpdateLayout();
+				if (!WideLibraryColumns) throw new InvalidOperationException("Wide library did not reveal album and year columns.");
+				CaptureDesignPreview(Shell, "PRISMA_WIDE_PREVIEW");
+			}
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
 			System.Windows.Application.Current.Shutdown(0);
@@ -1412,9 +1421,9 @@ public partial class MainWindow : Window
 
 		TextBlock instructions = new TextBlock
 		{
-			Text = LocalTextExtension.Translate("Escribe la ruta UNC del NAS o busca una carpeta compartida. Debe estar disponible en el Explorador de archivos; Prisma Music no almacena tus credenciales."),
+			Text = LocalTextExtension.Translate("Escribe la ruta del NAS o selecciona una unidad de red. Prisma usa el acceso a la red de Windows."),
 			TextWrapping = TextWrapping.Wrap,
-			Foreground = new SolidColorBrush(Color.FromRgb(180, 187, 200)),
+			Foreground = (Brush)FindResource("Muted"),
 			Margin = new Thickness(0, 0, 0, 16)
 		};
 		Grid.SetRow(instructions, 1);
@@ -1471,33 +1480,55 @@ public partial class MainWindow : Window
 			IsDefault = true,
 			Padding = new Thickness(16, 7, 16, 7)
 		};
-		connect.Click += (_, _) =>
+		connect.Click += async (_, _) =>
 		{
-			string path = pathInput.Text.Trim();
-			if (!path.StartsWith(@"\\", StringComparison.Ordinal))
+			string input = pathInput.Text;
+			connect.IsEnabled = browse.IsEnabled = pathInput.IsEnabled = false;
+			error.Text = T("Comprobando el acceso al NAS…");
+			try
 			{
-				error.Text = LocalTextExtension.Translate("Usa una ruta de red UNC que comience con \\\\. ");
-				pathInput.Focus();
-				return;
+				string path = await Task.Run(() =>
+				{
+					string resolved = NetworkMusicSource.Normalize(input);
+					if (resolved == null) return null;
+					using var entries = Directory.EnumerateFileSystemEntries(resolved).GetEnumerator();
+					entries.MoveNext();
+					return resolved;
+				}).WaitAsync(TimeSpan.FromSeconds(12));
+				if (!dialog.IsVisible) return;
+				if (path == null)
+				{
+					error.Text = T("Indica una carpeta compartida, por ejemplo \\\\servidor\\Música, o una unidad de red conectada.");
+					return;
+				}
+				pathInput.Text = path;
+				dialog.DialogResult = true;
 			}
-			if (!Directory.Exists(path))
+			catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or TimeoutException)
 			{
-				error.Text = LocalTextExtension.Translate("No se puede acceder a esa ruta. Comprueba la conexión y los permisos en el Explorador de archivos.");
-				pathInput.Focus();
-				return;
+				error.Text = T("Abre la carpeta en el Explorador de archivos para comprobar el acceso y vuelve a intentarlo.") + " " + ex.Message;
 			}
-			pathInput.Text = Path.TrimEndingDirectorySeparator(path);
-			dialog.DialogResult = true;
+			finally
+			{
+				connect.IsEnabled = browse.IsEnabled = pathInput.IsEnabled = true;
+			}
 		};
 		actions.Children.Add(browse);
 		actions.Children.Add(connect);
 		Grid.SetRow(actions, 4);
 		content.Children.Add(actions);
+				dialog.SetResourceReference(BackgroundProperty, "SettingsBackground");
 		dialog.Content = content;
 
 		if (dialog.ShowDialog() == true)
 		{
-			await Scan(new[] { pathInput.Text }, add: true);
+			string source = pathInput.Text;
+			await Scan(new[] { source }, add: true);
+			if (library.Folders.Contains(source, StringComparer.OrdinalIgnoreCase))
+			{
+				RestoreLibraryFilters(new LibraryFilters("", null, null, null, 0));
+				ShowLibrarySource(source);
+			}
 		}
 	}
 
@@ -1574,6 +1605,11 @@ public partial class MainWindow : Window
 		{
 			return;
 		}
+		ShowLibrarySource(path);
+	}
+
+	private void ShowLibrarySource(string path)
+	{
 		selectedLibrarySource = path;
 		collection = null;
 		collectionHistory.Clear();
@@ -1707,11 +1743,14 @@ public partial class MainWindow : Window
 		int errorsProcessed = 0;
 		try
 		{
-			foreach (string folder in folders)
+			foreach (string requestedFolder in folders)
 			{
 				token.ThrowIfCancellationRequested();
 				try
 				{
+					string folder = requestedFolder;
+					if (add && !library.Folders.Contains(requestedFolder, StringComparer.OrdinalIgnoreCase))
+						folder = await Task.Run(() => NetworkMusicSource.Normalize(requestedFolder) ?? requestedFolder, token);
 					ScanProgressText.Text = LocalTextExtension.Format("Escaneando carpeta: {0}", folder);
 					int folderFileOffset = filesProcessed;
 					int folderTrackOffset = tracksProcessed;
@@ -1733,7 +1772,7 @@ public partial class MainWindow : Window
 							folderFileOffset + value.FilesProcessed, folderTrackOffset + value.TracksFound,
 							folderErrorOffset + value.Errors, item);
 					});
-					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress), token);
+					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks), token);
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
 					tracksProcessed += tuple.Item1.Count;
 					errorsProcessed += tuple.Item2;
@@ -1753,9 +1792,10 @@ public partial class MainWindow : Window
 					}
 					else
 					{
-						errors.Add($"{tuple.Item2} archivos con errores en {folder}");
+						errors.Add($"{tuple.Item2} errores en {folder}");
 					}
-					if (add && !library.Folders.Contains(folder, StringComparer.OrdinalIgnoreCase))
+					if (add && !library.Folders.Contains(folder, StringComparer.OrdinalIgnoreCase) &&
+						!addedFolders.Contains(folder, StringComparer.OrdinalIgnoreCase))
 					{
 						addedFolders.Add(folder);
 					}
@@ -1766,11 +1806,12 @@ public partial class MainWindow : Window
 				}
 				catch (Exception ex2)
 				{
-					errors.Add(ex2.Message);
+					errors.Add(ex2.GetBaseException().Message);
 				}
 			}
 			token.ThrowIfCancellationRequested();
 			library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
+			trackThumbnails.Clear();
 			library.Folders.AddRange(addedFolders);
 			int newTracks = library.Tracks.Count(track => !originalTracks.ContainsKey(track.Path));
 			int updatedTracks = library.Tracks.Count(track =>
@@ -1799,36 +1840,42 @@ public partial class MainWindow : Window
 
 	private void RefreshFilters()
 	{
-		string artist = ArtistFilter.SelectedItem as string;
-		ArtistFilter.ItemsSource = new[] { LocalTextExtension.Translate("Todos los artistas") }.Concat(library.Tracks
-			.Select(track => track.Artist).Where(name => !string.IsNullOrWhiteSpace(name))
-			.Distinct(StringComparer.CurrentCultureIgnoreCase).OrderBy(name => name)).ToArray();
-		ArtistFilter.SelectedItem = artist;
-		if (ArtistFilter.SelectedIndex < 0) ArtistFilter.SelectedIndex = 0;
-		string selectedItem = Genre.SelectedItem as string;
-		string selectedItem2 = Year.SelectedItem as string;
-		Genre.ItemsSource = new string[1] { LocalTextExtension.Translate("Todos los géneros") }.Concat(from g in (from t in library.Tracks
-				select t.Genre into g
-				where g.Length > 0
-				select g).Distinct(StringComparer.CurrentCultureIgnoreCase)
-			orderby g
-			select g).ToArray();
-		Year.ItemsSource = new string[1] { LocalTextExtension.Translate("Todos los años") }.Concat(from y in (from t in library.Tracks
-				select t.Year into y
-				where y != 0
-				select y).Distinct()
-			orderby y descending
-			select y.ToString()).ToArray();
-		Genre.SelectedItem = selectedItem;
-		Year.SelectedItem = selectedItem2;
-		if (Genre.SelectedIndex < 0)
+		bool wasRestoring = restoringLibraryFilters;
+		restoringLibraryFilters = true;
+		try
 		{
-			Genre.SelectedIndex = 0;
+			string artist = ArtistFilter.SelectedItem as string;
+			ArtistFilter.ItemsSource = new[] { LocalTextExtension.Translate("Todos los artistas") }.Concat(library.Tracks
+				.Select(track => track.Artist).Where(name => !string.IsNullOrWhiteSpace(name))
+				.Distinct(StringComparer.CurrentCultureIgnoreCase).OrderBy(name => name)).ToArray();
+			ArtistFilter.SelectedItem = artist;
+			if (ArtistFilter.SelectedIndex < 0) ArtistFilter.SelectedIndex = 0;
+			string selectedItem = Genre.SelectedItem as string;
+			string selectedItem2 = Year.SelectedItem as string;
+			Genre.ItemsSource = new string[1] { LocalTextExtension.Translate("Todos los géneros") }.Concat(from g in (from t in library.Tracks
+					select t.Genre into g
+					where g.Length > 0
+					select g).Distinct(StringComparer.CurrentCultureIgnoreCase)
+				orderby g
+				select g).ToArray();
+			Year.ItemsSource = new string[1] { LocalTextExtension.Translate("Todos los años") }.Concat(from y in (from t in library.Tracks
+					select t.Year into y
+					where y != 0
+					select y).Distinct()
+				orderby y descending
+				select y.ToString()).ToArray();
+			Genre.SelectedItem = selectedItem;
+			Year.SelectedItem = selectedItem2;
+			if (Genre.SelectedIndex < 0)
+			{
+				Genre.SelectedIndex = 0;
+			}
+			if (Year.SelectedIndex < 0)
+			{
+				Year.SelectedIndex = 0;
+			}
 		}
-		if (Year.SelectedIndex < 0)
-		{
-			Year.SelectedIndex = 0;
-		}
+		finally { restoringLibraryFilters = wasRestoring; }
 	}
 
 	private void Navigate(object sender, SelectionChangedEventArgs args)
@@ -1862,7 +1909,7 @@ public partial class MainWindow : Window
 		}
 		else
 		{
-			RefreshRows();
+			RefreshRows(refreshQueue: false);
 		}
 	}
 
@@ -1872,9 +1919,9 @@ public partial class MainWindow : Window
 		Search.Focus();
 	}
 
-	private void RefreshRows()
+	private void RefreshRows(bool refreshQueue = true)
 	{
-		RefreshSideQueue();
+		if (refreshQueue) RefreshSideQueue();
 		galleryExportTracks = null;
 		UpdateCollectionHeader();
 		System.Windows.Controls.ListBox rows = Rows;
@@ -1912,16 +1959,13 @@ public partial class MainWindow : Window
 			UpdateEmptyLibrary();
 			return;
 		}
-		Dictionary<string, Track> lookup = library.Tracks.ToDictionary((Track t) => t.Path, StringComparer.OrdinalIgnoreCase);
 		bool losslessView = ReferenceEquals(Navigation.SelectedItem, LosslessNavigation);
 		IEnumerable<Track> source = LibrarySectionIndex switch
 		{
 			3 => library.Tracks.Where((Track t) => library.Favorites.Contains(t.Path)), 
 			4 => queue, 
-			5 => from path in library.History.Where(lookup.ContainsKey)
-				select lookup[path], 
-			6 => from path in ActivePlaylist.Where(lookup.ContainsKey)
-				select lookup[path], 
+			5 => ResolveSavedTracks(library.History),
+			6 => ResolveSavedTracks(ActivePlaylist),
 			_ => library.Tracks, 
 		};
 		if (losslessView) source = source.Where(track => track.IsLossless);

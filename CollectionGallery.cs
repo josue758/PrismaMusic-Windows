@@ -18,6 +18,7 @@ public partial class MainWindow
     private int galleryPage;
     private IEnumerable<Track> galleryExportTracks;
     private readonly SemaphoreSlim artworkWorkers = new(2);
+    private readonly Dictionary<Track, BitmapImage> trackThumbnails = new();
 
     private void SetGalleryRows(LibraryRow[] rows)
     {
@@ -61,14 +62,34 @@ public partial class MainWindow
         finally { artworkWorkers.Release(); }
     }
 
+    private void TrackArtworkChanged(object sender, DependencyPropertyChangedEventArgs args)
+    {
+        if (sender is Image image)
+        {
+            image.Source = null;
+            if (image.IsLoaded) LoadTrackArtwork(image, new RoutedEventArgs());
+        }
+    }
+
     private async void LoadTrackArtwork(object sender, RoutedEventArgs args)
     {
         if (sender is not Image image || image.DataContext is not LibraryRow { Tracks.Length: 1 } row) return;
+        var track = row.Tracks[0];
+        if (trackThumbnails.TryGetValue(track, out var cached))
+        {
+            image.Source = cached;
+            return;
+        }
         await artworkWorkers.WaitAsync();
         try
         {
             if (!image.IsLoaded || !ReferenceEquals(image.DataContext, row)) return;
-            var bitmap = await LoadCollectionArtwork(row, artist: false, 48);
+            if (!trackThumbnails.TryGetValue(track, out var bitmap))
+            {
+                bitmap = await Task.Run(() => ReadCollectionImage(row, artist: false, 48));
+                if (trackThumbnails.Count >= 384) trackThumbnails.Clear();
+                trackThumbnails[track] = bitmap;
+            }
             if (image.IsLoaded && ReferenceEquals(image.DataContext, row)) image.Source = bitmap;
         }
         finally { artworkWorkers.Release(); }

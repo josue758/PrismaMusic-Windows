@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace PrismaMusic;
 
@@ -9,50 +10,108 @@ internal sealed record LibraryScanProgress(string Path, int FilesProcessed, int 
 
 internal static class LibraryScanner
 {
-    private static readonly HashSet<string> Extensions = new(System.StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
         { ".mp3", ".wav", ".flac", ".m4a", ".aac", ".wma", ".aiff", ".aif", ".ogg", ".opus" };
 
     public static (List<Track> Tracks, int Errors) ReadFolder(string folder, CancellationToken cancellationToken = default,
-        IProgress<LibraryScanProgress> progress = null)
+        IProgress<LibraryScanProgress> progress = null, IReadOnlyDictionary<string, Track> cache = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var tracks = new List<Track>();
         int errors = 0;
-        int filesProcessed = 0;
+        int processed = 0;
+        var gate = new object();
+        long lastReport = Environment.TickCount64;
+        LibraryScanProgress latest = null;
         var options = new EnumerationOptions
         {
-            RecurseSubdirectories = true,
+            RecurseSubdirectories = false,
             IgnoreInaccessible = false,
             AttributesToSkip = FileAttributes.ReparsePoint
         };
-        foreach (string path in Directory.EnumerateFiles(folder, "*", options))
+        var files = EnumerateFiles(new DirectoryInfo(folder), options, cancellationToken,
+            (path, error) => Record(path, null, error));
+        Parallel.ForEach(files, new ParallelOptions
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (!Extensions.Contains(Path.GetExtension(path))) continue;
-            Track currentTrack = null;
+            CancellationToken = cancellationToken,
+            MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 1, 4)
+        }, info =>
+        {
+            if (!Extensions.Contains(info.Extension)) return;
+            Track track = null;
             string error = null;
             try
             {
-                using var file = TagLib.File.Create(path);
-                var tag = file.Tag;
-                var audio = file.Properties;
-                string codec = ReadCodec(audio);
-                string name = string.IsNullOrWhiteSpace(tag.Title) ? Path.GetFileNameWithoutExtension(path) : tag.Title;
-                currentTrack = new Track(path, name, tag.FirstPerformer ?? "Artista desconocido",
-                    tag.Album ?? "Sin álbum", tag.FirstAlbumArtist ?? "", tag.FirstGenre ?? "",
-                    tag.Year, tag.Disc, tag.Track, (int)audio.Duration.TotalSeconds,
-                    codec, audio.AudioSampleRate, audio.BitsPerSample);
-                tracks.Add(currentTrack);
+                long length = info.Length;
+                long stamp = info.LastWriteTimeUtc.Ticks;
+                track = cache != null && cache.TryGetValue(info.FullName, out var previous) &&
+                    previous.FileLength == length && previous.LastWriteUtcTicks == stamp && stamp > 0
+                    ? previous : ReadTrack(info.FullName, length, stamp);
             }
-            catch (System.Exception exception) { errors++; error = exception.Message; }
-            finally
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                or TagLib.CorruptFileException or TagLib.UnsupportedFormatException)
             {
-                filesProcessed++;
-                progress?.Report(new LibraryScanProgress(path, filesProcessed, tracks.Count, errors, currentTrack, error));
+                error = ex.Message;
+            }
+
+            Record(info.FullName, track, error);
+        });
+
+        void Record(string path, Track track, string error)
+        {
+            lock (gate)
+            {
+                if (track != null) tracks.Add(track);
+                else errors++;
+                processed++;
+                if (progress == null) return;
+                latest = new LibraryScanProgress(path, processed, tracks.Count, errors, track, error);
+                long now = Environment.TickCount64;
+                if (now - lastReport < 150) return;
+                lastReport = now;
+                progress.Report(latest);
             }
         }
         cancellationToken.ThrowIfCancellationRequested();
+        if (latest != null) progress.Report(latest);
+        tracks.Sort((left, right) => StringComparer.OrdinalIgnoreCase.Compare(left.Path, right.Path));
         return (tracks, errors);
+    }
+
+    private static IEnumerable<FileInfo> EnumerateFiles(DirectoryInfo root, EnumerationOptions options,
+        CancellationToken cancellationToken, Action<string, string> reportUnavailableFolder)
+    {
+        var folders = new Stack<DirectoryInfo>();
+        folders.Push(root);
+        while (folders.TryPop(out var folder))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            FileSystemInfo[] entries;
+            try { entries = folder.GetFileSystemInfos("*", options); }
+            catch (Exception error) when (folder != root && error is (IOException or UnauthorizedAccessException))
+            {
+                reportUnavailableFolder(folder.FullName, error.Message);
+                continue;
+            }
+            foreach (var entry in entries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (entry is DirectoryInfo child) folders.Push(child);
+                else if (entry is FileInfo file) yield return file;
+            }
+        }
+    }
+
+    private static Track ReadTrack(string path, long length, long stamp)
+    {
+        using var file = TagLib.File.Create(path);
+        var tag = file.Tag;
+        var audio = file.Properties;
+        string name = string.IsNullOrWhiteSpace(tag.Title) ? Path.GetFileNameWithoutExtension(path) : tag.Title;
+        return new Track(path, name, tag.FirstPerformer ?? "Artista desconocido",
+            tag.Album ?? "Sin álbum", tag.FirstAlbumArtist ?? "", tag.FirstGenre ?? "",
+            tag.Year, tag.Disc, tag.Track, (int)audio.Duration.TotalSeconds,
+            ReadCodec(audio), audio.AudioSampleRate, audio.BitsPerSample, length, stamp);
     }
 
     private static string ReadCodec(TagLib.Properties audio)
@@ -63,7 +122,6 @@ internal static class LibraryScanner
             if (codec is TagLib.Riff.WaveFormatEx wave && (int)wave.FormatTag is 1 or 3) return "PCM";
             if (codec is TagLib.Mpeg4.IsoAudioSampleEntry mp4 && mp4.BoxType.ToString() == "alac") return "ALAC";
         }
-        // AIFF-C and WAV can contain compressed audio. Only mark recognized codecs as lossless.
         return null;
     }
 }

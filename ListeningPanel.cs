@@ -87,8 +87,12 @@ public partial class MainWindow
         }
     }
 
-    private void UpdateListeningPanelWidth() =>
-        ListeningColumn.Width = new GridLength(listeningPanelHidden ? 0 : ActualWidth < 1120 ? 280 : 330);
+    private void UpdateListeningPanelWidth()
+    {
+        double width = ActualWidth < 1120 ? 280 : Math.Clamp(ActualWidth * .232, 330, 420);
+        ListeningColumn.Width = new GridLength(listeningPanelHidden ? 0 : width);
+        ArtPanel.Height = Math.Clamp(ActualHeight - 540, 98, Math.Max(226, width - 42));
+    }
 
     private void RefreshSideQueue()
     {

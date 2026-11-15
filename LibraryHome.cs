@@ -54,6 +54,12 @@ public partial class MainWindow
         heroText.Children.Add(play);
         hero.Children.Add(heroText);
         var heroCard = HomeCard(hero);
+        heroCard.SizeChanged += (_, _) =>
+        {
+            double size = Math.Clamp(heroCard.ActualWidth * .22, 108, 188);
+            heroArt.Width = heroArt.Height = size;
+            featuredTitle.FontSize = Math.Clamp(heroCard.ActualWidth / 30, 24, 35);
+        };
         var accent = ArtworkTile.AccentForCaption(spotlight.Album, windowsAccent);
         WatchSettingsCard(heroCard, 350, () =>
         {
@@ -76,7 +82,7 @@ public partial class MainWindow
 
         AddHeading("Álbumes destacados", "Ver álbumes", 1);
         var covers = new UniformGrid { Columns = Math.Min(3, albums.Length) };
-        foreach (var album in albums.Take(3))
+        foreach (var album in albums.Take(5))
         {
             var image = BuildHomeArtwork(album, 96);
             var details = new StackPanel();
@@ -94,9 +100,18 @@ public partial class MainWindow
             button.SetResourceReference(BackgroundProperty, "SettingsCard");
             AutomationProperties.SetName(button, album.Name);
             button.Click += (_, _) => OpenCollection(album, album: true);
-            button.SizeChanged += (_, _) => image.Height = Math.Clamp(button.ActualWidth - 16, 84, 186);
+            button.SizeChanged += (_, _) => image.Height = Math.Clamp(button.ActualWidth - 16, 84, 224);
             covers.Children.Add(button);
         }
+        void FitFeaturedAlbums()
+        {
+            int columns = Math.Min(covers.Children.Count, Math.Clamp((int)(covers.ActualWidth / 162), 2, 5));
+            covers.Columns = Math.Max(1, columns);
+            for (int index = 0; index < covers.Children.Count; index++)
+                covers.Children[index].Visibility = index < columns ? Visibility.Visible : Visibility.Collapsed;
+        }
+        covers.SizeChanged += (_, _) => FitFeaturedAlbums();
+        FitFeaturedAlbums();
         HomeContent.Children.Add(covers);
 
         AddHeading(recent.Length > 0 ? "Escuchadas recientemente" : "Canciones", "Ver canciones", 0);

@@ -42,7 +42,7 @@
                   AutomationProperties.Name="{local:LocalText Text=Mostrar información}" ToolTip="{local:LocalText Text=Mostrar información}"/>
         </StackPanel>
         <Grid>
-          <TextBox x:Name="Search" Style="{StaticResource LibrarySearch}" Height="33" Padding="36,0,36,0" Background="{DynamicResource TitleSearchSurface}" Foreground="{DynamicResource WorkspaceText}" CaretBrush="{DynamicResource WorkspaceText}" BorderBrush="{DynamicResource WorkspaceStroke}" TextChanged="Filter" ToolTip="{local:LocalText Text=Buscar canción\, artista\, álbum\, género o año}" AutomationProperties.Name="{local:LocalText Text=Buscar música}"/>
+          <TextBox x:Name="Search" Style="{StaticResource LibrarySearch}" Height="33" Padding="36,0,36,0" Background="{DynamicResource TitleSearchSurface}" Foreground="{DynamicResource WorkspaceText}" CaretBrush="{DynamicResource WorkspaceText}" BorderBrush="{DynamicResource WorkspaceStroke}" TextChanged="SearchTextChanged" ToolTip="{local:LocalText Text=Buscar canción\, artista\, álbum\, género o año}" AutomationProperties.Name="{local:LocalText Text=Buscar música}"/>
           <TextBlock IsHitTestVisible="False" Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Foreground="{DynamicResource WorkspaceMuted}" VerticalAlignment="Center" Margin="12,0,0,0"/>
           <TextBlock IsHitTestVisible="False" Text="{local:LocalText Text=Buscar música}" Foreground="{DynamicResource WorkspaceMuted}" VerticalAlignment="Center" Margin="36,0,0,0">
             <TextBlock.Style><Style TargetType="TextBlock">
@@ -204,6 +204,37 @@
           <Button x:Name="GalleryNext" AutomationProperties.Name="{local:LocalText Text=Siguiente}" Content="›" Click="NextGalleryPage" ToolTip="{local:LocalText Text=Siguiente}"/>
         </StackPanel>
         <TextBlock x:Name="LosslessNotice" DockPanel.Dock="Top" Visibility="Collapsed" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8"/>
+        <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource WorkspaceStroke}" BorderThickness="0,0,0,1"
+                Margin="2,5,2,1" Padding="17,3,22,7" IsHitTestVisible="False">
+          <Border.Style>
+            <Style TargetType="Border">
+              <Setter Property="Visibility" Value="Collapsed"/>
+              <Style.Triggers>
+                <MultiDataTrigger>
+                  <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding WideLibraryColumns, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                    <Condition Binding="{Binding Tag, ElementName=Rows}" Value="{x:Null}"/>
+                    <Condition Binding="{Binding HasItems, ElementName=Rows}" Value="True"/>
+                    <Condition Binding="{Binding Visibility, ElementName=HomeView}" Value="Collapsed"/>
+                  </MultiDataTrigger.Conditions>
+                  <Setter Property="Visibility" Value="Visible"/>
+                </MultiDataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Border.Style>
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Width="42" TextAlignment="Right" Margin="8,0,3,0"
+                       Text="{local:LocalText Text=Duración}" FontSize="11" Foreground="{DynamicResource Muted}"/>
+            <TextBlock DockPanel.Dock="Right" Width="118" Margin="10,0,4,0"
+                       Text="{local:LocalText Text=Formato}" FontSize="11" Foreground="{DynamicResource Muted}"
+                       Visibility="{DynamicResource TrackQualityVisibility}"/>
+            <TextBlock DockPanel.Dock="Right" Width="48" Margin="8,0" TextAlignment="Right"
+                       Text="{local:LocalText Text=Año}" FontSize="11" Foreground="{DynamicResource Muted}"/>
+            <TextBlock DockPanel.Dock="Right" Width="180" Margin="8,0"
+                       Text="{local:LocalText Text=Álbum}" FontSize="11" Foreground="{DynamicResource Muted}"/>
+            <TextBlock Text="{local:LocalText Text=Canción}" Margin="54,0,0,0" FontSize="11" Foreground="{DynamicResource Muted}"/>
+          </DockPanel>
+        </Border>
         <Border Background="Transparent" Padding="2">
         <Grid>
         <ScrollViewer x:Name="HomeView" Style="{StaticResource LyricsScroll}" Visibility="Collapsed"
@@ -236,18 +267,50 @@
             </ContextMenu>
           </ListBox.ContextMenu>
           <ListBox.Resources>
+            <Style x:Key="WideTrackFact" TargetType="TextBlock">
+              <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+              <Setter Property="VerticalAlignment" Value="Center"/>
+              <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+              <Setter Property="Margin" Value="8,0"/>
+              <Setter Property="FontSize" Value="12"/>
+              <Setter Property="Visibility" Value="Collapsed"/>
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding WideLibraryColumns, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                  <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
             <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinVerticalScrollBar}"/>
             <DataTemplate x:Key="SongRow">
               <DockPanel Margin="2,2">
                 <Border DockPanel.Dock="Left" Width="{DynamicResource SongThumbnailSize}" Height="{DynamicResource SongThumbnailSize}" CornerRadius="7" Background="#18FFFFFF" Margin="0,0,12,0">
                   <Grid ClipToBounds="True">
                     <local:ArtworkTile Caption="{Binding TileCaption}"/>
-                    <Image Loaded="LoadTrackArtwork" Stretch="UniformToFill"/>
+                    <Image Loaded="LoadTrackArtwork" DataContextChanged="TrackArtworkChanged" Stretch="UniformToFill"/>
                   </Grid>
                 </Border>
                 <TextBlock DockPanel.Dock="Right" Text="{Binding DurationLabel}" Foreground="{DynamicResource Muted}" Width="42" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,3,0"/>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding FormatLabel}" Visibility="{DynamicResource TrackQualityVisibility}" Foreground="{DynamicResource Muted}" MaxWidth="145"
-                           TextTrimming="CharacterEllipsis" FontSize="11" VerticalAlignment="Center" Margin="10,0,4,0"/>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding FormatLabel}" Visibility="{DynamicResource TrackQualityVisibility}"
+                           Foreground="{DynamicResource Muted}" MaxWidth="145" TextTrimming="CharacterEllipsis" FontSize="11"
+                           VerticalAlignment="Center" Margin="10,0,4,0" ToolTip="{Binding FormatLabel}">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding WideLibraryColumns, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                          <Setter Property="Width" Value="118"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+                <TextBlock DockPanel.Dock="Right" Width="48" TextAlignment="Right"
+                           Style="{StaticResource WideTrackFact}" ToolTip="{local:LocalText Text=Año}">
+                  <TextBlock.Text>
+                    <Binding Path="Tracks[0].Year" StringFormat="{}{0:0;;}"/>
+                  </TextBlock.Text>
+                </TextBlock>
+                <TextBlock DockPanel.Dock="Right" Width="180" Text="{Binding Tracks[0].Album}" Style="{StaticResource WideTrackFact}"
+                           ToolTip="{Binding Tracks[0].Album}"/>
                 <StackPanel VerticalAlignment="Center">
                   <DockPanel>
                     <TextBlock Text="&#xE767;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13" Margin="0,0,7,0"
@@ -272,7 +335,18 @@
                     </TextBlock>
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
                   </DockPanel>
-                  <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" FontSize="12" Margin="0,3,0,0" ToolTip="{Binding Detail}"/>
+                  <TextBlock Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" FontSize="12" Margin="0,3,0,0">
+                    <TextBlock.Style>
+                      <Style TargetType="TextBlock">
+                        <Setter Property="Text" Value="{Binding Detail}"/>
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding WideLibraryColumns, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                            <Setter Property="Text" Value="{Binding Tracks[0].Artist}"/>
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </TextBlock.Style>
+                  </TextBlock>
                 </StackPanel>
               </DockPanel>
             </DataTemplate>
@@ -385,6 +459,19 @@
                   <ListBox x:Name="SideQueue" AutomationProperties.Name="{local:LocalText Text=Cola}" Background="Transparent"
                            Foreground="{DynamicResource Ink}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.Resources>
+            <Style x:Key="WideTrackFact" TargetType="TextBlock">
+              <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+              <Setter Property="VerticalAlignment" Value="Center"/>
+              <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+              <Setter Property="Margin" Value="8,0"/>
+              <Setter Property="FontSize" Value="12"/>
+              <Setter Property="Visibility" Value="Collapsed"/>
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding WideLibraryColumns, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                  <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
                       <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinVerticalScrollBar}"/>
                     </ListBox.Resources>
                     <ListBox.ItemContainerStyle>

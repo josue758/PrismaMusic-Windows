@@ -63,4 +63,39 @@ public sealed class LibraryScannerTests : IDisposable
         Assert.Empty(result.Tracks);
         Assert.Equal(0, result.Errors);
     }
+
+    [Fact]
+    public void ScannerReusesUnchangedFilesAndRefreshesChangedMetadata()
+    {
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "cache.wav");
+        Write(1);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-3));
+        var first = Assert.Single(LibraryScanner.ReadFolder(directory).Tracks);
+        var cache = new System.Collections.Generic.Dictionary<string, Track>(StringComparer.OrdinalIgnoreCase) { [path] = first };
+
+        Assert.Same(first, Assert.Single(LibraryScanner.ReadFolder(directory, cache: cache).Tracks));
+
+        Write(2);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+        var second = Assert.Single(LibraryScanner.ReadFolder(directory, cache: cache).Tracks);
+        Assert.NotSame(first, second);
+        Assert.Equal(2, second.Seconds);
+
+        void Write(int seconds)
+        {
+            var format = new WaveFormat(44100, 16, 2);
+            using var writer = new WaveFileWriter(path, format);
+            var bytes = new byte[format.AverageBytesPerSecond * seconds];
+            writer.Write(bytes, 0, bytes.Length);
+        }
+    }
+
+    [Theory]
+    [InlineData("smb://fiberhome/Musica%20FLAC/Album/", @"\\fiberhome\Musica FLAC\Album")]
+    [InlineData(@"\\fiberhome\Musica\", @"\\fiberhome\Musica")]
+    [InlineData("smb://user:pass@fiberhome/Musica", null)]
+    [InlineData(@"\\?\UNC\fiberhome\Musica", null)]
+    public void NasNormalizesSupportedPaths(string input, string expected) =>
+        Assert.Equal(expected, NetworkMusicSource.Normalize(input));
 }

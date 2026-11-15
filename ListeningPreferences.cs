@@ -34,7 +34,11 @@ public partial class MainWindow
         UpdateGallerySizing();
     }
 
-    private void GalleryViewportChanged(object sender, SizeChangedEventArgs args) => UpdateGallerySizing();
+    private void GalleryViewportChanged(object sender, SizeChangedEventArgs args)
+    {
+        UpdateGallerySizing();
+        UpdateWideLibraryColumns();
+    }
 
     private void UpdateGallerySizing()
     {
