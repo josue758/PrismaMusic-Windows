@@ -2,6 +2,10 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.57.1
+
+- Distingue el Visualizador a pantalla completa (F12) de la Sala de escucha (F11) con accesos separados y etiquetas visibles.
+
 ## 0.57.0
 
 - Añade Atrás a la barra superior y el atajo Alt + ← para recuperar la vista anterior con sus filtros, página y selección.

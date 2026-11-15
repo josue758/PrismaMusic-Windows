@@ -30,7 +30,7 @@ public partial class MainWindow
         Console.WriteLine("Window placement: library inside the work area, listening room inside full monitor, player bar fully visible in both.");
     }
 
-    private void VerifyVisibleBounds(Window window, FrameworkElement root, bool fullscreen)
+    private void VerifyVisibleBounds(Window window, FrameworkElement root, bool fullscreen, FrameworkElement control = null)
     {
         var handle = new WindowInteropHelper(window).Handle;
         if (!WindowPlacement.TryGetBounds(handle, fullscreen, out var bounds))
@@ -38,8 +38,9 @@ public partial class MainWindow
 
         Point start = root.PointToScreen(new Point());
         Point end = root.PointToScreen(new Point(root.ActualWidth, root.ActualHeight));
-        Point playerStart = Transport.PointToScreen(new Point());
-        Point playerEnd = Transport.PointToScreen(new Point(Transport.ActualWidth, Transport.ActualHeight));
+        control ??= Transport;
+        Point playerStart = control.PointToScreen(new Point());
+        Point playerEnd = control.PointToScreen(new Point(control.ActualWidth, control.ActualHeight));
         const double tolerance = 2;
         if (Math.Abs(start.X - bounds.Left) > tolerance || Math.Abs(start.Y - bounds.Top) > tolerance ||
             Math.Abs(end.X - bounds.Right) > tolerance || Math.Abs(end.Y - bounds.Bottom) > tolerance ||

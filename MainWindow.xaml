@@ -35,8 +35,15 @@
       <DockPanel Grid.Column="1" MaxWidth="580" Margin="12,0" VerticalAlignment="Center" LastChildFill="True"
                  shell:WindowChrome.IsHitTestVisibleInChrome="True">
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="6,0,0,0">
-          <Button Style="{StaticResource HeaderAction}" Content="&#xE9E9;" Click="ShowVisualizer"
-                  AutomationProperties.Name="{local:LocalText Text=Visualizador}" ToolTip="{local:LocalText Text=Visualizador}"/>
+          <Button Style="{StaticResource CompactButton}" Click="ShowVisualizer" Height="32" Margin="0,0,4,0"
+                  Padding="9,0" AutomationProperties.Name="{local:LocalText Text=Visualizador}"
+                  ToolTip="{local:LocalText Text=Visualizador en pantalla completa · F12}">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE9E9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                         Margin="0,0,6,0" VerticalAlignment="Center"/>
+              <TextBlock Text="{local:LocalText Text=Visualizador}" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
           <Button x:Name="LyricsHeaderButton" Style="{StaticResource HeaderAction}" Content="&#xE8BD;" Click="ToggleLyricsView"
                   AutomationProperties.Name="{local:LocalText Text=Mostrar letras}" ToolTip="{local:LocalText Text=Mostrar letras}"/>
           <Button x:Name="QueueHeaderButton" Style="{StaticResource HeaderAction}" Content="&#xE8FD;" Click="ToggleQueueView"
@@ -420,8 +427,8 @@
               <local:ArtworkTile Caption="{Binding Tag, ElementName=Cover}"/>
               <Image x:Name="Cover" Stretch="UniformToFill"/>
               <Button Background="Transparent" Click="Fullscreen" Padding="0" Cursor="Hand"
-                      ToolTip="{local:LocalText Text=Pantalla completa}"
-                      AutomationProperties.Name="{local:LocalText Text=Pantalla completa}">
+                      ToolTip="{local:LocalText Text=Sala de escucha · F11}"
+                      AutomationProperties.Name="{local:LocalText Text=Sala de escucha}">
                 <Button.Template>
                   <ControlTemplate TargetType="Button">
                     <Border x:Name="CoverHitArea" Background="Transparent" CornerRadius="12" BorderThickness="2">
@@ -557,7 +564,7 @@
         <Grid.ColumnDefinitions><ColumnDefinition x:Name="TransportMetadataColumn" Width="*"/><ColumnDefinition Width="1.7*"/><ColumnDefinition Width="*" MinWidth="216"/></Grid.ColumnDefinitions>
         <DockPanel x:Name="TransportMetadata" VerticalAlignment="Center" Margin="0,0,12,0">
           <Button x:Name="TransportArtworkButton" Style="{StaticResource TransportIcon}" Width="54" Height="54" Margin="0,0,12,0"
-                  Click="Fullscreen" AutomationProperties.Name="{local:LocalText Text=Pantalla completa}" ToolTip="{local:LocalText Text=Pantalla completa}">
+                  Click="Fullscreen" AutomationProperties.Name="{local:LocalText Text=Sala de escucha}" ToolTip="{local:LocalText Text=Sala de escucha · F11}">
             <Border Width="52" Height="52" CornerRadius="8" ClipToBounds="True">
               <Grid>
                 <local:ArtworkTile Caption="{Binding Tag, ElementName=Cover}"/>
@@ -623,11 +630,11 @@
                   <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Modo PiP}" Click="Mini">
                     <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8A7;"/></MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem x:Name="FullScreenMenuItem" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Pantalla completa}" InputGestureText="F11" Click="Fullscreen">
+                  <MenuItem x:Name="FullScreenMenuItem" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Sala de escucha}" InputGestureText="F11" Click="Fullscreen">
                     <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE740;"/></MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
-                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Visualizador}" Click="ShowVisualizer">
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Visualizador}" InputGestureText="F12" Click="ShowVisualizer">
                     <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE9E9;"/></MenuItem.Icon>
                   </MenuItem>
                   <MenuItem x:Name="CastMenuItem" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Transmitir a dispositivo}" Click="CastTrack">

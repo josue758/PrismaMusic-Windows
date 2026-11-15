@@ -1106,6 +1106,9 @@ public partial class MainWindow : Window
 			{
 				throw new InvalidOperationException("The full-screen visualizer did not reflect the current track.");
 			}
+			if (listeningRoom != null || !ReferenceEquals(Transport.Parent, Shell))
+				throw new InvalidOperationException("The visualizer opened the listening room or moved the library transport.");
+			VerifyVisibleBounds(window2, (FrameworkElement)window2.Content, fullscreen: true, visualizerSeek);
 			ShowVisualizerOptions(visualizerOptionsButton, new RoutedEventArgs());
 			ContextMenu contextMenu = visualizerOptionsMenu;
 			if (contextMenu == null || contextMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "style")) != VisualizerStyles.Length || visualizerOptionsMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "sensitivity")) != 4 || visualizerOptionsMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "fps")) != 3)
@@ -3230,7 +3233,8 @@ public partial class MainWindow : Window
 		panel = AddSettingsCard(aboutPage, "Atajos de teclado");
 		AddShortcutRow(panel, "Buscar", "Ctrl + F");
 		AddShortcutRow(panel, "Información de la canción", "Ctrl + I");
-		AddShortcutRow(panel, "Pantalla completa", "F11");
+		AddShortcutRow(panel, "Sala de escucha", "F11");
+		AddShortcutRow(panel, "Visualizador", "F12");
 		AddShortcutRow(panel, "Reproducir canción seleccionada", "Enter");
 		panel = AddSettingsCard(aboutPage, "Prisma Music");
 		panel.Children.Add(SettingsHint($"Windows · {typeof(MainWindow).Assembly.GetName().Version?.ToString(3)}"));
@@ -3829,7 +3833,12 @@ public partial class MainWindow : Window
 		{
 			Inspect(sender, args);
 		}
-		else if ((int)args.Key == 100 || ((int)args.Key == 13 && listeningRoom != null))
+		else if (args.Key == Key.F12)
+		{
+			ShowVisualizer(sender, args);
+			args.Handled = true;
+		}
+		else if (args.Key == Key.F11 || (args.Key == Key.Escape && listeningRoom != null))
 		{
 			Fullscreen(sender, args);
 		}

@@ -270,7 +270,7 @@ public partial class MainWindow
     private void UpdateFullscreenToolbarButton(bool active)
     {
         ((TextBlock)FullScreenMenuItem.Icon).Text = active ? "\uE73F" : "\uE740";
-        string label = LocalTextExtension.Translate(active ? "Salir de pantalla completa" : "Pantalla completa");
+        string label = T(active ? "Salir de la Sala de escucha" : "Sala de escucha");
         FullScreenMenuItem.Header = label;
         System.Windows.Automation.AutomationProperties.SetName(FullScreenMenuItem, label);
     }

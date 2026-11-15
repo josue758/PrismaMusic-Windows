@@ -242,7 +242,7 @@ public partial class MainWindow
         };
         visualizerWindow.PreviewKeyDown += (_, key) =>
         {
-            if (key.Key is Key.Escape or Key.F11)
+            if (key.Key is Key.Escape or Key.F12)
             {
                 key.Handled = true;
                 visualizerWindow.Close();
