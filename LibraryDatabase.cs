@@ -85,12 +85,14 @@ internal sealed class LibraryDatabase(string directory)
                 ? JsonSerializer.Deserialize<Library>(File.ReadAllText(oldPath)) ?? new Library()
                 : new Library();
             legacy.Favorites = new HashSet<string>(legacy.Favorites, StringComparer.OrdinalIgnoreCase);
+            legacy.TagEdits = new Dictionary<string, LibraryTagEdit>(legacy.TagEdits, StringComparer.OrdinalIgnoreCase);
             Save(legacy, true);
             return legacy;
         }
 
         var library = JsonSerializer.Deserialize<Library>(payload) ?? throw new InvalidDataException("Biblioteca inválida.");
         library.Favorites = new HashSet<string>(library.Favorites, StringComparer.OrdinalIgnoreCase);
+        library.TagEdits = new Dictionary<string, LibraryTagEdit>(library.TagEdits, StringComparer.OrdinalIgnoreCase);
         using var readTracks = db.CreateCommand();
         readTracks.CommandText = "SELECT payload FROM tracks ORDER BY path";
         using var rows = readTracks.ExecuteReader();
@@ -157,7 +159,8 @@ internal sealed class LibraryDatabase(string directory)
             library.Favorites,
             library.Playlist,
             library.Playlists,
-            library.History
+            library.History,
+            library.TagEdits
         }));
         saveState.ExecuteNonQuery();
         transaction.Commit();

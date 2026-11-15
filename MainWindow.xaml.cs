@@ -64,6 +64,8 @@ public sealed class Library
 	public Dictionary<string, List<string>> Playlists { get; set; } = new Dictionary<string, List<string>>();
 
 	public List<string> History { get; set; } = new List<string>();
+
+	public Dictionary<string, LibraryTagEdit> TagEdits { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 public record LibraryRow(string Name, string Detail, Track[] Tracks, string Footnote = null)
@@ -331,6 +333,7 @@ public partial class MainWindow : Window
 		timer.Start();
 		Closed += (object? _, EventArgs _) =>
 		{
+			mini?.Close();
 			scanCancellation?.Cancel();
 			timer.Stop();
 			CancelPendingOpen();
@@ -761,6 +764,20 @@ public partial class MainWindow : Window
 			Console.WriteLine("Repeat: track restart and collection wrap passed.");
 			player.Speed = 1.5;
 			await Play(track, remember: false, 1.0);
+			var details = ReadTrackDetails(track);
+			if (!details.Audio.Any(row => row.Label == "Frecuencia" && row.Value.EndsWith(" Hz")))
+				throw new InvalidOperationException("File details did not expose the sample rate.");
+			var listeningMenu = ListeningMenuButton.ContextMenu;
+			listeningMenu.StaysOpen = true;
+			ShowListeningMenu(ListeningMenuButton, new RoutedEventArgs());
+			if (!listeningMenu.IsOpen || listeningMenu.Items.OfType<MenuItem>().Count() != 7)
+				throw new InvalidOperationException("Listening menu did not expose all commands.");
+			CaptureDesignPreview(listeningMenu, "PRISMA_LISTENING_MENU_PREVIEW");
+			listeningMenu.IsOpen = false;
+			listeningMenu.ClearValue(ContextMenu.StaysOpenProperty);
+			Console.WriteLine("Listening menu and file details passed.");
+			if (Environment.GetEnvironmentVariable("PRISMA_TAG_EDITOR_PREVIEW") != null)
+				EditLibraryTags(this, new RoutedEventArgs());
 			Mini(this, new RoutedEventArgs());
 			for (int num = 0; num < 20; num++)
 			{
@@ -780,6 +797,13 @@ public partial class MainWindow : Window
 				throw new InvalidOperationException("Mini player transport is out of sync.");
 			}
 			SetPlaying(value: false);
+			CaptureDesignPreview((FrameworkElement)mini.Content, "PRISMA_PIP_PREVIEW");
+			var mainState = WindowState;
+			WindowState = WindowState.Minimized;
+			await Task.Delay(100);
+			if (!mini.IsVisible || !mini.Topmost)
+				throw new InvalidOperationException("Mini player disappeared when minimizing the main window.");
+			WindowState = mainState;
 			mini.Close();
 			Console.WriteLine("Mini player: track, format and playback state passed.");
 			SetLyrics("[00:02]First verse\n[00:05]Second verse");
@@ -878,6 +902,8 @@ public partial class MainWindow : Window
 			Console.WriteLine("Full-screen live-spectrum visualizer passed.");
 			IEnumerable libraryRows = Rows.ItemsSource;
 			double beforeRoom = player.Position.TotalSeconds;
+			if (Environment.GetEnvironmentVariable("PRISMA_ROOM_PREVIEW") != null)
+				SetLyrics("[00:00]Las luces de la ciudad\n[00:08]Se reflejan sobre el agua\n[00:16]Y nos marcan el camino");
 			Fullscreen(this, new RoutedEventArgs());
 			await Task.Delay(400);
 			if (!playing || player.Position.TotalSeconds <= beforeRoom || libraryRows != Rows.ItemsSource)
@@ -1541,7 +1567,7 @@ public partial class MainWindow : Window
 				}
 			}
 			token.ThrowIfCancellationRequested();
-			library.Tracks = indexed.Values.ToList();
+			library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
 			library.Folders.AddRange(addedFolders);
 			int newTracks = library.Tracks.Count(track => !originalTracks.ContainsKey(track.Path));
 			int updatedTracks = library.Tracks.Count(track =>
@@ -2112,7 +2138,7 @@ public partial class MainWindow : Window
 		if (sender is System.Windows.Controls.Button { ContextMenu: { } contextMenu } button)
 		{
 			contextMenu.PlacementTarget = button;
-			contextMenu.Placement = PlacementMode.Bottom;
+			contextMenu.Placement = PlacementMode.Top;
 			contextMenu.IsOpen = true;
 		}
 	}
@@ -2360,44 +2386,6 @@ public partial class MainWindow : Window
 				RefreshRows();
 			}
 		}
-	}
-
-	private async void Inspect(object sender, RoutedEventArgs args)
-	{
-		Track track = Selected;
-		if ((object)track == null)
-		{
-			return;
-		}
-		System.Windows.MessageBox.Show(this, await Task.Run(() =>
-		{
-			try
-			{
-				using TagLib.File file = TagLib.File.Create(track.Path);
-				Properties properties = file.Properties;
-				TagLib.Tag tag = file.Tag;
-				string artist = tag.Performers.FirstOrDefault() ?? LocalTextExtension.Translate("Artista desconocido");
-				string albumArtist = tag.AlbumArtists.FirstOrDefault() ?? "";
-				string genre = tag.Genres.FirstOrDefault() ?? "";
-				string tags = string.Join("\n", new[]
-				{
-					LocalTextExtension.Format("Título: {0}", tag.Title ?? track.Name),
-					LocalTextExtension.Format("Artista: {0}", artist),
-					string.IsNullOrWhiteSpace(albumArtist) ? null : LocalTextExtension.Format("Artista del álbum: {0}", albumArtist),
-					LocalTextExtension.Format("Álbum: {0}", tag.Album ?? track.Album),
-					tag.Year == 0 ? null : LocalTextExtension.Format("Año: {0}", tag.Year),
-					string.IsNullOrWhiteSpace(genre) ? null : LocalTextExtension.Format("Género: {0}", genre),
-					tag.Track == 0 ? null : LocalTextExtension.Format("Pista: {0}{1}", tag.Track, tag.TrackCount > 0 ? $" / {tag.TrackCount}" : ""),
-					tag.Disc == 0 ? null : LocalTextExtension.Format("Disco: {0}{1}", tag.Disc, tag.DiscCount > 0 ? $" / {tag.DiscCount}" : ""),
-					LocalTextExtension.Format("Carátula integrada: {0}", tag.Pictures.Length > 0 ? LocalTextExtension.Translate("Sí") : LocalTextExtension.Translate("No"))
-				}.Where(line => line != null));
-				return $"{tags}\n\n{Path.GetExtension(track.Path).TrimStart('.').ToUpperInvariant()} · {properties.Description}\n{properties.AudioBitrate} kb/s · {properties.AudioSampleRate:N0} Hz · {properties.AudioChannels} canales\n" + ((properties.BitsPerSample > 0) ? $"{properties.BitsPerSample} bits\n" : "") + $"{new FileInfo(track.Path).Length:N0} bytes\n\n{track.Path}";
-			}
-			catch (Exception ex)
-			{
-				return ex.Message;
-			}
-		}), track.Name);
 	}
 
 	private void LoadAudioSettings()
@@ -3210,14 +3198,9 @@ public partial class MainWindow : Window
 			return;
 		}
 		var grid = new Grid();
-		grid.Children.Add(new TextBlock
-		{
-			Text = "♫",
-			FontSize = 30,
-			Foreground = (Brush)FindResource("AccentBrush"),
-			HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-			VerticalAlignment = VerticalAlignment.Center
-		});
+		var fallbackArt = new ArtworkTile();
+		fallbackArt.SetBinding(ArtworkTile.CaptionProperty, new System.Windows.Data.Binding(nameof(Tag)) { Source = Cover });
+		grid.Children.Add(fallbackArt);
 		miniCover = new Image
 		{
 			Stretch = Stretch.UniformToFill,
@@ -3302,8 +3285,19 @@ public partial class MainWindow : Window
 			ToolTip = LocalTextExtension.Translate("Volver a Prisma Music"),
 		};
 		AutomationProperties.SetName(returnButton, LocalTextExtension.Translate("Volver a Prisma Music"));
+		var closeMini = new System.Windows.Controls.Button
+		{
+			Content = "×",
+			Style = (Style)FindResource("CompactButton"),
+			ToolTip = LocalTextExtension.Translate("Cerrar")
+		};
+		AutomationProperties.SetName(closeMini, LocalTextExtension.Translate("Cerrar"));
+		closeMini.Click += (_, _) => mini?.Close();
+		AutomationProperties.SetName(previousButton, LocalTextExtension.Translate("Anterior"));
+		AutomationProperties.SetName(nextButton, LocalTextExtension.Translate("Siguiente"));
 		returnButton.Click += (_, _) =>
 		{
+			if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
 			Activate();
 			mini?.Close();
 		};
@@ -3314,19 +3308,15 @@ public partial class MainWindow : Window
 		controls.Children.Add(miniToggle);
 		controls.Children.Add(nextButton);
 		controls.Children.Add(returnButton);
+		controls.Children.Add(closeMini);
 		var details = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-		details.Children.Add(new TextBlock
-		{
-			Text = "PRISMA MUSIC  ·  " + LocalTextExtension.Translate("Modo PiP"),
-			Foreground = (Brush)FindResource("AccentBrush"),
-			FontSize = 9,
-			FontWeight = FontWeights.SemiBold,
-			Margin = new Thickness(0, 0, 0, 6)
-		});
 		details.Children.Add(miniTitle);
 		details.Children.Add(miniArtist);
 		details.Children.Add(miniFormat);
 		details.Children.Add(miniProgress);
+		var miniTime = new TextBlock { FontSize = 10, Foreground = (Brush)FindResource("Muted") };
+		miniTime.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(TextBlock.Text)) { Source = TimeLabel });
+		details.Children.Add(miniTime);
 		details.Children.Add(controls);
 		var card = new Border
 		{
@@ -3350,10 +3340,9 @@ public partial class MainWindow : Window
 		card.Child = content;
 		mini = new Window
 		{
-			Owner = this,
 			Title = "Prisma Music · PiP",
-			Width = 430,
-			Height = 176,
+			Width = 400,
+			Height = 184,
 			ResizeMode = ResizeMode.NoResize,
 			Topmost = true,
 			WindowStyle = WindowStyle.None,
@@ -3377,6 +3366,16 @@ public partial class MainWindow : Window
 			miniProgress = null;
 		};
 		UpdateMini();
+		card.MouseLeftButtonDown += (_, e) =>
+		{
+			if (e.LeftButton == MouseButtonState.Pressed) mini?.DragMove();
+		};
+		mini.PreviewKeyDown += (_, e) =>
+		{
+			if (e.Key != Key.Escape) return;
+			e.Handled = true;
+			mini?.Close();
+		};
 		mini.Show();
 	}
 
@@ -3385,10 +3384,24 @@ public partial class MainWindow : Window
 		if (miniTitle != null)
 		{
 			miniTitle.Text = current?.Name ?? "Prisma Music";
+			miniTitle.ToolTip = current?.Name;
 			miniArtist.Text = current?.Artist ?? "";
 			miniFormat.Text = AudioFormat.Text;
 			miniCover.Source = Cover.Source;
 		}
+	}
+
+	private static void CaptureDesignPreview(FrameworkElement view, string environmentVariable)
+	{
+		if (Environment.GetEnvironmentVariable(environmentVariable) is not string path) return;
+		view.UpdateLayout();
+		var bitmap = new RenderTargetBitmap((int)Math.Ceiling(view.ActualWidth), (int)Math.Ceiling(view.ActualHeight),
+			96, 96, PixelFormats.Pbgra32);
+		bitmap.Render(view);
+		var encoder = new PngBitmapEncoder();
+		encoder.Frames.Add(BitmapFrame.Create(bitmap));
+		using var stream = System.IO.File.Create(path);
+		encoder.Save(stream);
 	}
 
 	private void Shortcuts(object sender, System.Windows.Input.KeyEventArgs args)
@@ -3449,4 +3462,3 @@ public partial class MainWindow : Window
 		}
 	}
 }
-

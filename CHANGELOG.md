@@ -2,9 +2,14 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
-## 0.34.0
+## 0.35.0
 
-Versión actual de Windows.
+- Agrupa las acciones de letras, pista y vista en el menú del reproductor.
+- Destaca el verso activo y diferencia su traducción en las letras sincronizadas.
+- Mejora los controles del minirreproductor flotante y conserva su ventana al minimizar la principal.
+- Añade edición de título, artista, álbum, género y año en la biblioteca. Las correcciones sobreviven a los escaneos y se guardan en Prisma Music. La ficha del archivo muestra las etiquetas originales y el formato de audio.
+
+## 0.34.0
 
 - Añade progreso del escaneo con carpeta, archivo, etiquetas leídas, pistas encontradas y errores; informa los cambios al terminar. Las etiquetas se leen sin escribir en los archivos.
 - Permite consultar etiquetas completas de pista, artista del álbum, año, género, número de pista/disco y presencia de carátula integrada.

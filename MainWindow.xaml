@@ -152,7 +152,14 @@
           <TextBlock x:Name="GalleryPageLabel" Margin="8,0,14,0" VerticalAlignment="Center"/>
           <Button x:Name="GalleryNext" AutomationProperties.Name="{local:LocalText Text=Siguiente}" Content="›" Click="NextGalleryPage" ToolTip="{local:LocalText Text=Siguiente}"/>
         </StackPanel>
-        <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ContextMenuOpening="PrepareLibraryTagsMenu" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ContextMenu>
+            <ContextMenu Style="{StaticResource PlayerMenu}">
+              <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Editar etiquetas de biblioteca}" Click="EditLibraryTags">
+                <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE70F;"/></MenuItem.Icon>
+              </MenuItem>
+            </ContextMenu>
+          </ListBox.ContextMenu>
           <ListBox.Resources>
 <DataTemplate x:Key="SongRow">
               <DockPanel Margin="2,2">
@@ -238,13 +245,32 @@
             <Button Content="{local:LocalText Text=＋ Cola}" Click="Enqueue"/><Button Content="{local:LocalText Text=＋ Lista}" Click="Playlist" AutomationProperties.Name="{local:LocalText Text=Añadir o quitar de la lista seleccionada}" ToolTip="{local:LocalText Text=Añadir o quitar de la lista seleccionada}"/>
             <Button Content="{local:LocalText Text=Artista}" Click="ArtistProfile" AutomationProperties.Name="{local:LocalText Text=Ver perfil del artista}" ToolTip="{local:LocalText Text=Ver perfil del artista}"/>
             <Button Style="{StaticResource CompactButton}" Content="ⓘ" Click="Inspect" AutomationProperties.Name="{local:LocalText Text=Información del archivo}" ToolTip="{local:LocalText Text=Información del archivo}"/>
-            <Button Content="&#xE712;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Click="ShowListeningMenu" AutomationProperties.Name="{local:LocalText Text=Más opciones}" ToolTip="{local:LocalText Text=Más opciones}">
+            <Button x:Name="ListeningMenuButton" Content="&#xE712;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Click="ShowListeningMenu" AutomationProperties.Name="{local:LocalText Text=Más opciones}" ToolTip="{local:LocalText Text=Más opciones}">
               <Button.ContextMenu>
-                <ContextMenu Background="#2C2C2C" Foreground="#FFFFFF">
-                  <MenuItem Header="{local:LocalText Text=Traducir}" Click="TranslateLyrics"/>
-                  <MenuItem Header="{local:LocalText Text=Artista}" Click="ArtistProfile"/>
-                  <MenuItem Header="Mini" Click="Mini"/>
-                  <MenuItem Header="{local:LocalText Text=Pantalla completa}" Click="Fullscreen"/>
+                <ContextMenu Style="{StaticResource PlayerMenu}">
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Buscar letras}" Click="LookupLyrics">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8BD;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Traducir}" Click="TranslateLyrics">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8C1;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <Separator/>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Información del archivo}" InputGestureText="Ctrl+I" Click="Inspect">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE946;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Editar etiquetas de biblioteca}" Click="EditLibraryTags">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE70F;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Ver perfil del artista}" Click="ArtistProfile">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE77B;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <Separator/>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Modo PiP}" Click="Mini">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8A7;"/></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Pantalla completa}" InputGestureText="F11" Click="Fullscreen">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE740;"/></MenuItem.Icon>
+                  </MenuItem>
                 </ContextMenu>
               </Button.ContextMenu>
             </Button>

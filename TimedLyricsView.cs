@@ -41,18 +41,21 @@ public partial class MainWindow
             view.Text = sourceLyrics.Length == 0 ? LocalTextExtension.Translate("Sin letras disponibles") : sourceLyrics;
             return;
         }
-        int start = Math.Max(0, index);
+        int start = Math.Max(0, index - 1);
         for (int i = start; i < Math.Min(start + 5, lyricLines.Length); i++)
         {
             var line = lyricLines[i];
+            bool active = i == index;
+            bool fullscreen = view == roomLyrics;
             var verse = new Hyperlink(new Run(line.Text))
             {
-                Foreground = i == index
-                    ? view == roomLyrics ? (Brush)FindResource("AccentBrush") : Brushes.Lavender
-                    : (Brush)FindResource("Muted"),
+                Foreground = active ? (Brush)FindResource("Ink") : (Brush)FindResource("Muted"),
+                FontSize = fullscreen ? (active ? 30 : 20) : (active ? 18 : 14),
                 TextDecorations = null,
-                FontWeight = i == index ? FontWeights.SemiBold : FontWeights.Normal
+                FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal
             };
+            System.Windows.Automation.AutomationProperties.SetHelpText(verse,
+                TimeSpan.FromSeconds(line.Time).ToString(@"m\:ss"));
             verse.Click += (_, args) =>
             {
                 args.Handled = true;
@@ -65,7 +68,11 @@ public partial class MainWindow
                 !string.Equals(line.Text, translation, StringComparison.OrdinalIgnoreCase))
             {
                 view.Inlines.Add(new LineBreak());
-                view.Inlines.Add(new Run(translation) { Foreground = (Brush)FindResource("Muted") });
+                view.Inlines.Add(new Run(translation)
+                {
+                    Foreground = (Brush)FindResource(active ? "AccentBrush" : "Muted"),
+                    FontSize = fullscreen ? 17 : 13
+                });
             }
             view.Inlines.Add(new LineBreak());
             view.Inlines.Add(new LineBreak());

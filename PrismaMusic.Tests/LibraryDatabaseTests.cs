@@ -38,6 +38,24 @@ public sealed class LibraryDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void TagEditsSurviveReloadAndApplyToFreshlyScannedTrack()
+    {
+        var database = new LibraryDatabase(directory);
+        var library = database.Load();
+        var scanned = Song(@"C:\M\a.flac");
+        var edit = new LibraryTagEdit("Nuevo título", "Nuevo artista", "Nuevo álbum", "Jazz", 2025);
+        library.TagEdits[scanned.Path] = edit;
+        library.Tracks.Add(edit.ApplyTo(scanned));
+        database.Save(library, true);
+
+        var reloaded = new LibraryDatabase(directory).Load();
+        var updated = reloaded.TagEdits[@"c:\m\A.FLAC"].ApplyTo(scanned with { Seconds = 220 });
+        Assert.Equal(edit.ApplyTo(scanned), reloaded.Tracks.Single());
+        Assert.Equal(edit.Title, updated.Name);
+        Assert.Equal(220, updated.Seconds);
+    }
+
+    [Fact]
     public void RemovedTracksDisappearAfterSaving()
     {
         var database = new LibraryDatabase(directory);
