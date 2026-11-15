@@ -34,9 +34,11 @@ public partial class MainWindow
     private void ApplyAppearanceProfile(int profile)
     {
         appearanceProfile = Math.Clamp(profile, 0, AppearanceProfileNames.Length - 1);
-        ArtworkTint.Opacity = appearanceProfile switch { 1 => .32, 2 => 0, _ => .76 };
+        ArtworkTint.Opacity = appearanceProfile switch { 1 => .22, 2 => 0, _ => .53 };
         GlassReflection.Opacity = appearanceProfile switch { 1 => .035, 2 => 0, _ => .08 };
         AmbientArtwork.Opacity = appearanceProfile switch { 1 => .06, 2 => 0, _ => .14 };
+        Resources["WorkspaceSurface"] = new SolidColorBrush(appearanceProfile == 2
+            ? Color.FromRgb(31, 33, 39) : Color.FromArgb(238, 32, 32, 32));
         Shell.Background = appearanceProfile == 2
             ? new SolidColorBrush(Color.FromRgb(19, 21, 27))
             : ArtworkShellBrush(((SolidColorBrush)FindResource("AccentBrush")).Color);

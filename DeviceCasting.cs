@@ -15,6 +15,7 @@ public partial class MainWindow
     private RemotePlayer castingPlayer;
     private Track castingTrack;
     private bool castBusy;
+    private nint castingPickerOwner;
 
     private async void CastTrack(object sender, RoutedEventArgs args)
     {
@@ -35,18 +36,26 @@ public partial class MainWindow
                 Status.Text = LocalTextExtension.Translate("Elige una pista para transmitir.");
                 return;
             }
-            if (castingPicker == null)
+            var anchor = CastToolbarButton;
+            var owner = Window.GetWindow(anchor) ?? this;
+            var handle = new WindowInteropHelper(owner).Handle;
+            if (castingPicker == null || castingPickerOwner != handle)
             {
+                if (castingPicker != null)
+                {
+                    castingPicker.Hide();
+                    castingPicker.CastingDeviceSelected -= DeviceSelected;
+                }
+                else Closed += (_, _) => { castingPicker?.Hide(); ResetCasting(); };
                 var picker = new CastingDevicePicker();
-                WinRT.Interop.InitializeWithWindow.Initialize(picker, new WindowInteropHelper(this).Handle);
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, handle);
                 picker.Filter.SupportsAudio = true;
                 picker.Filter.SupportsVideo = true;
                 picker.CastingDeviceSelected += DeviceSelected;
                 castingPicker = picker;
-                Closed += (_, _) => { castingPicker.Hide(); ResetCasting(); };
+                castingPickerOwner = handle;
             }
-            var anchor = (FrameworkElement)sender;
-            var origin = anchor.TranslatePoint(new Point(0, 0), this);
+            var origin = anchor.TranslatePoint(new Point(0, 0), owner);
             castingPicker.Show(new Windows.Foundation.Rect(origin.X, origin.Y, anchor.ActualWidth, anchor.ActualHeight),
                 Windows.UI.Popups.Placement.Above);
         }
@@ -76,6 +85,7 @@ public partial class MainWindow
                 if (playing) Toggle(this, new RoutedEventArgs());
                 castingPlayer.Play();
                 CastMenuItem.Header = LocalTextExtension.Translate("Desconectar");
+                UpdateCastToolbar(true);
                 System.Windows.Automation.AutomationProperties.SetName(CastMenuItem,
                     LocalTextExtension.Translate("Desconectar"));
                 Status.Text = LocalTextExtension.Format("Transmitiendo «{0}» a {1}.", track.Name, args.SelectedCastingDevice.FriendlyName);
@@ -123,8 +133,17 @@ public partial class MainWindow
         castingPlayer = null;
         castingTrack = null;
         CastMenuItem.Header = LocalTextExtension.Translate("Transmitir a dispositivo");
+        UpdateCastToolbar(false);
         System.Windows.Automation.AutomationProperties.SetName(CastMenuItem,
             LocalTextExtension.Translate("Transmitir a dispositivo"));
+    }
+
+    private void UpdateCastToolbar(bool active)
+    {
+        string label = LocalTextExtension.Translate(active ? "Desconectar" : "Transmitir (Miracast)");
+        CastToolbarButton.ToolTip = label;
+        CastToolbarButton.SetResourceReference(System.Windows.Controls.Control.ForegroundProperty, active ? "AccentBrush" : "Ink");
+        System.Windows.Automation.AutomationProperties.SetName(CastToolbarButton, label);
     }
 }
 

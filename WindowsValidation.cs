@@ -103,4 +103,37 @@ public partial class MainWindow
             SetPlaying(false);
         }
     }
+
+    private async Task VerifyUsbDisconnect(string deviceName, string path)
+    {
+        string id = null;
+        using var devices = new MMDeviceEnumerator();
+        foreach (var device in devices.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
+            using (device)
+                if (device.FriendlyName.Contains(deviceName, StringComparison.OrdinalIgnoreCase))
+                    id = device.ID;
+        if (id == null) throw new InvalidOperationException("USB audio endpoint unavailable.");
+        Volume.Value = 0;
+        player.OutputId = id;
+        player.Exclusive = true;
+        var track = new Track(path, "USB audio validation", "", "", "", "", 0, 0, 0, 0);
+        await Play(track);
+        for (int attempt = 0; attempt < 40 && player.DevicePositionBytes <= 0; attempt++) await Task.Delay(50);
+        if (!opened || !playing || player.ActiveOutputId != id || !player.IsExclusive || player.DevicePositionBytes <= 0)
+            throw new InvalidOperationException("USB WASAPI exclusive playback did not start: " + Status.Text);
+        Console.WriteLine("READY: USB WASAPI exclusive; device clock advanced. Disconnect the DAC.");
+        var deadline = DateTime.UtcNow.AddMinutes(3);
+        while (DateTime.UtcNow < deadline)
+        {
+            using var fallback = devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            if (fallback.ID != id && opened && playing && player.OutputId == id &&
+                player.ActiveOutputId == fallback.ID && player.DevicePositionBytes > 0)
+            {
+                Console.WriteLine($"PASS: playback recovered on {fallback.FriendlyName} at {player.Position.TotalSeconds:0.00} s; requested DAC was retained.");
+                return;
+            }
+            await Task.Delay(250);
+        }
+        throw new InvalidOperationException("USB playback did not recover before the deadline: " + Status.Text);
+    }
 }

@@ -8,6 +8,7 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
+    private static readonly int[] SleepTimerPresets = { 15, 30, 60, 90 };
     private double volumeBeforeMute = .7;
     private bool stopAfterTrack;
     private bool continueAfterTrack = true;
@@ -51,7 +52,7 @@ public partial class MainWindow
         {
             Style = (Style)FindResource("PlayerMenu"), PlacementTarget = (UIElement)sender, Placement = PlacementMode.Top
         };
-        foreach (int minutes in new[] { 15, 30, 60, 90 })
+        foreach (int minutes in SleepTimerPresets)
         {
             var item = new MenuItem { Header = LocalTextExtension.Format("Pausar en {0} min", minutes),
                 Style = (Style)FindResource("PlayerMenuItem") };

@@ -10,7 +10,7 @@ public partial class MainWindow
 {
     private static string SessionFile => Path.Combine(DataDirectory, "session.json");
     private sealed record ListeningSession(string Track, double Position, string[] Queue, string[] OriginalOrder = null, string[] PlaybackOrder = null, int Section = 0);
-    private int startupSection;
+    private int startupSection = 3;
 
     private void MoveQueueUp(object sender, RoutedEventArgs args) => EditQueue(-1);
     private void MoveQueueDown(object sender, RoutedEventArgs args) => EditQueue(1);

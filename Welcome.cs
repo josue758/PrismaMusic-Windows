@@ -135,15 +135,12 @@ public partial class MainWindow
         footer.Children.Add(leftButtons);
         DockPanel.SetDock(forward, Dock.Right);
         footer.Children.Add(forward);
-        var root = new Grid { Margin = new Thickness(12) };
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(228) });
+        var root = new Grid { Margin = new Thickness(12), Background = (Brush)FindResource("SettingsBackground") };
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(202) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var rail = new Border
         {
-            Background = (Brush)FindResource("SettingsCard"),
-            BorderBrush = (Brush)FindResource("SettingsStroke"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(18),
+            Background = Brushes.Transparent,
             Padding = new Thickness(17, 18, 14, 14),
             Margin = new Thickness(0, 0, 14, 0)
         };
@@ -211,6 +208,7 @@ public partial class MainWindow
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 Padding = new Thickness(9, 10, 7, 10),
                 Margin = new Thickness(0, 2, 0, 3),
+                Style = (Style)FindResource("FluentNavigationButton"),
                 Tag = index
             };
             int step = index;
@@ -258,7 +256,7 @@ public partial class MainWindow
             Background = (Brush)FindResource("SettingsCard"),
             BorderBrush = (Brush)FindResource("SettingsStroke"),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(20),
+            CornerRadius = new CornerRadius(10),
             Padding = new Thickness(26, 24, 26, 22),
             Child = new ScrollViewer { Content = pageHost, Style = (Style)FindResource("LyricsScroll"), VerticalScrollBarVisibility = ScrollBarVisibility.Auto }
         };
@@ -286,6 +284,7 @@ public partial class MainWindow
             GlassFrameThickness = new Thickness(0),
             UseAeroCaptionButtons = false
         });
+        ApplyFluentDialog(dialog, root);
         if (smokeTest && Environment.GetEnvironmentVariable("PRISMA_WELCOME_PREVIEW") is string welcomePreview)
         {
             dialog.ContentRendered += (_, _) =>

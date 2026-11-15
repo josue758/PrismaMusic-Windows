@@ -54,6 +54,7 @@ internal sealed class AudioEngine
     }
     public static readonly int[] Frequencies = { 31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
     private float[] gains = new float[Frequencies.Length];
+    private double equalizerGainDb;
     public string OutputId { get; set; }
     public string ActiveOutputId => output == null ? null : endpoint?.ID;
     public string ActiveOutputName => output == null ? null : endpoint?.FriendlyName;
@@ -75,10 +76,11 @@ internal sealed class AudioEngine
     }
     public double Volume { get => volume; set { volume = value; if (volumeStage != null) volumeStage.Volume = (float)value; } }
 
-    public void SetGains(float[] values)
+    public void SetGains(float[] values, double gainDb)
     {
         gains = (float[])values.Clone();
-        meter?.SetGains(gains);
+        equalizerGainDb = gainDb;
+        meter?.SetGains(gains, equalizerGainDb);
     }
 
     public void Open(Uri uri)
@@ -185,7 +187,7 @@ internal sealed class AudioEngine
             volumeStage = new VolumeSampleProvider(reader as ISampleProvider ?? reader.ToSampleProvider()) { Volume = (float)volume };
             if (!direct && Speed != 1) tempo = new TempoProvider(reader, volumeStage, Speed);
             meter = new Meter((ISampleProvider)tempo ?? volumeStage) { Balance = balance, Bypass = direct };
-            meter.SetGains(gains);
+            meter.SetGains(gains, equalizerGainDb);
             int requestedRate = AudioSampleRatePolicy.SelectOutputRate(
                 meter.WaveFormat.SampleRate, OutputSampleRate, Exclusive && allowExclusive, strictDirect: false);
             bool usePcm16 = false;
@@ -327,7 +329,7 @@ internal sealed class AudioEngine
         public float Level => Volatile.Read(ref level);
         public WaveFormat WaveFormat => source.WaveFormat;
 
-        public void SetGains(float[] values)
+        public void SetGains(float[] values, double gainDb)
         {
             var next = Enumerable.Range(0, WaveFormat.Channels).Select(_ =>
                 Frequencies.Select((frequency, index) => (frequency, gain: values[index]))
@@ -337,7 +339,7 @@ internal sealed class AudioEngine
             lock (gate)
             {
                 filters = next;
-                headroom = (float)Math.Pow(10, -Math.Max(0, values.Max()) / 20);
+                headroom = (float)Math.Pow(10, gainDb / 20);
             }
         }
 

@@ -2,6 +2,28 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.50.0
+
+- Reorganiza Configuración en siete secciones con tarjetas y navegación lateral de estilo Fluent.
+- Añade al ecualizador una gráfica de las bandas, preamplificación y compensación automática ajustable.
+- Integra el temporizador de sueño, las fuentes de biblioteca y la vista previa de tamaño de letras.
+
+## 0.49.0
+
+- Añade accesos directos a visualizador, letras, cola e información junto a la búsqueda.
+- Amplía la vista de la cola con portada, duración y acciones por canción. El acceso de cola abre y cierra el panel sin cambiar de sección.
+
+## 0.48.0
+
+- Añade accesos directos al ecualizador, al selector de transmisión y al minirreproductor PiP en la barra inferior.
+- Añade Inicio con álbumes destacados, cifras de la biblioteca y canciones recientes.
+
+## 0.47.0
+
+- Integra la búsqueda en la barra de título y organiza navegación, biblioteca y reproducción en superficies continuas.
+- Aplica Mica cuando Windows lo admite y un fondo sólido cuando no está disponible.
+- Unifica Bienvenida, Configuración, salida de audio y sala de escucha con la misma paleta y controles.
+
 ## 0.46.0
 
 - Añade pestañas de letras, cola e información y permite plegar el panel de reproducción.

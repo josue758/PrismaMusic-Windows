@@ -99,7 +99,7 @@ public partial class MainWindow
                 library.History.Insert(0, track.Path);
                 if (library.History.Count > 500) library.History.RemoveAt(500);
                 Save();
-                if (Navigation.SelectedIndex == 5) RefreshRows();
+                if (Navigation.SelectedIndex == 5 || ReferenceEquals(Navigation.SelectedItem, HomeNavigation)) RefreshRows();
             }
             if (trackChanged) LoadPresentation(track);
             PublishSystemPlayback();

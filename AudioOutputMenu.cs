@@ -59,7 +59,7 @@ public partial class MainWindow
         var surface = new Border { Width = Math.Min(436, SystemParameters.WorkArea.Width - 24),
             MaxHeight = Math.Min(560, SystemParameters.WorkArea.Height - 44), Background = (Brush)FindResource("SettingsBackground"),
             BorderBrush = (Brush)FindResource("SettingsStroke"), BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(13), Child = layout };
+            CornerRadius = new CornerRadius(10), Child = layout };
         var popup = new Popup { PlacementTarget = anchor, Placement = PlacementMode.Top,
             VerticalOffset = -6, AllowsTransparency = true, StaysOpen = false, Child = surface };
         audioOutputPopup = popup;
@@ -224,6 +224,7 @@ public partial class MainWindow
                 Margin = new Thickness(0, 0, 0, 7) });
             add(section);
             content.Children.Add(new Border { Background = (Brush)FindResource("SettingsCard"),
+                BorderBrush = (Brush)FindResource("WorkspaceStroke"), BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(8), Padding = new Thickness(12), Margin = new Thickness(0, 0, 0, 8), Child = section });
         }
 

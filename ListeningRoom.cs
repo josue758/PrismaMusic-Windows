@@ -24,7 +24,7 @@ public partial class MainWindow
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         layout.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        layout.Background = new SolidColorBrush(Color.FromRgb(10, 12, 19));
+        layout.Background = (Brush)FindResource("SettingsBackground");
 
         var backdrop = new Image
         {
@@ -43,7 +43,7 @@ public partial class MainWindow
         var backdropTint = new Border
         {
             IsHitTestVisible = false,
-            Background = new SolidColorBrush(Color.FromArgb(0xE8, 8, 10, 17))
+            Background = new SolidColorBrush(Color.FromArgb(0x50, 12, 12, 12))
         };
         Grid.SetRowSpan(backdropTint, 3);
         layout.Children.Add(backdropTint);
@@ -73,17 +73,10 @@ public partial class MainWindow
         var brandText = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         brandText.Children.Add(new TextBlock
         {
-            Text = "PRISMA MUSIC",
-            FontSize = 10,
+            Text = "Prisma Music",
+            FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             Foreground = Brushes.White
-        });
-        brandText.Children.Add(new TextBlock
-        {
-            Text = LocalTextExtension.Translate("Tu espacio de escucha"),
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromArgb(0xA8, 255, 255, 255)),
-            Margin = new Thickness(0, 3, 0, 0)
         });
         brand.Children.Add(brandText);
         header.Children.Add(brand);
@@ -205,7 +198,7 @@ public partial class MainWindow
         });
         nowPlaying.Children.Add(new TextBlock
         {
-            Text = LocalTextExtension.Translate("REPRODUCIENDO AHORA"),
+            Text = LocalTextExtension.Translate("Reproduciendo ahora"),
             Foreground = (Brush)FindResource("AccentBrush"),
             FontSize = 10,
             FontWeight = FontWeights.SemiBold
@@ -244,8 +237,8 @@ public partial class MainWindow
         lyricHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         lyricHeader.Children.Add(new TextBlock
         {
-            Text = LocalTextExtension.Translate("LETRA SINCRONIZADA"),
-            FontSize = 10,
+            Text = LocalTextExtension.Translate("Letras"),
+            FontSize = 15,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromArgb(0xB5, 255, 255, 255)),
             VerticalAlignment = VerticalAlignment.Center
@@ -325,12 +318,9 @@ public partial class MainWindow
         var lyricsCard = new Border
         {
             Padding = new Thickness(22, 18, 22, 16),
-            CornerRadius = new CornerRadius(22),
-            Background = new LinearGradientBrush(
-                Color.FromArgb(0x30, 255, 255, 255),
-                Color.FromArgb(0x15, 255, 255, 255),
-                90),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x30, 255, 255, 255)),
+            CornerRadius = new CornerRadius(10),
+            Background = (Brush)FindResource("SettingsCard"),
+            BorderBrush = (Brush)FindResource("WorkspaceStroke"),
             BorderThickness = new Thickness(1),
             Child = lyricSection
         };
@@ -354,6 +344,7 @@ public partial class MainWindow
             Background = new SolidColorBrush(Color.FromRgb(10, 12, 19))
         };
         listeningRoom = room;
+        ApplyFluentDialog(room, layout);
         UpdateFullscreenToolbarButton(true);
         var focused = Keyboard.FocusedElement;
         room.PreviewKeyDown += (_, key) =>
@@ -362,10 +353,12 @@ public partial class MainWindow
             key.Handled = true;
             room.Close();
         };
+        Thickness transportMargin = Transport.Margin;
         room.Closed += (_, _) =>
         {
             layout.Children.Remove(Transport);
             Shell.Children.Add(Transport);
+            Transport.Margin = transportMargin;
             TransportArtworkButton.Visibility = artworkButtonVisibility;
             listeningRoom = null;
             roomLyrics = null;
@@ -375,6 +368,7 @@ public partial class MainWindow
             UpdateFullscreenToolbarButton(false);
             if (IsActive && focused != null) Keyboard.Focus(focused);
         };
+        Transport.Margin = new Thickness(24, 0, 24, 16);
         Shell.Children.Remove(Transport);
         Grid.SetRow(Transport, 2);
         Grid.SetColumn(Transport, 0);
@@ -385,6 +379,7 @@ public partial class MainWindow
         {
             layout.Children.Remove(Transport);
             if (Transport.Parent == null) Shell.Children.Add(Transport);
+            Transport.Margin = transportMargin;
             TransportArtworkButton.Visibility = artworkButtonVisibility;
             listeningRoom = null;
             roomLyrics = null;

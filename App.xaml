@@ -6,9 +6,36 @@
     <SolidColorBrush x:Key="Ink" Color="#FFFFFF"/>
     <SolidColorBrush x:Key="Muted" Color="#B8FFFFFF"/>
     <SolidColorBrush x:Key="Panel" Color="#A82B2933"/>
-    <SolidColorBrush x:Key="SettingsBackground" Color="#191B22"/>
-    <SolidColorBrush x:Key="SettingsCard" Color="#23262F"/>
+    <SolidColorBrush x:Key="SettingsBackground" Color="#202020"/>
+    <SolidColorBrush x:Key="SettingsCard" Color="#292929"/>
     <SolidColorBrush x:Key="SettingsStroke" Color="#38FFFFFF"/>
+    <SolidColorBrush x:Key="WorkspaceSurface" Color="#EE202020"/>
+    <SolidColorBrush x:Key="ListeningSurface" Color="#242424"/>
+    <SolidColorBrush x:Key="TransportSurface" Color="#252525"/>
+    <SolidColorBrush x:Key="WorkspaceStroke" Color="#28FFFFFF"/>
+    <SolidColorBrush x:Key="NavigationBackdrop" Color="#89191919"/>
+    <SolidColorBrush x:Key="WorkspaceText" Color="#F5F5F5"/>
+    <SolidColorBrush x:Key="WorkspaceMuted" Color="#C5FFFFFF"/>
+    <SolidColorBrush x:Key="TitleSearchSurface" Color="#13FFFFFF"/>
+    <Style x:Key="FluentNavigationButton" TargetType="Button">
+      <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="NavigationFill" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}"
+                    BorderBrush="Transparent" BorderThickness="1">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="NavigationFill" Property="Background" Value="#18FFFFFF"/></Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="NavigationFill" Property="Opacity" Value=".65"/></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="NavigationFill" Property="BorderBrush" Value="White"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="ListeningTab" TargetType="TabItem">
       <Setter Property="Foreground" Value="{StaticResource Muted}"/>
       <Setter Property="Template">
@@ -235,10 +262,10 @@
           <ControlTemplate TargetType="TextBox">
             <Grid>
               <Border x:Name="InputSurface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                      BorderThickness="1" CornerRadius="12" Padding="{TemplateBinding Padding}">
+                      BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
                 <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
               </Border>
-              <Border x:Name="FocusRing" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" CornerRadius="12" Opacity="0" IsHitTestVisible="False"/>
+              <Border x:Name="FocusRing" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="0,0,0,2" CornerRadius="6" Opacity="0" IsHitTestVisible="False"/>
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsKeyboardFocusWithin" Value="True">
@@ -273,6 +300,16 @@
           </ControlTemplate>
         </Setter.Value>
       </Setter>
+    </Style>
+    <Style x:Key="HeaderAction" TargetType="Button" BasedOn="{StaticResource TransportIcon}">
+      <Setter Property="Width" Value="32"/>
+      <Setter Property="Height" Value="32"/>
+      <Setter Property="Margin" Value="1,0"/>
+    </Style>
+    <Style x:Key="QueueRowButton" TargetType="Button" BasedOn="{StaticResource TransportIcon}">
+      <Setter Property="Width" Value="26"/>
+      <Setter Property="Height" Value="26"/>
+      <Setter Property="FontSize" Value="12"/>
     </Style>
     <Style x:Key="PrimaryTransport" TargetType="Button">
       <Setter Property="Template">
@@ -336,6 +373,55 @@
         <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinVerticalScrollBar}"/>
       </Style.Resources>
     </Style>
+    <Style x:Key="EqualizerBandSlider" TargetType="Slider">
+      <Setter Property="Width" Value="30"/>
+      <Setter Property="IsMoveToPointEnabled" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Slider">
+            <Border x:Name="BandFocus" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6">
+              <Track x:Name="PART_Track" Orientation="Vertical">
+                <Track.DecreaseRepeatButton>
+                  <RepeatButton Command="Slider.DecreaseLarge" Focusable="False">
+                    <RepeatButton.Template>
+                      <ControlTemplate TargetType="RepeatButton">
+                        <Border Width="4" HorizontalAlignment="Center" Background="{DynamicResource AccentBrush}" CornerRadius="2"/>
+                      </ControlTemplate>
+                    </RepeatButton.Template>
+                  </RepeatButton>
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                  <RepeatButton Command="Slider.IncreaseLarge" Focusable="False">
+                    <RepeatButton.Template>
+                      <ControlTemplate TargetType="RepeatButton">
+                        <Border Width="4" HorizontalAlignment="Center" Background="#55FFFFFF" CornerRadius="2"/>
+                      </ControlTemplate>
+                    </RepeatButton.Template>
+                  </RepeatButton>
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                  <Thumb Width="16" Height="16">
+                    <Thumb.Template>
+                      <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="Knob" Background="{DynamicResource AccentBrush}" CornerRadius="8" BorderThickness="2" BorderBrush="#595959"/>
+                        <ControlTemplate.Triggers>
+                          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Knob" Property="BorderBrush" Value="{StaticResource Ink}"/></Trigger>
+                          <Trigger Property="IsDragging" Value="True"><Setter TargetName="Knob" Property="BorderThickness" Value="3"/></Trigger>
+                        </ControlTemplate.Triggers>
+                      </ControlTemplate>
+                    </Thumb.Template>
+                  </Thumb>
+                </Track.Thumb>
+              </Track>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="BandFocus" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="BandFocus" Property="Opacity" Value=".45"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="TransportSlider" TargetType="Slider">
       <Setter Property="MinHeight" Value="18"/>
       <Setter Property="Template">
@@ -381,21 +467,20 @@
       <Setter Property="Padding" Value="10,7"/>
     </Style>
     <Style x:Key="TitleBarButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Width" Value="44"/>
-      <Setter Property="Height" Value="34"/>
-      <Setter Property="Margin" Value="2,0"/>
+      <Setter Property="Width" Value="46"/>
+      <Setter Property="Height" Value="40"/>
+      <Setter Property="Margin" Value="0"/>
       <Setter Property="Padding" Value="0"/>
       <Setter Property="Background" Value="Transparent"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Surface" Background="Transparent" CornerRadius="10">
+            <Border x:Name="Surface" Background="Transparent">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource AccentBrush}"/>
-                <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
+                <Setter TargetName="Surface" Property="Background" Value="#18FFFFFF"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
                 <Setter TargetName="Surface" Property="Opacity" Value=".72"/>
@@ -412,7 +497,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Surface" Background="Transparent" CornerRadius="10">
+            <Border x:Name="Surface" Background="Transparent">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
@@ -429,7 +514,7 @@
       </Setter>
     </Style>
     <Style x:Key="NavigationItem" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-      <Setter Property="Padding" Value="12,10"/>
+      <Setter Property="Padding" Value="10,8"/>
       <Setter Property="ContentTemplate">
         <Setter.Value>
           <DataTemplate>
