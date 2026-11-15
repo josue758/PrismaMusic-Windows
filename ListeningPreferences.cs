@@ -99,12 +99,7 @@ public partial class MainWindow
         if (cover != null && autoArtwork && ReferenceEquals(current, track) && Cover.Source == null)
         {
             Cover.Source = cover;
-            if (artworkColors)
-            {
-                var accent = ArtworkPalette.ExtractAccent(cover, windowsAccent);
-                SetArtworkAccent(accent);
-                Shell.Background = ArtworkShellBrush(accent);
-            }
+            RefreshArtworkTheme();
             UpdateMini();
         }
     }

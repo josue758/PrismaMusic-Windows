@@ -21,22 +21,28 @@ public partial class MainWindow
         });
         if (detail != null) content.Children.Add(SettingsHint(detail));
 
-        page.Children.Add(new Border
+        var surface = new Border
         {
             Background = (Brush)FindResource("SettingsCard"),
             BorderBrush = (Brush)FindResource("WorkspaceStroke"),
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8),
             Padding = new Thickness(16, 14, 16, 14), Margin = new Thickness(0, 0, 0, 10),
             Child = content
-        });
+        };
+        surface.SetResourceReference(Border.BackgroundProperty, "SettingsCard");
+        surface.SetResourceReference(Border.BorderBrushProperty, "WorkspaceStroke");
+        page.Children.Add(surface);
         return content;
     }
 
-    private TextBlock SettingsHint(string text) => new()
+    private TextBlock SettingsHint(string text)
     {
-        Text = T(text), TextWrapping = TextWrapping.Wrap, FontSize = 12,
-        Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 0, 0, 9)
-    };
+        var hint = new TextBlock { Text = T(text), TextWrapping = TextWrapping.Wrap,
+            FontSize = 12, Margin = new Thickness(0, 0, 0, 9) };
+        hint.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        return hint;
+    }
+
 
     private (FrameworkElement View, Action Refresh) CreateEqualizerGraph()
     {

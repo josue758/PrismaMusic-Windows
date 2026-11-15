@@ -411,15 +411,9 @@ public partial class MainWindow
 
     private void ApplyAccentPreset(string preset)
     {
-        accentPreset = preset is "blue" or "violet" ? preset : "artwork";
+        accentPreset = NormalizeAccent(preset);
         artworkColors = accentPreset == "artwork";
-        if (current != null) LoadPresentation(current);
-        else
-        {
-            Color accent = AccentPresetColor();
-            SetArtworkAccent(accent);
-            Shell.Background = ArtworkShellBrush(accent);
-        }
+        RefreshArtworkTheme();
         SaveAudioSettings();
     }
 

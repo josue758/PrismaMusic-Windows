@@ -19,6 +19,7 @@ public partial class MainWindow
     private double lyricOffset;
     private double lyricScale = 1;
     private bool followLyrics = true;
+    private bool showRoomTranslation = true;
 
     private void RefreshLyrics()
     {
@@ -32,7 +33,8 @@ public partial class MainWindow
         string label = LocalTextExtension.Translate(title);
         var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 6) };
         var heading = new DockPanel();
-        var value = new TextBlock { Text = current.ToString(format), Foreground = (Brush)FindResource("Muted") };
+        var value = new TextBlock { Text = current.ToString(format) };
+        value.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
         DockPanel.SetDock(value, Dock.Right);
         heading.Children.Add(value);
         heading.Children.Add(new TextBlock { Text = label });
@@ -65,15 +67,15 @@ public partial class MainWindow
     {
         view.Inlines.Clear();
         bool fullscreen = view == roomLyrics;
-        view.FontSize = (fullscreen ? 22 : 14) * lyricScale;
-        if (fullscreen) view.LineHeight = 35 * lyricScale;
+        view.FontSize = (fullscreen ? 23 : 14) * lyricScale;
+        if (fullscreen) view.LineHeight = 28 * lyricScale;
         if (lyricLines.Length == 0)
         {
             view.Text = sourceLyrics.Length == 0 ? LocalTextExtension.Translate("Sin letras disponibles") : sourceLyrics;
             return;
         }
         int start = followLyrics ? Math.Max(0, index - 1) : 0;
-        int end = followLyrics ? Math.Min(start + 5, lyricLines.Length) : lyricLines.Length;
+        int end = followLyrics ? Math.Min(start + (fullscreen ? 9 : 5), lyricLines.Length) : lyricLines.Length;
         for (int i = start; i < end; i++)
         {
             var line = lyricLines[i];
@@ -81,7 +83,7 @@ public partial class MainWindow
             var verse = new Hyperlink(new Run(line.Text))
             {
                 Foreground = active ? (Brush)FindResource("Ink") : (Brush)FindResource("Muted"),
-                FontSize = (fullscreen ? (active ? 30 : 20) : (active ? 18 : 14)) * lyricScale,
+                FontSize = (fullscreen ? (active ? 30 : 23) : (active ? 18 : 14)) * lyricScale,
                 TextDecorations = null,
                 FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal
             };
@@ -96,7 +98,7 @@ public partial class MainWindow
                 Tick();
             };
             view.Inlines.Add(verse);
-            if (translatedLines != null && translatedLines.TryGetValue(line.Text, out var translation) &&
+            if ((!fullscreen || showRoomTranslation) && translatedLines != null && translatedLines.TryGetValue(line.Text, out var translation) &&
                 !string.Equals(line.Text, translation, StringComparison.OrdinalIgnoreCase))
             {
                 view.Inlines.Add(new LineBreak());

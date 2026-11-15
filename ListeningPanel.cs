@@ -163,6 +163,11 @@ public partial class MainWindow
         removedQueueTrack = queue[index];
         removedQueueIndex = index;
         queue.RemoveAt(index);
+        if (undoNotices)
+        {
+            QueueRemovalNotice.Visibility = Visibility.Visible;
+            queueNoticeDeadline = DateTime.UtcNow.AddSeconds(5);
+        }
         RefreshQueueViews();
     }
 
@@ -170,6 +175,7 @@ public partial class MainWindow
     {
         var track = removedQueueTrack;
         removedQueueTrack = null;
+        ClearQueueNotice();
         if (track == null) return;
         if (library.Tracks.Any(item => StringComparer.OrdinalIgnoreCase.Equals(item.Path, track.Path)) &&
             !queue.Any(item => StringComparer.OrdinalIgnoreCase.Equals(item.Path, track.Path)))

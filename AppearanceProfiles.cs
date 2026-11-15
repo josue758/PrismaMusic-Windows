@@ -34,15 +34,10 @@ public partial class MainWindow
     private void ApplyAppearanceProfile(int profile)
     {
         appearanceProfile = Math.Clamp(profile, 0, AppearanceProfileNames.Length - 1);
-        ArtworkTint.Opacity = appearanceProfile switch { 1 => .22, 2 => 0, _ => .53 };
-        GlassReflection.Opacity = appearanceProfile switch { 1 => .035, 2 => 0, _ => .08 };
-        AmbientArtwork.Opacity = appearanceProfile switch { 1 => .06, 2 => 0, _ => .14 };
-        Resources["WorkspaceSurface"] = new SolidColorBrush(appearanceProfile == 2
-            ? Color.FromRgb(31, 33, 39) : Color.FromArgb(238, 32, 32, 32));
-        Shell.Background = appearanceProfile == 2
-            ? new SolidColorBrush(Color.FromRgb(19, 21, 27))
-            : ArtworkShellBrush(((SolidColorBrush)FindResource("AccentBrush")).Color);
+        ApplySurfaceMaterial();
+        RefreshArtworkTheme();
     }
+
 
     private FrameworkElement CreateAppearanceProfiles(int selected, Action<int> change)
     {
@@ -62,8 +57,10 @@ public partial class MainWindow
             var content = new StackPanel();
             content.Children.Add(sample);
             content.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold });
-            content.Children.Add(new TextBlock { Text = description, TextWrapping = TextWrapping.Wrap,
-                FontSize = 11, Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 3, 0, 0) });
+            var detail = new TextBlock { Text = description, TextWrapping = TextWrapping.Wrap,
+                FontSize = 11, Margin = new Thickness(0, 3, 0, 0) };
+            detail.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+            content.Children.Add(detail);
             var button = new RadioButton { Content = content, GroupName = group, IsChecked = selected == index,
                 Style = (Style)FindResource("AppearanceChoice") };
             AutomationProperties.SetName(button, title);

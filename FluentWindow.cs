@@ -7,11 +7,18 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
-    private static bool ApplyWindowMaterial(Window window)
+    private void UpdateWindowCaptionTheme(Window window)
     {
         var handle = new WindowInteropHelper(window).Handle;
-        int dark = 1;
+        if (handle == 0) return;
+        int dark = lightTheme ? 0 : 1;
         DwmSetWindowAttribute(handle, 20, ref dark, sizeof(int));
+    }
+
+    private bool ApplyWindowMaterial(Window window)
+    {
+        var handle = new WindowInteropHelper(window).Handle;
+        UpdateWindowCaptionTheme(window);
         if (Environment.OSVersion.Version.Build < 22621 || SystemParameters.HighContrast ||
             HwndSource.FromHwnd(handle)?.CompositionTarget is not HwndTarget target) return false;
 
@@ -35,7 +42,7 @@ public partial class MainWindow
         window.SourceInitialized += (_, _) =>
         {
             if (ApplyWindowMaterial(window))
-                root.Background = (Brush)FindResource("NavigationBackdrop");
+                root.SetResourceReference(System.Windows.Controls.Panel.BackgroundProperty, "NavigationBackdrop");
         };
     }
 }

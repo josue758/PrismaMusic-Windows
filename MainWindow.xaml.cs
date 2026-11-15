@@ -113,7 +113,7 @@ public record Track(string Path, string Name, string Artist, string Album, strin
 public partial class MainWindow : Window
 {
 
-	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0, bool CompactRows = false, bool ShowTrackQuality = true, bool MiniAlwaysOnTop = true, bool FollowLyrics = true, int AlbumSize = 1, bool AutoArtwork = true, bool AutoLyrics = false, bool KeepAwake = false, int StartupSection = 0, double EqPreamp = 0, bool EqAutoHeadroom = true);
+	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0, bool CompactRows = false, bool ShowTrackQuality = true, bool MiniAlwaysOnTop = true, bool FollowLyrics = true, int AlbumSize = 1, bool AutoArtwork = true, bool AutoLyrics = false, bool KeepAwake = false, int StartupSection = 0, double EqPreamp = 0, bool EqAutoHeadroom = true, bool InterfaceAnimations = true, bool PointerEffects = true, bool UndoNotices = true, bool AudioBackdrop = true, bool ArtworkMotion = true, int Theme = 1, double SurfaceTransparency = 1, double AmbientLight = 1);
 
 	private enum RepeatMode
 	{
@@ -253,26 +253,14 @@ public partial class MainWindow : Window
 
 	private Track Selected => (Rows.SelectedItem as LibraryRow)?.Tracks.FirstOrDefault() ?? current;
 
-	private Color AccentPresetColor()
-	{
-		string text = accentPreset;
-		if (!(text == "blue"))
-		{
-			if (text == "violet")
-			{
-				return Color.FromRgb(190, 145, byte.MaxValue);
-			}
-			return windowsAccent;
-		}
-		return Color.FromRgb(96, 188, byte.MaxValue);
-	}
-
 	public MainWindow()
 	{
 		//IL_004e: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0053: Unknown result type (might be due to invalid IL or missing references)
 		//IL_006c: Expected Obj, but got Unknown
 		InitializeComponent();
+		AmbientArtwork.RenderTransform = ambientOffset;
+		WatchWindowsTheme();
 		windowsAccent = ((SolidColorBrush)System.Windows.Application.Current.Resources["AccentBrush"]).Color;
 		TransportTitle.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Text")
 		{
@@ -1163,11 +1151,7 @@ public partial class MainWindow : Window
 						{
 							throw new InvalidOperationException("Direct PCM playback did not advance.");
 						}
-						if (Environment.GetEnvironmentVariable("PRISMA_SETTINGS_PREVIEW") != null)
-			{
-				Settings(this, new RoutedEventArgs());
-			}
-			Console.WriteLine(player.OutputNotice);
+						Console.WriteLine(player.OutputNotice);
 						goto IL_23f4;
 					}
 				}
@@ -1205,6 +1189,10 @@ public partial class MainWindow : Window
                 Console.WriteLine("Unavailable device fallback preserved the requested ID and exposed the actual endpoint.");
             }
             Console.WriteLine("Audio output panel opened and exposed device and sample-rate choices.");
+			if (Environment.GetEnvironmentVariable("PRISMA_SETTINGS_PREVIEW") != null)
+			{
+				Settings(this, new RoutedEventArgs());
+			}
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
 			System.Windows.Application.Current.Shutdown(0);
@@ -1224,6 +1212,7 @@ public partial class MainWindow : Window
 
 	private Brush DefaultShellBrush()
 	{
+		if (lightTheme) return new SolidColorBrush(Color.FromRgb(241, 241, 244));
 		if (appearanceProfile == 2) return new SolidColorBrush(Color.FromRgb(19, 21, 27));
 		if (!micaActive)
 		{
@@ -1235,7 +1224,8 @@ public partial class MainWindow : Window
 	private Brush ArtworkShellBrush(Color accent)
 	{
 		if (appearanceProfile == 2) return DefaultShellBrush();
-		double strength = appearanceProfile == 1 ? .14 : .35;
+		double strength = ambientLight * (appearanceProfile == 1 ? .14 : .35);
+		if (lightTheme) return new LinearGradientBrush(Mix(Color.FromRgb(245, 245, 247), accent, strength * .38), Color.FromRgb(244, 244, 245), 120);
 		if (!micaActive)
 		{
 			return new LinearGradientBrush(Color.FromRgb((byte)(accent.R * strength + 20.8),
@@ -1257,7 +1247,7 @@ public partial class MainWindow : Window
 		//IL_00ab: Unknown result type (might be due to invalid IL or missing references)
 		//IL_00ac: Unknown result type (might be due to invalid IL or missing references)
 		//IL_00b3: Unknown result type (might be due to invalid IL or missing references)
-		if (appearanceProfile == 0 && SystemParameters.ClientAreaAnimation && Shell.ActualWidth > 0 && Shell.ActualHeight > 0)
+		if (appearanceProfile == 0 && pointerEffects && MotionEnabled && Shell.ActualWidth > 0 && Shell.ActualHeight > 0)
 		{
 			Point position = args.GetPosition(Shell);
 			Point val = new Point(position.X / Shell.ActualWidth, position.Y / Shell.ActualHeight);
@@ -1286,6 +1276,10 @@ public partial class MainWindow : Window
 		{
 			array[i].Background = new SolidColorBrush(accent);
 		}
+	}
+
+	private void ApplyArtworkSurfaces(Color accent)
+	{
 		AudioGlow.Background = new RadialGradientBrush(Color.FromArgb(85, accent.R, accent.G, accent.B), Color.FromArgb(0, accent.R, accent.G, accent.B));
 		ArtworkTint.Background = new RadialGradientBrush
 		{
@@ -2176,7 +2170,7 @@ public partial class MainWindow : Window
 			return;
 		}
 		Cover.Source = tuple.Item2;
-		if (tuple.Item2 != null && SystemParameters.ClientAreaAnimation)
+		if (tuple.Item2 != null && MotionEnabled)
 		{
 			Cover.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(260.0))
 			{
@@ -2188,31 +2182,7 @@ public partial class MainWindow : Window
 		}
 		AudioFormat.Text = tuple.Item3;
 		UpdateMini();
-		if (artworkColors)
-		{
-			BitmapImage item = tuple.Item2;
-			if (item != null && ((Freezable)item).IsFrozen)
-			{
-				Color color = ArtworkPalette.ExtractAccent(tuple.Item2, windowsAccent);
-				SetArtworkAccent(color);
-				Shell.Background = ArtworkShellBrush(color);
-				goto IL_0274;
-			}
-		}
-		if (artworkColors)
-		{
-			Color color2 = ArtworkTile.AccentForCaption(track.Album, windowsAccent);
-			SetArtworkAccent(color2);
-			Shell.Background = ArtworkShellBrush(color2);
-		}
-		else
-		{
-			Color color3 = AccentPresetColor();
-			SetArtworkAccent(color3);
-			Shell.Background = ArtworkShellBrush(color3);
-		}
-		goto IL_0274;
-		IL_0274:
+		RefreshArtworkTheme();
 		SetLyrics(tuple.Item1);
 		await CompleteTrackPresentation(track);
 	}
@@ -2238,7 +2208,7 @@ public partial class MainWindow : Window
 	private async void LookupLyrics(object sender, RoutedEventArgs args)
 	{
 		Track track = current;
-		if (track == null || System.Windows.MessageBox.Show(this, LocalTextExtension.Translate("Se enviarán el título, artista y álbum a LRCLIB para buscar la letra."), LocalTextExtension.Translate("Buscar letras"), MessageBoxButton.OKCancel) != MessageBoxResult.OK)
+		if (track == null || System.Windows.MessageBox.Show(listeningRoom ?? this, LocalTextExtension.Translate("Se enviarán el título, artista y álbum a LRCLIB para buscar la letra."), LocalTextExtension.Translate("Buscar letras"), MessageBoxButton.OKCancel) != MessageBoxResult.OK)
 		{
 			return;
 		}
@@ -2277,7 +2247,10 @@ public partial class MainWindow : Window
 			spectrumBars[num].Height = Math.Max(val, spectrumBars[num].Height * 0.65);
 			num++;
 		}
-		AudioGlow.Opacity = ((appearanceProfile == 0 && animateSpectrum && playing && SystemParameters.ClientAreaAnimation) ? Math.Clamp(player.Level * 0.42, 0.025, 0.2) : 0.0);
+		AudioGlow.Opacity = appearanceProfile == 0 && audioBackdrop && playing && MotionEnabled
+			? ambientLight * Math.Clamp(player.Level * .42, 0, .2) : 0;
+		UpdateArtworkMotion();
+		if (queueNoticeDeadline is DateTime deadline && DateTime.UtcNow >= deadline) ClearQueueNotice();
 		UpdateVisualizer();
 		if (opened)
 		{
@@ -2530,7 +2503,7 @@ public partial class MainWindow : Window
 			Track track = current ?? Selected;
 			bool flag = track != null && library.Favorites.Contains(track.Path);
 			FavoriteToolbarButton.Content = (flag ? "\uEB52" : "\uEB51");
-			FavoriteToolbarButton.Foreground = (flag ? ((System.Windows.Application.Current.Resources["AccentBrush"] as Brush) ?? Brushes.White) : Brushes.White);
+			FavoriteToolbarButton.SetResourceReference(ForegroundProperty, flag ? "AccentBrush" : "Ink");
 			string text = LocalTextExtension.Translate(flag ? "Quitar de favoritos" : "Favorito");
 			FavoriteToolbarButton.ToolTip = text;
 			AutomationProperties.SetName((DependencyObject)(object)FavoriteToolbarButton, text);
@@ -2687,7 +2660,6 @@ public partial class MainWindow : Window
 			continueAfterTrack = audioSettings.ContinueAfterTrack;
 			lyricOffset = Math.Clamp(audioSettings.LyricOffset, -10, 10);
 			lyricScale = Math.Clamp(audioSettings.LyricScale, .85, 1.35);
-			ApplyAppearanceProfile(audioSettings.AppearanceProfile);
 			compactRows = audioSettings.CompactRows;
 			showTrackQuality = audioSettings.ShowTrackQuality;
 			miniAlwaysOnTop = audioSettings.MiniAlwaysOnTop;
@@ -2703,9 +2675,17 @@ public partial class MainWindow : Window
 			UpdateVolumeControls();
 			player.Speed = Math.Clamp(audioSettings.Speed, 0.75, 2.0);
 			artworkColors = audioSettings.ArtworkColors;
-			string text = audioSettings.AccentPreset;
-			bool flag = ((text == "blue" || text == "violet") ? true : false);
-			accentPreset = (flag ? audioSettings.AccentPreset : "artwork");
+			accentPreset = NormalizeAccent(audioSettings.AccentPreset);
+			interfaceAnimations = audioSettings.InterfaceAnimations;
+			pointerEffects = audioSettings.PointerEffects;
+			undoNotices = audioSettings.UndoNotices;
+			audioBackdrop = audioSettings.AudioBackdrop;
+			artworkMotion = audioSettings.ArtworkMotion;
+			surfaceTransparency = Math.Clamp(audioSettings.SurfaceTransparency, 0, 1);
+			ambientLight = Math.Clamp(audioSettings.AmbientLight, 0, 1);
+			ApplyTheme(audioSettings.Theme);
+			ApplyAppearanceProfile(audioSettings.AppearanceProfile);
+			bool flag;
 			animateSpectrum = audioSettings.AnimateSpectrum;
 			switch (audioSettings.VisualizerStyle)
 			{
@@ -2724,10 +2704,6 @@ public partial class MainWindow : Window
 			flag = ((num == 24 || num == 30 || num == 60) ? true : false);
 			visualizerFramesPerSecond = (flag ? audioSettings.VisualizerFramesPerSecond : 30);
 			SpectrumView.Visibility = ((!animateSpectrum) ? Visibility.Collapsed : Visibility.Visible);
-			if (!artworkColors)
-			{
-				SetArtworkAccent(AccentPresetColor());
-			}
 			eqPreamp = double.IsFinite(audioSettings.EqPreamp) ? Math.Clamp(audioSettings.EqPreamp, -12, 6) : 0;
 			eqAutoHeadroom = audioSettings.EqAutoHeadroom;
 			if (audioSettings.Gains?.Length == gains.Length)
@@ -2750,7 +2726,7 @@ public partial class MainWindow : Window
 		try
 		{
 			Directory.CreateDirectory(DataDirectory);
-			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics, albumSize, autoArtwork, autoLyrics, keepAwake, startupSection, eqPreamp, eqAutoHeadroom)));
+			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics, albumSize, autoArtwork, autoLyrics, keepAwake, startupSection, eqPreamp, eqAutoHeadroom, interfaceAnimations, pointerEffects, undoNotices, audioBackdrop, artworkMotion, themePreference, surfaceTransparency, ambientLight)));
 			System.IO.File.Move(AudioSettingsFile + ".tmp", AudioSettingsFile, overwrite: true);
 			return true;
 		}
@@ -2780,6 +2756,7 @@ public partial class MainWindow : Window
 			Foreground = (Brush)FindResource("Muted"),
 			FontSize = 10
 		};
+		settingsSaveStatus.SetResourceReference(ForegroundProperty, "Muted");
 		DispatcherTimer settingsSaveTimer = new DispatcherTimer
 		{
 			Interval = TimeSpan.FromMilliseconds(350)
@@ -2836,7 +2813,7 @@ public partial class MainWindow : Window
 			Content = LocalTextExtension.Translate("Activar ecualizador"),
 			Style = (Style)FindResource("SettingsToggle"),
 			IsChecked = eqEnabled,
-			Foreground = Brushes.White,
+			Foreground = (Brush)FindResource("Ink"),
 			Margin = new Thickness(0.0, 0.0, 20.0, 0.0),
 			VerticalAlignment = VerticalAlignment.Center
 		};
@@ -3046,44 +3023,45 @@ public partial class MainWindow : Window
 			Margin = new Thickness(0.0, 20.0, 0.0, 4.0)
 		};
 		panel.Children.Add(SettingsSection(appearanceAnchor, "Personaliza el aspecto del reproductor."));
-		panel = AddSettingsCard(appearancePage, "Estilo de la interfaz");
+		panel = AddSettingsCard(appearancePage, "Movimiento y respuesta");
+		AddPreference("Animaciones de carátulas y paneles", interfaceAnimations, enabled =>
+		{
+			interfaceAnimations = enabled;
+			if (!enabled) Cover.BeginAnimation(UIElement.OpacityProperty, null);
+		});
+		AddPreference("Reflejos con el cursor", pointerEffects, enabled => { pointerEffects = enabled; RefreshArtworkTheme(); });
+		AddPreference("Avisos breves con Deshacer", undoNotices, enabled => { undoNotices = enabled; if (!enabled) ClearQueueNotice(); });
+
+		panel = AddSettingsCard(appearancePage, "Atmósfera de la carátula", "Prisma extrae los colores de la carátula en este equipo.");
+		AddPreference("Adaptar colores a la carátula", artworkColors, enabled => { artworkColors = enabled; RefreshArtworkTheme(); });
+		AddPreference("Fondo que responde al audio", audioBackdrop, enabled => audioBackdrop = enabled);
+		AddPreference("Movimiento suave de la carátula", artworkMotion, enabled => artworkMotion = enabled);
+		panel.Children.Add(CreateArtworkPalettePreview());
+
+		panel = AddSettingsCard(appearancePage, "Color de acento");
+		panel.Children.Add(CreateAccentPicker(SaveSettingsSoon));
+
+		panel = AddSettingsCard(appearancePage, "Tema y materiales");
+		panel.Children.Add(CreateThemePicker(SaveSettingsSoon));
 		panel.Children.Add(CreateAppearanceProfiles(appearanceProfile, profile =>
 		{
 			ApplyAppearanceProfile(profile);
 			SaveSettingsSoon();
 		}));
-		AddPreference("Filas compactas en la biblioteca", compactRows, enabled => { compactRows = enabled; ApplyLibraryPresentation(); });
+		panel.Children.Add(CreateLyricSetting("Transparencia de las superficies", 0, 1, .05, surfaceTransparency, "P0",
+			value => { surfaceTransparency = value; ApplySurfaceMaterial(); SaveSettingsSoon(); }));
+		panel.Children.Add(CreateLyricSetting("Luz ambiental", 0, 1, .05, ambientLight, "P0",
+			value => { ambientLight = value; RefreshArtworkTheme(); SaveSettingsSoon(); }));
+
+		panel = AddSettingsCard(appearancePage, "Distribución de la biblioteca");
+		AddOption(panel, "Densidad de la lista", new[] { "Cómoda", "Compacta" }, compactRows ? 1 : 0,
+			index => { compactRows = index == 1; ApplyLibraryPresentation(); });
 		AddPreference("Mostrar formato en la biblioteca y la barra", showTrackQuality, enabled => { showTrackQuality = enabled; ApplyLibraryPresentation(); });
 		AddOption(panel, "Tamaño de las portadas", new[] { "Pequeño", "Mediano", "Grande" }, albumSize,
 			index => { albumSize = index; ApplyAlbumSize(); });
-		panel.Children.Add(new TextBlock
-		{
-			Text = LocalTextExtension.Translate("Color de la aplicación"),
-			Margin = new Thickness(0.0, 8.0, 0.0, 4.0)
-		});
-		System.Windows.Controls.ComboBox comboBox = new System.Windows.Controls.ComboBox();
-		comboBox.Style = (Style)FindResource("FilterCombo");
-		comboBox.ItemsSource = new string[3]
-		{
-			LocalTextExtension.Translate("Según la carátula"),
-			LocalTextExtension.Translate("Azul frío"),
-			LocalTextExtension.Translate("Violeta")
-		};
-		System.Windows.Controls.ComboBox comboBox2 = comboBox;
-		string text = accentPreset;
-		int selectedIndex = ((text == "blue") ? 1 : ((text == "violet") ? 2 : 0));
-		comboBox2.SelectedIndex = selectedIndex;
-		System.Windows.Controls.ComboBox accentChoices = comboBox;
-		accentChoices.SelectionChanged += (object _, SelectionChangedEventArgs _) =>
-		{
-			if (accentChoices.SelectedIndex >= 0)
-			{
-				ApplyAccentPreset((new string[3] { "artwork", "blue", "violet" })[accentChoices.SelectedIndex]);
-				SaveSettingsSoon();
-			}
-		};
-		panel.Children.Add(accentChoices);
-		panel = AddSettingsCard(appearancePage, "Idioma de interfaz", "El idioma se aplica al reiniciar Prisma Music.");
+		AddOption(panel, "Pantalla de inicio", new[] { "Canciones", "Álbumes", "Última sección", "Inicio" }, startupSection,
+			index => startupSection = index);
+		panel.Children.Add(SettingsHint("El idioma se aplica al reiniciar Prisma Music."));
 		string[] codes = new string[3] { "es", "en", "pt" };
 		System.Windows.Controls.ComboBox language = new System.Windows.Controls.ComboBox
 		{
@@ -3147,9 +3125,6 @@ public partial class MainWindow : Window
 		exportPlaylist.Click += ExportCurrentPlaylist;
 		AddLibraryAction("Biblioteca JSON", "Incluye las pistas, fuentes, listas y etiquetas editadas.", exportLibrary);
 		AddLibraryAction("Lista M3U8", "Incluye las pistas de la vista actual en el orden mostrado.", exportPlaylist);
-		panel = AddSettingsCard(libraryPage, "Al iniciar Prisma");
-		AddOption(panel, "Abrir en", new[] { "Canciones", "Álbumes", "Última sección", "Inicio" }, startupSection,
-			index => startupSection = index);
 
 		metadataPage.Children.Add(SettingsSection(new TextBlock { Text = T("Metadatos e internet") }, "Gestiona las carátulas y letras que Prisma busca en línea."));
 		panel = AddSettingsCard(metadataPage, "Completar desde internet");
@@ -3226,7 +3201,8 @@ public partial class MainWindow : Window
 			VerticalScrollBarVisibility = ScrollBarVisibility.Auto
 		};
 		var settingsBackground = (Brush)FindResource("SettingsBackground");
-		var settingsRoot = new Grid { Background = settingsBackground };
+		var settingsRoot = new Grid();
+		settingsRoot.SetResourceReference(System.Windows.Controls.Panel.BackgroundProperty, "SettingsBackground");
 		settingsRoot.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 		settingsRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 		settingsRoot.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(224) });
@@ -3301,6 +3277,7 @@ public partial class MainWindow : Window
 				VerticalAlignment = VerticalAlignment.Center,
 				Foreground = (Brush)FindResource("Muted")
 			};
+			icon.SetResourceReference(ForegroundProperty, "Muted");
 			DockPanel.SetDock(icon, Dock.Left);
 			content.Children.Add(icon);
 			content.Children.Add(new TextBlock { Text = T(label), TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center });
@@ -3318,6 +3295,7 @@ public partial class MainWindow : Window
 		navigation.SelectionChanged += (_, _) =>
 		{
 			settingsScroll.Content = (navigation.SelectedItem as ListBoxItem)?.Tag;
+			if (settingsScroll.Content is FrameworkElement settingsPage) AnimateSettingsPage(settingsPage);
 			settingsScroll.ScrollToTop();
 		};
 		navigation.SelectedIndex = 0;
@@ -3333,6 +3311,7 @@ public partial class MainWindow : Window
 			BorderBrush = (Brush)FindResource("WorkspaceStroke"), BorderThickness = new Thickness(1),
 			Margin = new Thickness(18, 0, 0, 0)
 		};
+		sidebarSurface.SetResourceReference(Border.BackgroundProperty, "NavigationBackdrop");
 		Grid.SetRow(sidebarSurface, 1);
 		settingsRoot.Children.Add(sidebarSurface);
 		Grid.SetColumn(settingsScroll, 1);
@@ -3413,6 +3392,19 @@ public partial class MainWindow : Window
 							settingsWindow.UpdateLayout();
 							SaveSettingsPreview("-dispositivos");
 						}
+						if (index == 4)
+						{
+							settingsScroll.ScrollToBottom();
+							await Task.Delay(130);
+							settingsWindow.UpdateLayout();
+							SaveSettingsPreview("-materiales");
+							int previousTheme = themePreference;
+							ApplyTheme(2);
+							await Task.Delay(100);
+							settingsWindow.UpdateLayout();
+							SaveSettingsPreview("-tema-claro");
+							ApplyTheme(previousTheme);
+						}
 					}
 
 					void SaveSettingsPreview(string suffix)
@@ -3450,7 +3442,6 @@ public partial class MainWindow : Window
 				Content = LocalTextExtension.Translate(label),
 				Style = (Style)FindResource("SettingsToggle"),
 				IsChecked = value2,
-				Foreground = Brushes.White,
 				Margin = new Thickness(0, 4, 0, 1)
 			};
 			control.Click += (object _, RoutedEventArgs _) =>
@@ -3470,7 +3461,6 @@ public partial class MainWindow : Window
 			content.Children.Add(new TextBlock
 			{
 				Text = LocalTextExtension.Translate(description),
-				Foreground = (Brush)FindResource("Muted"),
 				FontSize = 12,
 				TextWrapping = TextWrapping.Wrap,
 				Margin = new Thickness(0, 3, 0, 0)

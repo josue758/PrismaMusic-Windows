@@ -1,6 +1,6 @@
 # Prisma Music para Windows
 
-**Versión Windows 0.51.0** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
+**Versión Windows 0.52.0** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
 
 En **Configuración → Biblioteca** o en el menú **…** junto a los filtros, puedes exportar la colección a JSON o las pistas de la vista actual a M3U8. La exportación guarda metadatos y rutas. Los archivos de audio y las carátulas se conservan en sus ubicaciones.
 

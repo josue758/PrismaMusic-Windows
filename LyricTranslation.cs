@@ -80,7 +80,7 @@ public partial class MainWindow
             catch (Exception error) { result.Text = LocalTextExtension.Translate("No se pudo traducir la letra.") + " " + error.Message; }
             finally { translate.IsEnabled = true; }
         };
-        new Window { Owner = this, Title = LocalTextExtension.Translate("Traducción de letra"), Width = 620, Height = 600,
+        new Window { Owner = listeningRoom ?? this, Title = LocalTextExtension.Translate("Traducción de letra"), Width = 620, Height = 600,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Background = new SolidColorBrush(Color.FromRgb(30, 28, 35)),
             Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } }.Show();

@@ -19,7 +19,7 @@
         </RadialGradientBrush>
       </Border.Background>
     </Border>
-    <Border Background="{StaticResource NavigationBackdrop}" Grid.RowSpan="3" IsHitTestVisible="False"/>
+    <Border Background="{DynamicResource NavigationBackdrop}" Grid.RowSpan="3" IsHitTestVisible="False"/>
     <Grid x:Name="WindowTitleBar" Grid.Row="0" Margin="0,0,0,4" Background="Transparent">
       <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="2*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
       <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0,0,0" IsHitTestVisible="False">
@@ -95,14 +95,14 @@
           </StackPanel>
           <Grid DockPanel.Dock="Top" Margin="10,0,4,8">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <TextBlock Text="{local:LocalText Text=Biblioteca}" Foreground="{StaticResource Muted}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+            <TextBlock Text="{local:LocalText Text=Biblioteca}" Foreground="{DynamicResource Muted}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
             <Button x:Name="NewPlaylistButton" Grid.Column="1" Content="＋" Style="{StaticResource CompactButton}" Click="NewPlaylist"
                     AutomationProperties.Name="{local:LocalText Text=Crear lista}" ToolTip="{local:LocalText Text=Crear lista}" Padding="8,4"/>
           </Grid>
           <StackPanel DockPanel.Dock="Top" Margin="8,0,8,10">
             <Grid Margin="2,0,2,5">
               <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <TextBlock Text="{local:LocalText Text=Fuentes}" Foreground="{StaticResource Muted}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+              <TextBlock Text="{local:LocalText Text=Fuentes}" Foreground="{DynamicResource Muted}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
               <Button Grid.Column="1" Content="{local:LocalText Text=Todas}" Style="{StaticResource CompactButton}" Click="ClearLibrarySource"
                       AutomationProperties.Name="{local:LocalText Text=Mostrar todas las fuentes}" ToolTip="{local:LocalText Text=Mostrar todas las fuentes}" Padding="6,3" Margin="0,0,4,0"/>
               <Button Grid.Column="2" Content="＋" Style="{StaticResource CompactButton}" Click="AddFolder"
@@ -114,7 +114,7 @@
             <Button Content="{local:LocalText Text=Conectar NAS}" Click="ConnectNas" Margin="0,5,0,0" HorizontalContentAlignment="Left"
                     AutomationProperties.Name="{local:LocalText Text=Conectar NAS}" ToolTip="{local:LocalText Text=Conectar NAS}"/>
           </StackPanel>
-          <ListBox ItemContainerStyle="{StaticResource NavigationItem}" x:Name="Navigation" AutomationProperties.Name="{local:LocalText Text=Secciones de biblioteca}" SelectionChanged="Navigate" Background="Transparent" Foreground="White" BorderThickness="0">
+          <ListBox ItemContainerStyle="{StaticResource NavigationItem}" x:Name="Navigation" AutomationProperties.Name="{local:LocalText Text=Secciones de biblioteca}" SelectionChanged="Navigate" Background="Transparent" Foreground="{DynamicResource Ink}" BorderThickness="0">
             <ListBoxItem Tag="&#xE8D6;" Content="{local:LocalText Text=Canciones}"/><ListBoxItem Tag="&#xE93C;" Content="{local:LocalText Text=Álbumes}"/><ListBoxItem Tag="&#xE716;" Content="{local:LocalText Text=Artistas}"/>
             <ListBoxItem Tag="&#xEB51;" Content="{local:LocalText Text=Favoritos}"/><ListBoxItem Tag="&#xE8FD;" Content="{local:LocalText Text=Cola}"/><ListBoxItem Tag="&#xE81C;" Content="{local:LocalText Text=Historial}"/><ListBoxItem Tag="&#xE93F;" Content="{local:LocalText Text=Listas}"/>
             <ListBoxItem x:Name="LosslessNavigation" Tag="&#xE9E9;" Content="{local:LocalText Text=Sin pérdida}"/>
@@ -141,7 +141,7 @@
             <StackPanel VerticalAlignment="Center">
               <TextBlock x:Name="CollectionKind" FontSize="11" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" Visibility="Collapsed"/>
               <TextBlock x:Name="Heading" Text="{local:LocalText Text=Canciones}" FontSize="38" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-              <TextBlock x:Name="CollectionCount" Foreground="{StaticResource Muted}" FontSize="13" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
+              <TextBlock x:Name="CollectionCount" Foreground="{DynamicResource Muted}" FontSize="13" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
               <WrapPanel x:Name="CollectionActions" Visibility="Collapsed" Margin="0,12,0,0">
                 <Button Click="PlayCollection" Background="{DynamicResource AccentBrush}"><TextBlock Text="{local:LocalText Text=Reproducir colección}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold"/></Button>
                 <Button Content="{local:LocalText Text=Aleatorio}" Click="ShuffleCollection"/>
@@ -177,7 +177,7 @@
           <Button Content="↓" Click="MoveQueueDown" AutomationProperties.Name="{local:LocalText Text=Bajar en la cola}" ToolTip="{local:LocalText Text=Bajar en la cola}"/>
           <Button Content="{local:LocalText Text=Quitar}" Click="RemoveFromQueue"/>
         </StackPanel>
-        <TextBlock x:Name="Status" DockPanel.Dock="Bottom" TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,9,0,0"/>
+        <TextBlock x:Name="Status" DockPanel.Dock="Bottom" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,9,0,0"/>
         <StackPanel x:Name="ScanProgressPanel" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,8,0,2">
           <ProgressBar x:Name="ScanProgressBar" Height="3" IsIndeterminate="True" Margin="0,0,0,5"/>
           <TextBlock x:Name="ScanProgressText" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource AccentBrush}"/>
@@ -187,14 +187,14 @@
           <TextBlock x:Name="GalleryPageLabel" Margin="8,0,14,0" VerticalAlignment="Center"/>
           <Button x:Name="GalleryNext" AutomationProperties.Name="{local:LocalText Text=Siguiente}" Content="›" Click="NextGalleryPage" ToolTip="{local:LocalText Text=Siguiente}"/>
         </StackPanel>
-        <TextBlock x:Name="LosslessNotice" DockPanel.Dock="Top" Visibility="Collapsed" Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8"/>
+        <TextBlock x:Name="LosslessNotice" DockPanel.Dock="Top" Visibility="Collapsed" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,8"/>
         <Border Background="Transparent" Padding="2">
         <Grid>
         <ScrollViewer x:Name="HomeView" Style="{StaticResource LyricsScroll}" Visibility="Collapsed"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <StackPanel x:Name="HomeContent" Margin="2,0,6,8"/>
         </ScrollViewer>
-        <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="White" BorderThickness="0" SizeChanged="GalleryViewportChanged" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ContextMenuOpening="PrepareLibraryTagsMenu" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <ListBox x:Name="Rows" AutomationProperties.Name="{local:LocalText Text=Resultados de biblioteca}" Background="Transparent" Foreground="{DynamicResource Ink}" BorderThickness="0" SizeChanged="GalleryViewportChanged" MouseDoubleClick="Activate" SelectionChanged="RowsSelectionChanged" ContextMenuOpening="PrepareLibraryTagsMenu" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
           <ListBox.ContextMenu>
             <ContextMenu Style="{StaticResource PlayerMenu}">
               <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Reproducir ahora}" Click="PlaySelectedSong">
@@ -229,8 +229,8 @@
                     <Image Loaded="LoadTrackArtwork" Stretch="UniformToFill"/>
                   </Grid>
                 </Border>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding DurationLabel}" Foreground="{StaticResource Muted}" Width="42" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,3,0"/>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding FormatLabel}" Visibility="{DynamicResource TrackQualityVisibility}" Foreground="{StaticResource Muted}" MaxWidth="145"
+                <TextBlock DockPanel.Dock="Right" Text="{Binding DurationLabel}" Foreground="{DynamicResource Muted}" Width="42" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,3,0"/>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding FormatLabel}" Visibility="{DynamicResource TrackQualityVisibility}" Foreground="{DynamicResource Muted}" MaxWidth="145"
                            TextTrimming="CharacterEllipsis" FontSize="11" VerticalAlignment="Center" Margin="10,0,4,0"/>
                 <StackPanel VerticalAlignment="Center">
                   <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
@@ -247,7 +247,7 @@
                   </Grid>
                 </Border>
                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
-                <TextBlock Text="{Binding Detail}" Foreground="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
+                <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
                 <TextBlock Text="{Binding Footnote}" Foreground="#C5FFFFFF" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,3,0,0"/>
               </StackPanel>
             </DataTemplate>
@@ -269,7 +269,7 @@
         <StackPanel x:Name="EmptyLibraryView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="300" Margin="14">
           <TextBlock Text="&#xE8D6;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="25" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center"/>
           <TextBlock x:Name="EmptyLibraryTitle" FontSize="19" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" Margin="0,9,0,5"/>
-          <TextBlock x:Name="EmptyLibraryDetail" Foreground="{StaticResource Muted}" TextAlignment="Center" TextWrapping="Wrap"/>
+          <TextBlock x:Name="EmptyLibraryDetail" Foreground="{DynamicResource Muted}" TextAlignment="Center" TextWrapping="Wrap"/>
           <Button x:Name="EmptyLibraryAction" HorizontalAlignment="Center" Margin="0,12,0,0" Click="RunEmptyLibraryAction"/>
         </StackPanel>
         </Grid>
@@ -280,7 +280,7 @@
           <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
             <Button DockPanel.Dock="Right" Style="{StaticResource HeaderAction}" Content="&#xE711;" Click="ToggleListeningPanel"
                     AutomationProperties.Name="{local:LocalText Text=Plegar panel de reproducción}" ToolTip="{local:LocalText Text=Plegar panel de reproducción}"/>
-            <TextBlock x:Name="ListeningPanelTitle" Text="{local:LocalText Text=Reproduciendo ahora}" Foreground="{StaticResource Ink}"
+            <TextBlock x:Name="ListeningPanelTitle" Text="{local:LocalText Text=Reproduciendo ahora}" Foreground="{DynamicResource Ink}"
                        FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
           </DockPanel>
           <StackPanel x:Name="ListeningTrackSummary" DockPanel.Dock="Top">
@@ -312,7 +312,7 @@
             </Grid>
           </Border>
           <TextBlock x:Name="Now" DockPanel.Dock="Top" Text="{local:LocalText Text=Sin pista}" FontWeight="Bold" FontSize="25" TextTrimming="CharacterEllipsis" Margin="0,17,0,4"/>
-          <TextBlock x:Name="Artist" DockPanel.Dock="Top" Foreground="{StaticResource Muted}" FontSize="14" TextWrapping="Wrap" Margin="0,0,0,5"/>
+          <TextBlock x:Name="Artist" DockPanel.Dock="Top" Foreground="{DynamicResource Muted}" FontSize="14" TextWrapping="Wrap" Margin="0,0,0,5"/>
           <TextBlock x:Name="AudioFormat" DockPanel.Dock="Top" Foreground="{DynamicResource AccentBrush}" FontSize="11" Margin="0,0,0,13" TextTrimming="CharacterEllipsis"/>
           <WrapPanel x:Name="ListeningActions" DockPanel.Dock="Top" Margin="0,0,0,8">
             <Button Content="{local:LocalText Text=＋ Cola}" Click="Enqueue" AutomationProperties.Name="{local:LocalText Text=Añadir a la cola}" ToolTip="{local:LocalText Text=Añadir a la cola}"/>
@@ -322,7 +322,7 @@
           </WrapPanel>
           <UniformGrid x:Name="SpectrumView" DockPanel.Dock="Top" Rows="1" Height="28" Margin="0,2,0,12" ToolTip="{local:LocalText Text=Espectro de la pista}" AutomationProperties.Name="{local:LocalText Text=Espectro de diez bandas}"/>
           </StackPanel>
-          <TabControl x:Name="ListeningTabs" SelectionChanged="ListeningTabChanged" Background="{StaticResource SettingsCard}" Foreground="White" BorderBrush="#23FFFFFF">
+          <TabControl x:Name="ListeningTabs" SelectionChanged="ListeningTabChanged" Background="{DynamicResource SettingsCard}" Foreground="{DynamicResource Ink}" BorderBrush="#23FFFFFF">
             <TabItem Header="{local:LocalText Text=Letras}" Style="{StaticResource ListeningTab}">
             <DockPanel>
               <Grid DockPanel.Dock="Top" Margin="0,0,0,5">
@@ -331,21 +331,26 @@
                         Click="LookupLyrics" ToolTip="{local:LocalText Text=Buscar letras}" AutomationProperties.Name="{local:LocalText Text=Buscar letras}"/>
               </Grid>
               <ScrollViewer Style="{StaticResource LyricsScroll}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <TextBlock x:Name="Lyrics" TextWrapping="Wrap" Foreground="{StaticResource Muted}"/>
+                <TextBlock x:Name="Lyrics" TextWrapping="Wrap" Foreground="{DynamicResource Muted}"/>
               </ScrollViewer>
             </DockPanel>
             </TabItem>
             <TabItem Header="{local:LocalText Text=Cola}" Style="{StaticResource ListeningTab}">
               <DockPanel>
                 <DockPanel DockPanel.Dock="Top" Margin="10,10,10,4">
-                  <TextBlock x:Name="SideQueueCount" DockPanel.Dock="Right" Foreground="{StaticResource Muted}" />
+                  <TextBlock x:Name="SideQueueCount" DockPanel.Dock="Right" Foreground="{DynamicResource Muted}" />
                   <TextBlock Text="{local:LocalText Text=A continuación}" FontWeight="SemiBold"/>
                 </DockPanel>
-                <Button x:Name="UndoQueueButton" DockPanel.Dock="Bottom" HorizontalAlignment="Left" Margin="8,6"
-                        Content="{local:LocalText Text=Deshacer}" Click="UndoQueueRemoval" IsEnabled="False"/>
+                <DockPanel DockPanel.Dock="Bottom" Margin="8,6">
+                  <Button x:Name="UndoQueueButton" DockPanel.Dock="Right" Margin="5,0,0,0"
+                          Content="{local:LocalText Text=Deshacer}" Click="UndoQueueRemoval" IsEnabled="False"/>
+                  <TextBlock x:Name="QueueRemovalNotice" Visibility="Collapsed" VerticalAlignment="Center"
+                             Text="{local:LocalText Text=Canción quitada de la cola.}" TextWrapping="Wrap"
+                             AutomationProperties.LiveSetting="Polite"/>
+                </DockPanel>
                 <Grid>
                   <ListBox x:Name="SideQueue" AutomationProperties.Name="{local:LocalText Text=Cola}" Background="Transparent"
-                           Foreground="White" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                           Foreground="{DynamicResource Ink}" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.Resources>
                       <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinVerticalScrollBar}"/>
                     </ListBox.Resources>
@@ -372,7 +377,7 @@
                                 <Button Style="{StaticResource QueueRowButton}" Content="&#xE711;" Click="RemoveSideQueueTrack"
                                         AutomationProperties.Name="{local:LocalText Text=Quitar}" ToolTip="{local:LocalText Text=Quitar}"/>
                               </StackPanel>
-                              <TextBlock Text="{Binding DurationLabel}" Foreground="{StaticResource Muted}" FontSize="11" VerticalAlignment="Center"/>
+                              <TextBlock Text="{Binding DurationLabel}" Foreground="{DynamicResource Muted}" FontSize="11" VerticalAlignment="Center"/>
                             </DockPanel>
                             <Border DockPanel.Dock="Left" Width="40" Height="40" CornerRadius="6" ClipToBounds="True" Margin="0,0,9,0">
                               <Grid>
@@ -384,14 +389,14 @@
                                     AutomationProperties.Name="{local:LocalText Text=Reproducir ahora}" ToolTip="{local:LocalText Text=Reproducir ahora}"/>
                             <StackPanel VerticalAlignment="Center">
                               <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
-                              <TextBlock Text="{Binding Artist}" Foreground="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                              <TextBlock Text="{Binding Artist}" Foreground="{DynamicResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                           </DockPanel>
                         </Border>
                       </DataTemplate>
                     </ListBox.ItemTemplate>
                   </ListBox>
-                  <TextBlock x:Name="SideQueueEmpty" IsHitTestVisible="False" Text="{local:LocalText Text=La cola está vacía}" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="SideQueueEmpty" IsHitTestVisible="False" Text="{local:LocalText Text=La cola está vacía}" Foreground="{DynamicResource Muted}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Grid>
               </DockPanel>
             </TabItem>
@@ -399,7 +404,7 @@
               <ScrollViewer Style="{StaticResource LyricsScroll}" VerticalScrollBarVisibility="Auto">
                 <StackPanel Margin="5">
                   <TextBlock Text="{local:LocalText Text=Formato de audio}" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                  <TextBlock Text="{Binding Text, ElementName=AudioFormat}" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                  <TextBlock Text="{Binding Text, ElementName=AudioFormat}" Foreground="{DynamicResource Muted}" TextWrapping="Wrap"/>
                   <Button Content="{local:LocalText Text=Información del archivo}" Click="InspectPlayingTrack" HorizontalAlignment="Left" Margin="0,10,0,0"/>
                 </StackPanel>
               </ScrollViewer>
@@ -425,7 +430,7 @@
                   Click="Favorite" AutomationProperties.Name="{local:LocalText Text=Favorito}" ToolTip="{local:LocalText Text=Favorito}"/>
           <StackPanel VerticalAlignment="Center">
             <TextBlock x:Name="TransportTitle" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="{Binding Text, ElementName=Artist}" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+            <TextBlock Text="{Binding Text, ElementName=Artist}" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
             <TextBlock Text="{Binding Text, ElementName=AudioFormat}" Visibility="{DynamicResource TrackQualityVisibility}" Foreground="{DynamicResource AccentBrush}" FontSize="10" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
           </StackPanel>
         </DockPanel>
@@ -439,9 +444,9 @@
           </StackPanel>
           <Grid Margin="0,3,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="55"/><ColumnDefinition Width="*"/><ColumnDefinition Width="55"/></Grid.ColumnDefinitions>
-            <TextBlock x:Name="TimeLabel" Text="0:00" TextAlignment="Right" FontSize="10" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,7,0"/>
+            <TextBlock x:Name="TimeLabel" Text="0:00" TextAlignment="Right" FontSize="10" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="0,0,7,0"/>
             <Slider Grid.Column="1" Style="{StaticResource TransportSlider}" x:Name="Seek" IsMoveToPointEnabled="True" ValueChanged="SeekChanged" AutomationProperties.Name="{local:LocalText Text=Posición}"/>
-            <TextBlock Grid.Column="2" x:Name="RemainingTimeLabel" Text="−0:00" FontSize="10" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="7,0,0,0"/>
+            <TextBlock Grid.Column="2" x:Name="RemainingTimeLabel" Text="−0:00" FontSize="10" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="7,0,0,0"/>
           </Grid>
         </StackPanel>
         <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0,0,0">
@@ -509,7 +514,7 @@
           <StackPanel x:Name="VolumeControls" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="MuteButton" Content="&#xE767;" Style="{StaticResource TransportIcon}" Width="30" Height="26" Click="ToggleMute" AutomationProperties.Name="{local:LocalText Text=Silenciar}" ToolTip="{local:LocalText Text=Silenciar}"/>
             <Slider Style="{StaticResource TransportSlider}" x:Name="Volume" Width="83" Minimum="0" Maximum="1" Value=".7" ValueChanged="ChangeVolume" AutomationProperties.Name="{local:LocalText Text=Volumen}"/>
-            <TextBlock x:Name="VolumeLabel" Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="10" Foreground="{StaticResource Muted}" Text="{Binding Value, ElementName=Volume, StringFormat={}{0:P0}}"/>
+            <TextBlock x:Name="VolumeLabel" Width="36" TextAlignment="Right" VerticalAlignment="Center" FontSize="10" Foreground="{DynamicResource Muted}" Text="{Binding Value, ElementName=Volume, StringFormat={}{0:P0}}"/>
           </StackPanel>
         </StackPanel>
       </Grid>
