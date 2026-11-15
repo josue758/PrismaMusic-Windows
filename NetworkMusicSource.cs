@@ -36,15 +36,18 @@ internal static class NetworkMusicSource
     {
         const int universalNameInfo = 1;
         const int moreData = 234;
-        int size = 0;
-        if (WNetGetUniversalNameW(path, universalNameInfo, IntPtr.Zero, ref size) != moreData || size <= 0)
-            return null;
-        IntPtr buffer = Marshal.AllocHGlobal(size);
-        try
+        int size = 1024;
+        for (int attempt = 0; attempt < 2; attempt++)
         {
-            return WNetGetUniversalNameW(path, universalNameInfo, buffer, ref size) == 0
-                ? Marshal.PtrToStringUni(Marshal.ReadIntPtr(buffer)) : null;
+            IntPtr buffer = Marshal.AllocHGlobal(size);
+            try
+            {
+                int result = WNetGetUniversalNameW(path, universalNameInfo, buffer, ref size);
+                if (result == 0) return Marshal.PtrToStringUni(Marshal.ReadIntPtr(buffer));
+                if (result != moreData || size <= 0) return null;
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
         }
-        finally { Marshal.FreeHGlobal(buffer); }
+        return null;
     }
 }

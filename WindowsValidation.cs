@@ -36,7 +36,8 @@ public partial class MainWindow
 
     private async Task VerifySmbPlayback(string directory)
     {
-        string source = NetworkMusicSource.Normalize(directory);
+        string source = NetworkMusicSource.Normalize(directory)
+            ?? throw new InvalidOperationException("Windows did not resolve the test path to a network share.");
         var originalLibrary = library;
         string originalSource = selectedLibrarySource;
         try
