@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.55.0
+
+- Usa el logo de Prisma Music en los ejecutables de Windows, el instalador, el acceso directo, la ventana y la barra de tareas.
+- Acelera la lectura de etiquetas por SMB con concurrencia limitada. Los archivos sin cambios pasan por el escaneo sin ocupar los lectores de etiquetas.
+- Evita guardar y redibujar la biblioteca cuando el índice ya está al día. Muestra el progreso y la acción de cancelar juntos en la biblioteca.
+
 ## 0.54.1
 
 - Aprovecha las ventanas amplias con columnas de álbum y año, paneles proporcionados y portadas adaptables en Inicio.

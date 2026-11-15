@@ -36,6 +36,7 @@ public partial class MainWindow
 
     private void ApplyFluentDialog(Window window, System.Windows.Controls.Panel root)
     {
+        window.Icon = Icon;
         window.FontFamily = FontFamily;
         window.FontSize = 13;
         window.UseLayoutRounding = true;

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace PrismaMusic;
 
-internal sealed record LibraryScanProgress(string Path, int FilesProcessed, int TracksFound, int Errors, Track CurrentTrack, string Error = null);
+internal sealed record LibraryScanProgress(string Path, int FilesProcessed, int TracksFound, int Errors, Track CurrentTrack, string Error = null, int Reused = 0);
 
 internal static class LibraryScanner
 {
@@ -20,62 +20,93 @@ internal static class LibraryScanner
         var tracks = new List<Track>();
         int errors = 0;
         int processed = 0;
+        int reused = 0;
         var gate = new object();
         long lastReport = Environment.TickCount64;
-        LibraryScanProgress latest = null;
+        int reportedCount = 0;
+        (string Path, Track Track, string Error) last = default;
         var options = new EnumerationOptions
         {
             RecurseSubdirectories = false,
             IgnoreInaccessible = false,
             AttributesToSkip = FileAttributes.ReparsePoint
         };
-        var files = EnumerateFiles(new DirectoryInfo(folder), options, cancellationToken,
-            (path, error) => Record(path, null, error));
-        Parallel.ForEach(files, new ParallelOptions
+
+        // NAS file opens wait for network I/O. Cache hits stay in the directory enumerator
+        // and never consume a worker reserved for reading tags.
+        int workers = folder.StartsWith(@"\\", StringComparison.Ordinal)
+            ? Math.Clamp(Environment.ProcessorCount * 2, 4, 12)
+            : Math.Clamp(Environment.ProcessorCount, 1, 4);
+        Parallel.ForEach(FilesNeedingTags(), new ParallelOptions
         {
             CancellationToken = cancellationToken,
-            MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 1, 4)
-        }, info =>
+            MaxDegreeOfParallelism = workers
+        }, entry =>
         {
-            if (!Extensions.Contains(info.Extension)) return;
-            Track track = null;
-            string error = null;
-            try
-            {
-                long length = info.Length;
-                long stamp = info.LastWriteTimeUtc.Ticks;
-                track = cache != null && cache.TryGetValue(info.FullName, out var previous) &&
-                    previous.FileLength == length && previous.LastWriteUtcTicks == stamp && stamp > 0
-                    ? previous : ReadTrack(info.FullName, length, stamp);
-            }
+            try { Record(entry.Path, ReadTrack(entry.Path, entry.Length, entry.Stamp), null); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
                 or TagLib.CorruptFileException or TagLib.UnsupportedFormatException)
             {
-                error = ex.Message;
+                Record(entry.Path, null, ex.Message);
             }
-
-            Record(info.FullName, track, error);
         });
+        cancellationToken.ThrowIfCancellationRequested();
+        if (processed != reportedCount && progress != null) Report();
+        tracks.Sort((left, right) => StringComparer.OrdinalIgnoreCase.Compare(left.Path, right.Path));
+        return (tracks, errors);
 
-        void Record(string path, Track track, string error)
+        IEnumerable<(string Path, long Length, long Stamp)> FilesNeedingTags()
+        {
+            foreach (var info in EnumerateFiles(new DirectoryInfo(folder), options, cancellationToken,
+                (path, error) => Record(path, null, error)))
+            {
+                if (!Extensions.Contains(info.Extension)) continue;
+                long length;
+                long stamp;
+                try
+                {
+                    length = info.Length;
+                    stamp = info.LastWriteTimeUtc.Ticks;
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                    Record(info.FullName, null, error.Message);
+                    continue;
+                }
+
+                string path = info.FullName;
+                if (cache != null && cache.TryGetValue(path, out var previous) &&
+                    previous.FileLength == length && previous.LastWriteUtcTicks == stamp && stamp > 0)
+                {
+                    Record(path, previous, null, cached: true);
+                    continue;
+                }
+                yield return (path, length, stamp);
+            }
+        }
+
+        void Record(string path, Track track, string error, bool cached = false)
         {
             lock (gate)
             {
                 if (track != null) tracks.Add(track);
                 else errors++;
+                if (cached) reused++;
                 processed++;
                 if (progress == null) return;
-                latest = new LibraryScanProgress(path, processed, tracks.Count, errors, track, error);
+                last = (path, track, error);
                 long now = Environment.TickCount64;
                 if (now - lastReport < 150) return;
                 lastReport = now;
-                progress.Report(latest);
+                Report();
             }
         }
-        cancellationToken.ThrowIfCancellationRequested();
-        if (latest != null) progress.Report(latest);
-        tracks.Sort((left, right) => StringComparer.OrdinalIgnoreCase.Compare(left.Path, right.Path));
-        return (tracks, errors);
+
+        void Report()
+        {
+            reportedCount = processed;
+            progress.Report(new LibraryScanProgress(last.Path, processed, tracks.Count, errors, last.Track, last.Error, reused));
+        }
     }
 
     private static IEnumerable<FileInfo> EnumerateFiles(DirectoryInfo root, EnumerationOptions options,

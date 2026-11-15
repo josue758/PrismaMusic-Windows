@@ -1739,8 +1739,8 @@ public partial class MainWindow : Window
 		List<string> errors = new List<string>();
 		List<string> addedFolders = new List<string>();
 		int filesProcessed = 0;
-		int tracksProcessed = 0;
 		int errorsProcessed = 0;
+		int reusedTracks = 0;
 		try
 		{
 			foreach (string requestedFolder in folders)
@@ -1753,31 +1753,26 @@ public partial class MainWindow : Window
 						folder = await Task.Run(() => NetworkMusicSource.Normalize(requestedFolder) ?? requestedFolder, token);
 					ScanProgressText.Text = LocalTextExtension.Format("Escaneando carpeta: {0}", folder);
 					int folderFileOffset = filesProcessed;
-					int folderTrackOffset = tracksProcessed;
 					int folderErrorOffset = errorsProcessed;
+					int folderReusedOffset = reusedTracks;
 					IProgress<LibraryScanProgress> progress = new Progress<LibraryScanProgress>(value =>
 					{
 						if (!scanning || !ReferenceEquals(scanCancellation, cancellation))
 						{
 							return;
 						}
-						string item = value.CurrentTrack == null
-							? LocalTextExtension.Format("No se pudieron leer las etiquetas de {0}: {1}", Path.GetFileName(value.Path), value.Error)
-							: LocalTextExtension.Format("Leyendo etiquetas: {0} · {1} · {2}{3}",
-								value.CurrentTrack.Name,
-								value.CurrentTrack.Artist,
-								value.CurrentTrack.Album,
-								value.CurrentTrack.Year > 0 ? $" · {value.CurrentTrack.Year}" : "");
-						ScanProgressText.Text = LocalTextExtension.Format("Escaneando {0:N0} archivos de audio · {1:N0} pistas reconocidas · {2:N0} errores\n{3}",
-							folderFileOffset + value.FilesProcessed, folderTrackOffset + value.TracksFound,
-							folderErrorOffset + value.Errors, item);
+						string item = value.CurrentTrack != null
+							? value.CurrentTrack.Name + " · " + value.CurrentTrack.Artist
+							: Path.GetFileName(value.Path) + " · " + value.Error;
+						ScanProgressText.Text = LocalTextExtension.Format("{0:N0} revisados · {1:N0} ya indexados · {2:N0} errores\n{3}",
+							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item);
 					});
 					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks), token);
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
-					tracksProcessed += tuple.Item1.Count;
 					errorsProcessed += tuple.Item2;
 					foreach (Track item in tuple.Item1)
 					{
+						if (originalTracks.TryGetValue(item.Path, out var previous) && ReferenceEquals(previous, item)) reusedTracks++;
 						indexed[item.Path] = item;
 					}
 					if (tuple.Item2 == 0)
@@ -1810,19 +1805,37 @@ public partial class MainWindow : Window
 				}
 			}
 			token.ThrowIfCancellationRequested();
-			library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
-			trackThumbnails.Clear();
-			library.Folders.AddRange(addedFolders);
-			int newTracks = library.Tracks.Count(track => !originalTracks.ContainsKey(track.Path));
-			int updatedTracks = library.Tracks.Count(track =>
-				originalTracks.TryGetValue(track.Path, out Track previous) && previous != track);
-			RefreshLibrarySources();
-			RefreshFilters();
-			RefreshRows();
+			int newTracks = 0;
+			int updatedTracks = 0;
+			foreach (Track track in indexed.Values)
+			{
+				if (!originalTracks.TryGetValue(track.Path, out var previous)) newTracks++;
+				else if (!Equals(previous, track)) updatedTracks++;
+			}
+			bool tracksChanged = newTracks != 0 || updatedTracks != 0 || indexed.Count != originalTracks.Count;
+			if (tracksChanged)
+			{
+				library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
+				trackThumbnails.Clear();
+			}
+
 			Status.Text = errors.Count == 0
-				? LocalTextExtension.Format("Escaneo terminado: {0:N0} pistas nuevas, {1:N0} etiquetas actualizadas. Las etiquetas se leyeron de los archivos; no se modificaron.", newTracks, updatedTracks)
+				? !tracksChanged && addedFolders.Count == 0
+					? LocalTextExtension.Format("Biblioteca al día · {0:N0} archivos revisados.", filesProcessed)
+					: LocalTextExtension.Format("Escaneo terminado: {0:N0} pistas nuevas, {1:N0} pistas actualizadas.", newTracks, updatedTracks)
 				: LocalTextExtension.Format("Escaneo parcial: {0:N0} pistas nuevas, {1:N0} etiquetas actualizadas. {2}", newTracks, updatedTracks, errors[0]);
-			Save(tracksChanged: true);
+			if (tracksChanged || addedFolders.Count != 0)
+			{
+				library.Folders.AddRange(addedFolders);
+				Save(tracksChanged);
+				RefreshLibrarySources();
+			}
+			else if (unsavedTracks) Save();
+			if (tracksChanged)
+			{
+				RefreshFilters();
+				RefreshRows();
+			}
 		}
 		catch (OperationCanceledException) when (token.IsCancellationRequested)
 		{

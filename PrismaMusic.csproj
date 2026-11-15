@@ -4,8 +4,9 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <Version>0.54.1</Version>
+    <Version>0.55.0</Version>
     <AssemblyName>Prisma Music</AssemblyName>
+    <ApplicationIcon>Assets\PrismaMusic.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
@@ -19,6 +20,7 @@
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="SoundTouch.Net" Version="2.3.2" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
+    <Resource Include="Assets\PrismaMusic.ico;Assets\PrismaMusic.png" />
     <Content Include="Demo\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

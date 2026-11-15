@@ -10,6 +10,8 @@ namespace PrismaMusic;
 
 internal sealed class LibraryDatabase(string directory)
 {
+    private static readonly JsonSerializerOptions TrackJson = new() { IgnoreReadOnlyProperties = true };
+
     private Dictionary<string, Track> savedTracks = new(StringComparer.OrdinalIgnoreCase);
 
     private string DatabasePath => Path.Combine(directory, "library.sqlite3");
@@ -134,7 +136,7 @@ internal sealed class LibraryDatabase(string directory)
             {
                 if (savedTracks.TryGetValue(path, out var old) && track == old) continue;
                 upsertPath.Value = path.ToUpperInvariant();
-                upsertPayload.Value = JsonSerializer.Serialize(track);
+                upsertPayload.Value = JsonSerializer.Serialize(track, TrackJson);
                 upsert.ExecuteNonQuery();
             }
 

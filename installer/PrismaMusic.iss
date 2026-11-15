@@ -28,7 +28,10 @@ OutputBaseFilename=Prisma-Music-Windows-{#AppVersion}-Setup-x64
 SetupLogging=yes
 Compression=lzma2
 SolidCompression=yes
-WizardStyle=modern
+WizardStyle=modern dynamic
+SetupIconFile=..\Assets\PrismaMusic.ico
+WizardSmallImageFile=..\Assets\PrismaMusic.png
+WizardSmallImageFileDynamicDark=..\Assets\PrismaMusic.png
 UninstallDisplayIcon={app}\Prisma Music.exe
 VersionInfoVersion={#AppVersion}
 VersionInfoDescription=Prisma Music Setup
@@ -42,7 +45,7 @@ Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortugue
 Source: "{#PayloadRoot}\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Prisma Music"; Filename: "{app}\Prisma Music.exe"; WorkingDir: "{app}"; Check: not WizardNoIcons
+Name: "{autoprograms}\Prisma Music"; Filename: "{app}\Prisma Music.exe"; WorkingDir: "{app}"; IconFilename: "{app}\Prisma Music.exe"; IconIndex: 0; Check: not WizardNoIcons
 
 [Run]
 Filename: "{app}\Prisma Music.exe"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,Prisma Music}"; Flags: nowait postinstall skipifsilent
