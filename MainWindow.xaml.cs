@@ -173,7 +173,6 @@ public partial class MainWindow : Window
 
 	private LibraryRow artRequest;
 
-	private readonly Stack<(LibraryRow Collection, int Selection, bool Album, int GalleryPage, LibraryFilters Filters)> collectionHistory = new();
 
 	private string playlistName = "Mi lista";
 
@@ -750,6 +749,18 @@ public partial class MainWindow : Window
 				throw new InvalidOperationException("Back did not restore the selected song.");
 			Search.Clear();
 			Console.WriteLine("Song menu commands and navigation from Songs passed.");
+			Search.Text = sourceSong.Name;
+			Rows.SelectedIndex = 0;
+			LibrarySectionIndex = 1;
+			LibrarySectionIndex = 2;
+			LibraryBackButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+			if (LibrarySectionIndex != 1)
+				throw new InvalidOperationException("Back did not return to the Albums section.");
+			LibraryBackButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+			if (LibrarySectionIndex != 0 || Search.Text != sourceSong.Name || Selected != sourceSong)
+				throw new InvalidOperationException("Back did not restore the filtered Songs section.");
+			Search.Clear();
+			Console.WriteLine("Library back button restored sections, search and song selection.");
 			if (Environment.GetEnvironmentVariable("PRISMA_PROFILE_PROBE") == "1")
 			{
 				string[] originals = new string[3] { "es", "pt", "en" };
@@ -1091,26 +1102,25 @@ public partial class MainWindow : Window
 			ShowVisualizer(this, new RoutedEventArgs());
 			await Task.Delay(string.IsNullOrEmpty(visualizerPreview) ? 150 : 1200);
 			Window window2 = visualizerWindow;
-			if (window2 == null || !window2.IsVisible || visualizerBars.Length != 48 || visualizerTitle?.Text != Now.Text || !visualizerBars.Any((Border bar) => bar.Height > 3.0))
+			if (window2 == null || !window2.IsVisible || visualizerTitle?.Text != Now.Text || visualizerSpectrum.Peak <= 0)
 			{
 				throw new InvalidOperationException("The full-screen visualizer did not reflect the current track.");
 			}
 			ShowVisualizerOptions(visualizerOptionsButton, new RoutedEventArgs());
 			ContextMenu contextMenu = visualizerOptionsMenu;
-			if (contextMenu == null || contextMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "style")) != 3 || visualizerOptionsMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "sensitivity")) != 4 || visualizerOptionsMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "fps")) != 3)
+			if (contextMenu == null || contextMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "style")) != VisualizerStyles.Length || visualizerOptionsMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "sensitivity")) != 4 || visualizerOptionsMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "fps")) != 3)
 			{
 				throw new InvalidOperationException("Visualizer style, sensitivity or frame-rate options are missing.");
 			}
 			visualizerOptionsMenu.IsOpen = false;
+			contextMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, T("Aurora")))
+				.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+			if (visualizerStyle != "aurora" || visualizerStyleLabel.Text != T("Aurora"))
+				throw new InvalidOperationException("The Aurora visualizer did not switch styles.");
 			if (!string.IsNullOrEmpty(visualizerPreview))
 			{
-				FrameworkElement frameworkElement = (FrameworkElement)visualizerWindow.Content;
-				RenderTargetBitmap renderTargetBitmap5 = new RenderTargetBitmap((int)frameworkElement.ActualWidth, (int)frameworkElement.ActualHeight, 96.0, 96.0, PixelFormats.Pbgra32);
-				renderTargetBitmap5.Render(frameworkElement);
-				PngBitmapEncoder pngBitmapEncoder5 = new PngBitmapEncoder();
-				pngBitmapEncoder5.Frames.Add(BitmapFrame.Create(renderTargetBitmap5));
-				using FileStream stream6 = System.IO.File.Create(visualizerPreview);
-				pngBitmapEncoder5.Save(stream6);
+				await Task.Delay(160);
+				CaptureDesignPreview((FrameworkElement)visualizerWindow.Content, "PRISMA_VISUALIZER_PREVIEW");
 			}
 			player.Volume = previewVolume;
 			visualizerWindow.Close();
@@ -1613,26 +1623,26 @@ public partial class MainWindow : Window
 
 	private void ShowLibrarySource(string path)
 	{
+		if (LibrarySectionIndex != 0 || collection != null || !string.Equals(selectedLibrarySource, path, StringComparison.OrdinalIgnoreCase))
+			RememberLibraryView(LibrarySectionIndex);
 		selectedLibrarySource = path;
 		collection = null;
-		collectionHistory.Clear();
 		galleryPage = 0;
 		RefreshLibrarySources();
-		if (LibrarySectionIndex != 0)
+		restoringLibraryVisit = true;
+		try
 		{
 			LibrarySectionIndex = 0;
 		}
-		else
-		{
-			UpdateCollectionHeading();
-		}
+		finally { restoringLibraryVisit = false; }
+		UpdateCollectionHeading();
 	}
 
 	private void ClearLibrarySource(object sender, RoutedEventArgs args)
 	{
+		if (selectedLibrarySource != null || collection != null) RememberLibraryView(LibrarySectionIndex);
 		selectedLibrarySource = null;
 		collection = null;
-		collectionHistory.Clear();
 		RefreshLibrarySources();
 		UpdateCollectionHeading();
 	}
@@ -1690,9 +1700,11 @@ public partial class MainWindow : Window
 		{
 			selectedLibrarySource = null;
 			collection = null;
-			collectionHistory.Clear();
 			UpdateCollectionHeading();
 		}
+		libraryHistory.RemoveAll(visit => string.Equals(visit.Source, path, StringComparison.OrdinalIgnoreCase)
+			|| (visit.Collection?.Tracks.Any(track => removedPaths.Contains(track.Path)) ?? false));
+		LibraryBackButton.IsEnabled = libraryHistory.Count != 0;
 		RefreshLibrarySources();
 		RefreshFilters();
 		RefreshRows();
@@ -1896,10 +1908,12 @@ public partial class MainWindow : Window
 
 	private void Navigate(object sender, SelectionChangedEventArgs args)
 	{
-		if (ready)
+		if (ready && !restoringLibraryVisit)
 		{
+			if (args.RemovedItems.Count > 0 && args.RemovedItems[0] is ListBoxItem previous &&
+				int.TryParse(previous.Uid, out int section))
+				RememberLibraryView(section);
 			collection = null;
-			collectionHistory.Clear();
 			galleryPage = 0;
 			UpdateCollectionHeading();
 		}
@@ -1919,8 +1933,8 @@ public partial class MainWindow : Window
 				LibrarySectionIndex = 0;
 				return;
 			}
+			RememberLibraryView(LibrarySectionIndex);
 			collection = null;
-			collectionHistory.Clear();
 			UpdateCollectionHeading();
 		}
 		else
@@ -2073,19 +2087,7 @@ public partial class MainWindow : Window
 
 	private void CloseCollection(object sender, RoutedEventArgs args)
 	{
-		if (collectionHistory.TryPop(out var result))
-		{
-			collection = result.Collection;
-			albumPage = result.Album;
-			galleryPage = result.GalleryPage;
-			RestoreLibraryFilters(result.Filters);
-			UpdateCollectionHeading();
-			if (result.Selection >= 0 && result.Selection < Rows.Items.Count)
-			{
-				Rows.SelectedIndex = result.Selection;
-				Rows.ScrollIntoView(Rows.SelectedItem);
-			}
-		}
+		if (libraryHistory.Count > 0) GoBackInLibrary(sender, args);
 		else
 		{
 			collection = null;
@@ -2107,9 +2109,7 @@ public partial class MainWindow : Window
 
 	private void OpenCollection(LibraryRow row, bool album)
 	{
-		collectionHistory.Push((collection, Rows.SelectedIndex, albumPage, galleryPage,
-			new LibraryFilters(Search.Text, ArtistFilter.SelectedItem as string, Genre.SelectedItem as string,
-				Year.SelectedItem as string, Sort.SelectedIndex)));
+		RememberLibraryView(LibrarySectionIndex);
 		albumPage = album;
 		collection = row;
 		UpdateCollectionHeading();
@@ -2348,7 +2348,7 @@ public partial class MainWindow : Window
 			double num2 = (player.NaturalDuration.HasTimeSpan ? player.NaturalDuration.TimeSpan.TotalSeconds : 0.0);
 			updatingSeek = true;
 			Seek.Maximum = num2;
-			if (!Seek.IsMouseCaptureWithin)
+			if (!Seek.IsMouseCaptureWithin && visualizerSeek?.IsMouseCaptureWithin != true)
 			{
 				Seek.Value = totalSeconds;
 			}
@@ -2782,6 +2782,7 @@ public partial class MainWindow : Window
 			case "bars":
 			case "mirror":
 			case "centered":
+			case "aurora":
 				flag = true;
 				break;
 			default:
@@ -2813,6 +2814,7 @@ public partial class MainWindow : Window
 
 	private bool SaveAudioSettings()
 	{
+		if (smokeTest) return true;
 		try
 		{
 			Directory.CreateDirectory(DataDirectory);
@@ -3236,9 +3238,9 @@ public partial class MainWindow : Window
 			panel.Children.Add(SettingsButton("Buscar actualizaciones", OpenUpdateDialog));
 
 		var visualizerCard = AddSettingsCard(lyricsPage, "Visualizador", "Ajusta el movimiento del visualizador.");
-		string[] styles = { "bars", "mirror", "centered" };
-		AddOption(visualizerCard, "Estilo del visualizador", new[] { "Barras", "Espejo", "Centrado" },
-			Array.IndexOf(styles, visualizerStyle), index => { visualizerStyle = styles[index]; });
+		AddOption(visualizerCard, "Estilo del visualizador", VisualizerStyles.Select(style => style.Label).ToArray(),
+			Array.FindIndex(VisualizerStyles, style => style.Value == visualizerStyle),
+			index => { visualizerStyle = VisualizerStyles[index].Value; });
 		int[] rates = { 24, 30, 60 };
 		AddOption(visualizerCard, "Frecuencia de actualización", new[] { "24 FPS", "30 FPS", "60 FPS" },
 			Array.IndexOf(rates, visualizerFramesPerSecond), index =>
@@ -3811,7 +3813,13 @@ public partial class MainWindow : Window
 		//IL_00ca: Invalid comparison between Unknown and I4
 		//IL_00f7: Unknown result type (might be due to invalid IL or missing references)
 		//IL_00fd: Invalid comparison between Unknown and I4
-		if ((int)Keyboard.Modifiers == 2 && (int)args.Key == 49)
+		if ((args.Key == Key.System && args.SystemKey == Key.Left && Keyboard.Modifiers == ModifierKeys.Alt) ||
+			args.Key == Key.BrowserBack)
+		{
+			GoBackInLibrary(sender, args);
+			args.Handled = true;
+		}
+		else if ((int)Keyboard.Modifiers == 2 && (int)args.Key == 49)
 		{
 			Search.Focus();
 			Search.SelectAll();

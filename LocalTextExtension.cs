@@ -639,6 +639,8 @@ public sealed class LocalTextExtension : MarkupExtension
         ["Leyendo carpetas…"] = ("Reading folders…", "Lendo pastas…"),
         ["Crear"] = ("Create", "Criar"),
         ["Nombre de la lista"] = ("Playlist name", "Nome da lista"),
+        ["Ir atrás"] = ("Go back", "Voltar"),
+        ["Ir atrás · Alt + ←"] = ("Go back · Alt + ←", "Voltar · Alt + ←"),
         ["Actualizaciones de Prisma Music"] = ("Prisma Music updates", "Atualizações do Prisma Music"),
         ["Hay una actualización disponible"] = ("An update is available", "Uma atualização está disponível"),
         ["Buscar actualizaciones"] = ("Check for updates", "Verificar atualizações"),

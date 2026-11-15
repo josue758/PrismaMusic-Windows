@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.57.0
+
+- Añade Atrás a la barra superior y el atajo Alt + ← para recuperar la vista anterior con sus filtros, página y selección.
+- Rediseña el visualizador con una carátula independiente, una línea de tiempo interactiva y el modo Aurora. El espectro se dibuja en una sola superficie con transiciones suavizadas.
+
 ## 0.56.1
 
 - Encaja la ventana maximizada en el área de trabajo de su monitor para que la barra de tareas de Windows no tape los controles de reproducción. La Sala de escucha utiliza el monitor completo.
