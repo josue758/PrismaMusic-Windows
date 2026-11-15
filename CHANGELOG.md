@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.51.0
+
+- Completa Sonido con un medidor dBFS, balance estéreo y el selector de dispositivos WASAPI con actualización manual.
+- Muestra el dispositivo solicitado y el activo, el formato real y la ruta de frecuencia. Agrupa PCM directo, acceso exclusivo y transmisión inalámbrica en el mismo panel.
+
 ## 0.50.0
 
 - Reorganiza Configuración en siete secciones con tarjetas y navegación lateral de estilo Fluent.

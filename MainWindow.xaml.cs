@@ -654,10 +654,6 @@ public partial class MainWindow : Window
 				using FileStream stream2 = System.IO.File.Create(environmentVariable7);
 				pngBitmapEncoder2.Save(stream2);
 			}
-			if (Environment.GetEnvironmentVariable("PRISMA_SETTINGS_PREVIEW") != null)
-			{
-				Settings(this, new RoutedEventArgs());
-			}
 			library.Tracks = demo.Tracks;
 			Navigation.SelectedIndex = 1;
 			Rows.SelectedIndex = 0;
@@ -1167,7 +1163,11 @@ public partial class MainWindow : Window
 						{
 							throw new InvalidOperationException("Direct PCM playback did not advance.");
 						}
-						Console.WriteLine(player.OutputNotice);
+						if (Environment.GetEnvironmentVariable("PRISMA_SETTINGS_PREVIEW") != null)
+			{
+				Settings(this, new RoutedEventArgs());
+			}
+			Console.WriteLine(player.OutputNotice);
 						goto IL_23f4;
 					}
 				}
@@ -2957,104 +2957,7 @@ public partial class MainWindow : Window
 		RefreshEffectiveGain();
 		soundPage.Loaded += (_, _) => RefreshEffectiveGain();
 
-		panel = AddSettingsCard(soundPage, "Balance estéreo");
-		Slider balanceSlider = new Slider
-		{
-			Style = (Style)FindResource("TransportSlider"),
-			Minimum = -1.0,
-			Maximum = 1.0,
-			Value = player.Balance,
-			TickFrequency = 0.05,
-			IsSnapToTickEnabled = true
-		};
-		System.Windows.Controls.Button button = new System.Windows.Controls.Button
-		{
-			Content = LocalTextExtension.Translate("Centrar"),
-			HorizontalAlignment = System.Windows.HorizontalAlignment.Left
-		};
-		balanceSlider.ValueChanged += (object _, RoutedPropertyChangedEventArgs<double> change) =>
-		{
-			player.Balance = (float)change.NewValue;
-			SaveSettingsSoon();
-		};
-		button.Click += (object _, RoutedEventArgs _) =>
-		{
-			balanceSlider.Value = 0.0;
-		};
-		AutomationProperties.SetName(balanceSlider, T("Balance estéreo"));
-		panel.Children.Add(balanceSlider);
-		panel.Children.Add(button);
-		panel = AddSettingsCard(soundPage, "Salida de audio · WASAPI");
-		System.Windows.Controls.ComboBox choices = new System.Windows.Controls.ComboBox
-		{
-			Style = (Style)FindResource("FilterCombo"),
-			ItemTemplate = (DataTemplate)FindResource("AudioDeviceLabel"),
-			SelectedValuePath = "Id"
-		};
-		try
-		{
-			using MMDeviceEnumerator mMDeviceEnumerator = new MMDeviceEnumerator();
-			var list = mMDeviceEnumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active).Select((MMDevice device) =>
-			{
-				using (device)
-				{
-					return new
-					{
-						Name = device.FriendlyName,
-						Id = device.ID
-					};
-				}
-			}).ToList();
-			list.Insert(0, new
-			{
-				Name = LocalTextExtension.Translate("Predeterminada del sistema"),
-				Id = (string)null
-			});
-			choices.ItemsSource = list;
-			choices.SelectedIndex = Math.Max(0, list.FindIndex(item => item.Id == player.OutputId));
-			choices.SelectionChanged += (object _, SelectionChangedEventArgs _) =>
-			{
-				player.OutputId = choices.SelectedValue as string;
-				ReopenOutput();
-				SaveSettingsSoon();
-			};
-		}
-		catch (Exception ex)
-		{
-			choices.Items.Add(ex.Message);
-			choices.SelectedIndex = 0;
-			choices.IsEnabled = false;
-		}
-		AutomationProperties.SetName(choices, T("Salida de audio"));
-		panel.Children.Add(choices);
-		System.Windows.Controls.CheckBox exclusive = new System.Windows.Controls.CheckBox
-		{
-			Style = (Style)FindResource("SettingsToggle"),
-			Content = LocalTextExtension.Translate("Solicitar acceso exclusivo"),
-			IsChecked = player.Exclusive,
-			Foreground = Brushes.White,
-			Margin = new Thickness(0.0, 12.0, 0.0, 4.0)
-		};
-		TextBlock mode = new TextBlock
-		{
-			TextWrapping = TextWrapping.Wrap,
-			MaxWidth = 520.0,
-			HorizontalAlignment = System.Windows.HorizontalAlignment.Left
-		};
-		exclusive.Click += (object _, RoutedEventArgs _) =>
-		{
-			player.Exclusive = exclusive.IsChecked == true;
-			ReopenOutput();
-			UpdateMode();
-			SaveSettingsSoon();
-		};
-		choices.SelectionChanged += (object _, SelectionChangedEventArgs _) =>
-		{
-			UpdateMode();
-		};
-		UpdateMode();
-		panel.Children.Add(exclusive);
-		panel.Children.Add(mode);
+		AddBalanceSettings(AddSettingsCard(soundPage, "Balance estéreo"), SaveSettingsSoon);
 		panel = playbackPage;
 		var playbackAnchor = new TextBlock
 		{
@@ -3100,25 +3003,15 @@ public partial class MainWindow : Window
 			SaveSettingsSoon();
 		};
 		AddSleepSettings(AddSettingsCard(playbackPage, "Temporizador de sueño", "Pausa la reproducción al terminar el tiempo."));
-		panel = AddSettingsCard(playbackPage, "Procesamiento de audio");
-		AddPreference(LocalTextExtension.Translate("PCM directo exclusivo (WAV, AIFF y FLAC)"), player.StrictDirect, (bool enabled) =>
+		AddAudioDeviceSettings(AddSettingsCard(soundPage, "Dispositivos de audio"), async () =>
 		{
-			player.StrictDirect = enabled;
-			UpdateVolumeControls();
 			UpdateSpeedAvailability();
 			speedApplyTimer.Stop();
-			ReopenOutput();
-			UpdateMode();
 			SaveSettingsSoon();
+			await ReopenOutput();
+			RefreshEffectiveGain();
 		});
-		AddPreference("Omitir ecualizador, balance y velocidad", player.Direct, (bool enabled) =>
-		{
-			player.Direct = enabled;
-			UpdateSpeedAvailability();
-			speedApplyTimer.Stop();
-			ReopenOutput();
-			SaveSettingsSoon();
-		});
+
 		panel = AddSettingsCard(playbackPage, "Sesión de escucha");
 		AddPreference("Continuar con la siguiente canción", continueAfterTrack, enabled => continueAfterTrack = enabled);
 		AddPreference("Evitar el reposo al reproducir", keepAwake, enabled =>
@@ -3512,11 +3405,23 @@ public partial class MainWindow : Window
 							throw new InvalidOperationException($"Settings navigation at index {index} did not switch pages.");
 						await Task.Delay(220);
 						settingsWindow.UpdateLayout();
+						SaveSettingsPreview(names[index]);
+						if (index == 0)
+						{
+							settingsScroll.ScrollToBottom();
+							await Task.Delay(150);
+							settingsWindow.UpdateLayout();
+							SaveSettingsPreview("-dispositivos");
+						}
+					}
+
+					void SaveSettingsPreview(string suffix)
+					{
 						var bitmap = new RenderTargetBitmap((int)settingsRoot.ActualWidth, (int)settingsRoot.ActualHeight, 96, 96, PixelFormats.Pbgra32);
 						bitmap.Render(settingsRoot);
 						var encoder = new PngBitmapEncoder { Frames = { BitmapFrame.Create(bitmap) } };
-						string target = index == 0 ? preview : Path.Combine(Path.GetDirectoryName(preview) ?? "",
-							Path.GetFileNameWithoutExtension(preview) + names[index] + ".png");
+						string target = suffix.Length == 0 ? preview : Path.Combine(Path.GetDirectoryName(preview) ?? "",
+							Path.GetFileNameWithoutExtension(preview) + suffix + ".png");
 						using var stream = System.IO.File.Create(target);
 						encoder.Save(stream);
 					}
@@ -3576,10 +3481,6 @@ public partial class MainWindow : Window
 				Padding = new Thickness(0, 0, 0, 2),
 				Child = content
 			};
-		}
-		void UpdateMode()
-		{
-			mode.Text = player.OutputNotice ?? ((!opened) ? LocalTextExtension.Translate("El modo exclusivo se solicita al abrir una pista.") : (player.IsExclusive ? LocalTextExtension.Translate("Salida activa en modo exclusivo.") : LocalTextExtension.Translate("Salida activa en modo compartido.")));
 		}
 	}
 

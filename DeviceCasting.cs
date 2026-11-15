@@ -15,11 +15,15 @@ public partial class MainWindow
     private RemotePlayer castingPlayer;
     private Track castingTrack;
     private bool castBusy;
+    private string castFailure;
     private nint castingPickerOwner;
 
-    private async void CastTrack(object sender, RoutedEventArgs args)
+    private async void CastTrack(object sender, RoutedEventArgs args) => await ShowCastingPicker(CastToolbarButton);
+
+    private async System.Threading.Tasks.Task ShowCastingPicker(FrameworkElement anchor)
     {
         if (castBusy) return;
+        castFailure = null;
         try
         {
             if (castingConnection != null)
@@ -36,7 +40,6 @@ public partial class MainWindow
                 Status.Text = LocalTextExtension.Translate("Elige una pista para transmitir.");
                 return;
             }
-            var anchor = CastToolbarButton;
             var owner = Window.GetWindow(anchor) ?? this;
             var handle = new WindowInteropHelper(owner).Handle;
             if (castingPicker == null || castingPickerOwner != handle)
@@ -59,7 +62,7 @@ public partial class MainWindow
             castingPicker.Show(new Windows.Foundation.Rect(origin.X, origin.Y, anchor.ActualWidth, anchor.ActualHeight),
                 Windows.UI.Popups.Placement.Above);
         }
-        catch (Exception error) { Status.Text = LocalTextExtension.Translate("No se pudo usar el selector de dispositivos. ") + error.Message; }
+        catch (Exception error) { Status.Text = castFailure = LocalTextExtension.Translate("No se pudo usar el selector de dispositivos. ") + error.Message; }
     }
 
     private void DeviceSelected(CastingDevicePicker sender, CastingDeviceSelectedEventArgs args)
@@ -93,7 +96,7 @@ public partial class MainWindow
             catch (Exception error)
             {
                 ResetCasting();
-                Status.Text = LocalTextExtension.Translate("No se pudo transmitir la pista. ") + error.Message;
+                Status.Text = castFailure = LocalTextExtension.Translate("No se pudo transmitir la pista. ") + error.Message;
             }
             finally { castBusy = false; }
         });
@@ -115,7 +118,7 @@ public partial class MainWindow
         {
             if (castingConnection != sender) return;
             ResetCasting();
-            Status.Text = LocalTextExtension.Translate("Error de transmisión. ") + args.Message;
+            Status.Text = castFailure = LocalTextExtension.Translate("Error de transmisión. ") + args.Message;
         });
     }
 

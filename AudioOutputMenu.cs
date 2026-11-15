@@ -239,7 +239,7 @@ public partial class MainWindow
             Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 6, 0, 0) };
     }
 
-    private static AudioOutputSnapshot ReadAudioOutputs(string outputId)
+    private static AudioOutputSnapshot ReadAudioOutputs(string outputId, bool includeRates = true)
     {
         var outputs = new System.Collections.Generic.List<AudioOutputInfo>();
         try
@@ -252,8 +252,9 @@ public partial class MainWindow
                 ? devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia) : devices.GetDevice(outputId);
             using var client = active.AudioClient;
             var format = client.MixFormat;
-            return new(outputs.ToArray(), active.FriendlyName, format, SupportedOutputRates(client, format.Channels),
-                SupportedExclusiveRates(client, format), missing, null);
+            return new(outputs.ToArray(), active.FriendlyName, format,
+                includeRates ? SupportedOutputRates(client, format.Channels) : Array.Empty<int>(),
+                includeRates ? SupportedExclusiveRates(client, format) : Array.Empty<int>(), missing, null);
         }
         catch (Exception error)
         {
