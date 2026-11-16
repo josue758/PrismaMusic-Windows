@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.58.0
+
+- Rediseña la bienvenida en cuatro pasos con selección de idioma, archivos y NAS, vista previa de apariencia y preferencias de inicio.
+- Ordena los accesos del reproductor como EQ, salida de audio, Miracast, PiP y Sala de escucha.
+- Comienza a leer etiquetas mientras se enumeran los archivos y permite configurar el número de lecturas paralelas, las subcarpetas y el escaneo al iniciar.
+
 ## 0.57.3
 
 - Espera a que todas las instancias de Prisma de la instalación de destino cierren antes de reemplazar archivos. Esto corrige el error de acceso denegado al actualizar desde versiones anteriores.

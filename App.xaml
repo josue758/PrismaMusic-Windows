@@ -128,6 +128,52 @@
         </Setter.Value>
       </Setter>
     </Style>
+    <Style x:Key="WelcomeChoice" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="Padding" Value="12,9"/>
+      <Setter Property="Margin" Value="0,0,6,0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="Card" Padding="{TemplateBinding Padding}" CornerRadius="13"
+                    Background="{DynamicResource WelcomeSurface}" BorderBrush="{DynamicResource SettingsStroke}" BorderThickness="1">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Card" Property="Background" Value="{DynamicResource ControlHover}"/></Trigger>
+              <Trigger Property="IsChecked" Value="True"><Setter TargetName="Card" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Card" Property="BorderThickness" Value="2"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="WelcomeCheck" TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="Margin" Value="0,7,0,2"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <DockPanel Background="Transparent" MinHeight="27">
+              <Border x:Name="Box" DockPanel.Dock="Left" Width="19" Height="19" Margin="0,0,9,0"
+                      VerticalAlignment="Center" CornerRadius="5" BorderThickness="1" BorderBrush="{DynamicResource SettingsStroke}">
+                <TextBlock x:Name="Mark" Text="&#xE73E;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10"
+                           Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{DynamicResource OnAccentBrush}"/>
+              </Border>
+              <TextBlock Text="{TemplateBinding Content}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+            </DockPanel>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Box" Property="BorderThickness" Value="2"/></Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Box" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                <Setter TargetName="Mark" Property="Visibility" Value="Visible"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
     <Style x:Key="AppearanceChoice" TargetType="RadioButton">
       <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
       <Setter Property="Margin" Value="2,0,5,0"/>

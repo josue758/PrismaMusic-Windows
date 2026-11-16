@@ -4,7 +4,7 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <Version>0.57.3</Version>
+    <Version>0.58.0</Version>
     <AssemblyName>Prisma Music</AssemblyName>
     <ApplicationIcon>Assets\PrismaMusic.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>

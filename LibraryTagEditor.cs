@@ -34,9 +34,11 @@ public partial class MainWindow
         args.Handled = Equals(Rows.Tag, "Gallery") || Rows.SelectedItem is not LibraryRow { Tracks.Length: 1 };
     }
 
-    private void EditLibraryTags(object sender, RoutedEventArgs args)
+    private void EditLibraryTags(object sender, RoutedEventArgs args) =>
+        EditLibraryTags(Selected, listeningRoom ?? this);
+
+    private void EditLibraryTags(Track track, Window owner)
     {
-        var track = Selected;
         if (track == null) return;
         string Translate(string label) => LocalTextExtension.Translate(label);
         var body = new StackPanel { Margin = new Thickness(24, 22, 24, 18) };
@@ -66,7 +68,7 @@ public partial class MainWindow
         var scroll = new ScrollViewer { Content = body, Background = surface, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var dialog = new Window
         {
-            Owner = listeningRoom ?? this, Title = Translate("Editar etiquetas de biblioteca"),
+            Owner = owner, Title = Translate("Editar etiquetas de biblioteca"),
             Width = 490, MaxHeight = SystemParameters.WorkArea.Height, SizeToContent = SizeToContent.Height,
             ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Background = surface, Content = scroll

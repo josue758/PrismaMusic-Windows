@@ -128,6 +128,30 @@ public partial class MainWindow
     {
         var sources = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         card.Children.Add(sources);
+        var subfolders = new CheckBox { Content = T("Incluir subcarpetas al escanear"), IsChecked = scanSubfolders,
+            Style = (Style)FindResource("SettingsToggle") };
+        subfolders.Click += (_, _) => { scanSubfolders = subfolders.IsChecked == true; SaveAudioSettings(); };
+        var onLaunch = new CheckBox { Content = T("Leer etiquetas al iniciar"), IsChecked = scanOnLaunch,
+            Style = (Style)FindResource("SettingsToggle") };
+        onLaunch.Click += (_, _) => { scanOnLaunch = onLaunch.IsChecked == true; SaveAudioSettings(); };
+        var readers = new ComboBox
+        {
+            ItemsSource = Array.ConvertAll(TagReaderLabels, T), SelectedIndex = Array.IndexOf(TagReaderOptions, parallelTagReads),
+            Style = (Style)FindResource("FilterCombo"), Width = 145, HorizontalAlignment = HorizontalAlignment.Left
+        };
+        readers.SelectionChanged += (_, _) =>
+        {
+            if (readers.SelectedIndex < 0) return;
+            parallelTagReads = TagReaderOptions[readers.SelectedIndex];
+            SaveAudioSettings();
+        };
+        var readerLabel = SettingsHint("Lecturas simultáneas");
+        AutomationProperties.SetLabeledBy(readers, readerLabel);
+        card.Children.Add(subfolders);
+        card.Children.Add(onLaunch);
+        card.Children.Add(readerLabel);
+        card.Children.Add(readers);
+        card.Children.Add(SettingsHint("Automático ajusta las lecturas a la carpeta. Elige 2, 4 u 8 para fijar un límite."));
         var actions = new WrapPanel();
         var add = SettingsButton("Añadir carpeta", AddFolder);
         var scan = SettingsButton("Volver a escanear", Rescan);

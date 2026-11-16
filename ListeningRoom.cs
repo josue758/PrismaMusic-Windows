@@ -193,11 +193,10 @@ public partial class MainWindow
         RefreshLyrics();
 
         Visibility artworkButtonVisibility = TransportArtworkButton.Visibility;
-        Visibility panelButtonVisibility = ListeningPanelButton.Visibility;
         GridLength trackColumn = TransportMetadataColumn.Width;
         TransportMetadata.Visibility = Visibility.Collapsed;
         TransportMetadataColumn.Width = new GridLength(0);
-        ListeningPanelButton.Visibility = Visibility.Collapsed;
+        ListeningPanelMenuItem.Visibility = Visibility.Collapsed;
         TransportArtworkButton.Visibility = Visibility.Collapsed;
         var room = new Window
         {
@@ -232,7 +231,7 @@ public partial class MainWindow
             TransportArtworkButton.Visibility = artworkButtonVisibility;
             TransportMetadata.Visibility = Visibility.Visible;
             TransportMetadataColumn.Width = trackColumn;
-            ListeningPanelButton.Visibility = panelButtonVisibility;
+            ListeningPanelMenuItem.Visibility = Visibility.Visible;
             listeningRoom = null;
             roomLyrics = null;
             roomLyricsLiveDot = null;
@@ -256,7 +255,7 @@ public partial class MainWindow
             TransportArtworkButton.Visibility = artworkButtonVisibility;
             TransportMetadata.Visibility = Visibility.Visible;
             TransportMetadataColumn.Width = trackColumn;
-            ListeningPanelButton.Visibility = panelButtonVisibility;
+            ListeningPanelMenuItem.Visibility = Visibility.Visible;
             listeningRoom = null;
             roomLyrics = null;
             roomLyricsLiveDot = null;
@@ -273,6 +272,9 @@ public partial class MainWindow
         string label = T(active ? "Salir de la Sala de escucha" : "Sala de escucha");
         FullScreenMenuItem.Header = label;
         System.Windows.Automation.AutomationProperties.SetName(FullScreenMenuItem, label);
+        FullscreenToolbarButton.Content = active ? "\uE73F" : "\uE740";
+        FullscreenToolbarButton.ToolTip = label + " · F11";
+        System.Windows.Automation.AutomationProperties.SetName(FullscreenToolbarButton, label);
     }
 
     private static TextBlock MirrorText(TextBlock source, double size, Brush color)

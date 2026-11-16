@@ -13,8 +13,11 @@ internal static class LibraryScanner
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
         { ".mp3", ".wav", ".flac", ".m4a", ".aac", ".wma", ".aiff", ".aif", ".ogg", ".opus" };
 
+    internal static string AudioFilePattern { get; } = string.Join(";", System.Linq.Enumerable.Select(Extensions, ext => "*" + ext));
+
     public static (List<Track> Tracks, int Errors) ReadFolder(string folder, CancellationToken cancellationToken = default,
-        IProgress<LibraryScanProgress> progress = null, IReadOnlyDictionary<string, Track> cache = null)
+        IProgress<LibraryScanProgress> progress = null, IReadOnlyDictionary<string, Track> cache = null,
+        bool includeSubfolders = true, int parallelReads = 0)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var tracks = new List<Track>();
@@ -34,7 +37,7 @@ internal static class LibraryScanner
 
         // NAS file opens wait for network I/O. Cache hits stay in the directory enumerator
         // and never consume a worker reserved for reading tags.
-        int workers = folder.StartsWith(@"\\", StringComparison.Ordinal)
+        int workers = parallelReads > 0 ? parallelReads : folder.StartsWith(@"\\", StringComparison.Ordinal)
             ? Math.Clamp(Environment.ProcessorCount * 2, 4, 12)
             : Math.Clamp(Environment.ProcessorCount, 1, 4);
         Parallel.ForEach(FilesNeedingTags(), new ParallelOptions
@@ -57,8 +60,11 @@ internal static class LibraryScanner
 
         IEnumerable<(string Path, long Length, long Stamp)> FilesNeedingTags()
         {
-            foreach (var info in EnumerateFiles(new DirectoryInfo(folder), options, cancellationToken,
-                (path, error) => Record(path, null, error)))
+            IEnumerable<FileInfo> files = Extensions.Contains(Path.GetExtension(folder)) && File.Exists(folder)
+                ? new[] { new FileInfo(folder) }
+                : EnumerateFiles(new DirectoryInfo(folder), options, cancellationToken,
+                    (path, error) => Record(path, null, error), includeSubfolders);
+            foreach (var info in files)
             {
                 if (!Extensions.Contains(info.Extension)) continue;
                 long length;
@@ -110,25 +116,34 @@ internal static class LibraryScanner
     }
 
     private static IEnumerable<FileInfo> EnumerateFiles(DirectoryInfo root, EnumerationOptions options,
-        CancellationToken cancellationToken, Action<string, string> reportUnavailableFolder)
+        CancellationToken cancellationToken, Action<string, string> reportUnavailableFolder, bool includeSubfolders)
     {
         var folders = new Stack<DirectoryInfo>();
         folders.Push(root);
         while (folders.TryPop(out var folder))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            FileSystemInfo[] entries;
-            try { entries = folder.GetFileSystemInfos("*", options); }
+            IEnumerator<FileSystemInfo> entries;
+            try { entries = folder.EnumerateFileSystemInfos("*", options).GetEnumerator(); }
             catch (Exception error) when (folder != root && error is (IOException or UnauthorizedAccessException))
             {
                 reportUnavailableFolder(folder.FullName, error.Message);
                 continue;
             }
-            foreach (var entry in entries)
+            using (entries)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (entry is DirectoryInfo child) folders.Push(child);
-                else if (entry is FileInfo file) yield return file;
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try { if (!entries.MoveNext()) break; }
+                    catch (Exception error) when (folder != root && error is (IOException or UnauthorizedAccessException))
+                    {
+                        reportUnavailableFolder(folder.FullName, error.Message);
+                        break;
+                    }
+                    if (entries.Current is DirectoryInfo child && includeSubfolders) folders.Push(child);
+                    else if (entries.Current is FileInfo file) yield return file;
+                }
             }
         }
     }

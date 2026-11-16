@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shell;
@@ -19,402 +20,535 @@ public partial class MainWindow
             ShowWelcome(this, new RoutedEventArgs());
     }
 
+    private bool scanSubfolders = true;
+    private bool scanOnLaunch;
+    private int parallelTagReads;
+    private static readonly int[] TagReaderOptions = { 0, 2, 4, 8 };
+    private static readonly string[] TagReaderLabels = { "Automático", "2", "4", "8" };
+
     private async void ShowWelcome(object sender, RoutedEventArgs args)
     {
-        string T(string text) => LocalTextExtension.Translate(text);
-        int chosenAppearance = appearanceProfile;
-        var codes = new[] { "es", "en", "pt" };
-        var language = new ComboBox
+        string[] codes = { "es", "en", "pt" };
+        string[] steps = { "Elige tu idioma", "Tu colección", "Dale tu estilo", "Listo para escuchar" };
+        string[] descriptions =
         {
-            ItemsSource = new[] { "Español", "English", "Português" },
-            SelectedIndex = Array.IndexOf(codes, LocalTextExtension.Language),
-            Style = (Style)FindResource("FilterCombo")
+            "Puedes cambiar todo esto después desde Configuración.",
+            "Añade carpetas o archivos de música, o conecta tu NAS.",
+            "Prueba una apariencia. La vista previa conserva tus ajustes de sonido.",
+            "Ajusta lo esencial para tu próxima sesión."
         };
-        var accentChoices = new ComboBox
+        string[] icons = { "\uE774", "\uE8B7", "\uE790", "\uE7F6" };
+        string language = LocalTextExtension.Language;
+        string selectedAccent = AccentChoices.Any(choice => choice.Id == accentPreset) ? accentPreset : "violet";
+        int selectedTheme = themePreference;
+        int selectedProfile = appearanceProfile;
+        bool accentChanged = false;
+        double previewTransparency = surfaceTransparency;
+        int step = 0;
+        bool finish = false;
+        bool postpone = false;
+        var sources = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pages = Enumerable.Range(0, steps.Length).Select(_ => new StackPanel { Margin = new Thickness(0, 0, 8, 10) }).ToArray();
+        var root = new Grid();
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(.69, GridUnitType.Star), MinWidth = 210, MaxWidth = 260 });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        var dialog = new Window
         {
-            ItemsSource = new[] { T("Según la carátula"), T("Azul frío"), T("Violeta") },
-            SelectedIndex = accentPreset switch { "blue" => 1, "violet" => 2, _ => 0 },
-            Style = (Style)FindResource("FilterCombo")
-        };
-        string selectedFolder = null;
-        var librarySelection = new TextBlock
-        {
-            Text = T("Aún no has elegido una biblioteca."),
-            Foreground = Brushes.Gainsboro,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 14, 0, 0)
-        };
-        var pages = new StackPanel[4];
-        pages[0] = new StackPanel();
-        pages[0].Children.Add(language);
-        pages[0].Children.Add(new TextBlock
-        {
-            Text = T("Puedes cambiar el idioma más tarde en Configuración. El cambio se aplica al reiniciar."),
-            Foreground = Brushes.Gainsboro,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 12, 0, 0)
-        });
-
-        pages[1] = new StackPanel();
-        pages[1].Children.Add(new TextBlock
-        {
-            Text = T("Elige una carpeta local o una carpeta compartida SMB. Para un NAS, conéctalo desde el Explorador de archivos y luego selecciónalo aquí."),
-            Foreground = Brushes.Gainsboro,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
-        });
-        var chooseFolder = new Button { Content = T("Elegir carpeta o NAS"), Margin = new Thickness(0, 0, 0, 8) };
-        chooseFolder.Click += (_, _) =>
-        {
-            using var picker = new System.Windows.Forms.FolderBrowserDialog
-            {
-                Description = T("Elige una carpeta local o una carpeta compartida SMB"),
-                ShowNewFolderButton = false,
-                UseDescriptionForTitle = true
-            };
-            if (picker.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-            selectedFolder = picker.SelectedPath;
-            librarySelection.Text = LocalTextExtension.Format("Carpeta seleccionada: {0}", selectedFolder);
-        };
-        var libraryActions = new WrapPanel();
-        libraryActions.Children.Add(chooseFolder);
-        var chooseDemos = new Button { Content = T("Probar demos"), Margin = new Thickness(0, 0, 0, 6) };
-        chooseDemos.Click += (_, _) =>
-        {
-            selectedFolder = Path.Combine(AppContext.BaseDirectory, "Demo");
-            librarySelection.Text = T("Se añadirán las pistas de demostración.");
-        };
-        libraryActions.Children.Add(chooseDemos);
-        pages[1].Children.Add(libraryActions);
-        pages[1].Children.Add(new Border
-        {
-            Background = (Brush)FindResource("SettingsBackground"), CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(12), Margin = new Thickness(0, 12, 0, 0), Child = librarySelection
-        });
-        librarySelection.Margin = new Thickness(0);
-        System.Windows.Automation.AutomationProperties.SetLiveSetting(librarySelection,
-            System.Windows.Automation.AutomationLiveSetting.Polite);
-
-        pages[2] = new StackPanel();
-        pages[2].Children.Add(CreateAppearanceProfiles(chosenAppearance, profile => chosenAppearance = profile));
-        pages[2].Children.Add(new TextBlock { Text = T("Color de la aplicación"), FontWeight = FontWeights.SemiBold });
-        pages[2].Children.Add(accentChoices);
-        pages[3] = new StackPanel();
-        pages[3].Children.Add(new TextBlock
-        {
-            Text = T("Todo listo"),
-            FontSize = 24,
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-        pages[3].Children.Add(new TextBlock
-        {
-            Text = T("Tu biblioteca queda en este equipo. Las letras se pueden traducir localmente: Prisma prepara el runtime y el modelo al solicitar la traducción, sin que tengas que instalar Python."),
-            Foreground = Brushes.Gainsboro,
-            TextWrapping = TextWrapping.Wrap
-        });
-        var currentStep = 0;
-        bool restartForLanguage = false;
-        bool completed = false;
-        var pageHost = new ContentControl();
-        var stepLabel = new TextBlock { Foreground = Brushes.Gainsboro, VerticalAlignment = VerticalAlignment.Center,
-            FontSize = 11, Margin = new Thickness(0, 7, 0, 0) };
-        var progress = new ProgressBar { Minimum = 0, Maximum = 4, Height = 3, Value = 1,
-            Background = (Brush)FindResource("SettingsStroke"), BorderThickness = new Thickness(0) };
-        progress.SetResourceReference(ForegroundProperty, "AccentBrush");
-        var back = new Button { Content = T("Atrás"), IsEnabled = false, Margin = new Thickness(0, 0, 8, 0) };
-        var skip = new Button { Content = T("Ahora no"), Margin = new Thickness(0, 0, 8, 0) };
-        var forward = new Button { Content = T("Continuar"), MinWidth = 112, IsDefault = true };
-        forward.SetResourceReference(BackgroundProperty, "AccentBrush");
-        forward.SetResourceReference(ForegroundProperty, "OnAccentBrush");
-        var footer = new DockPanel { LastChildFill = false, Margin = new Thickness(0, 18, 0, 0) };
-        var leftButtons = new StackPanel { Orientation = Orientation.Horizontal };
-        leftButtons.Children.Add(back);
-        leftButtons.Children.Add(skip);
-        DockPanel.SetDock(leftButtons, Dock.Left);
-        footer.Children.Add(leftButtons);
-        DockPanel.SetDock(forward, Dock.Right);
-        footer.Children.Add(forward);
-        var root = new Grid { Margin = new Thickness(12), Background = (Brush)FindResource("SettingsBackground") };
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(202) });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var rail = new Border
-        {
-            Background = Brushes.Transparent,
-            Padding = new Thickness(17, 18, 14, 14),
-            Margin = new Thickness(0, 0, 14, 0)
-        };
-        var railLayout = new DockPanel();
-        var brand = new StackPanel { Margin = new Thickness(2, 0, 0, 25) };
-        brand.Children.Add(new Border
-        {
-            Width = 42,
-            Height = 42,
-            CornerRadius = new CornerRadius(14),
-            Background = new SolidColorBrush(Color.FromArgb(0x24, 255, 255, 255)),
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x34, 255, 255, 255)),
-            BorderThickness = new Thickness(1),
-            Child = new TextBlock
-            {
-                Text = "\uE8D6",
-                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                FontSize = 21,
-                Foreground = (Brush)FindResource("AccentBrush"),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            }
-        });
-        brand.Children.Add(new TextBlock { Text = "Prisma Music", FontSize = 21,
-            FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 12, 0, 0) });
-        DockPanel.SetDock(brand, Dock.Top);
-        railLayout.Children.Add(brand);
-        var navigation = new StackPanel();
-        var stepButtons = new Button[pages.Length];
-        var stepIconTiles = new Border[pages.Length];
-        var stageTitle = new TextBlock { FontSize = 28, FontWeight = FontWeights.SemiBold };
-        var stageDescription = new TextBlock
-        {
-            Foreground = Brushes.Gainsboro,
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 3, 0, 0)
-        };
-        string[] stepNames = { T("Idioma"), T("Biblioteca"), T("Apariencia"), T("Listo") };
-        string[] stepIcons = { "\uE774", "\uE8B7", "\uE790", "\uE73E" };
-        for (int index = 0; index < stepButtons.Length; index++)
-        {
-            var label = new TextBlock { Text = stepNames[index], VerticalAlignment = VerticalAlignment.Center,
-                FontWeight = FontWeights.SemiBold };
-            var icon = new TextBlock { Text = stepIcons[index], FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-                FontSize = 15, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            stepIconTiles[index] = new Border
-            {
-                Width = 34,
-                Height = 34,
-                CornerRadius = new CornerRadius(11),
-                Background = new SolidColorBrush(Color.FromArgb(0x18, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0x20, 255, 255, 255)),
-                BorderThickness = new Thickness(1),
-                Child = icon
-            };
-            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(11, 0, 0, 0) };
-            text.Children.Add(label);
-            var content = new StackPanel { Orientation = Orientation.Horizontal };
-            content.Children.Add(stepIconTiles[index]);
-            content.Children.Add(text);
-            stepButtons[index] = new Button
-            {
-                Content = content,
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                Padding = new Thickness(9, 10, 7, 10),
-                Margin = new Thickness(0, 2, 0, 3),
-                Style = (Style)FindResource("FluentNavigationButton"),
-                Tag = index
-            };
-            int step = index;
-            System.Windows.Automation.AutomationProperties.SetName(stepButtons[index], stepNames[index]);
-            stepButtons[index].Click += (_, _) => SetStep(step);
-            navigation.Children.Add(stepButtons[index]);
-        }
-        DockPanel.SetDock(navigation, Dock.Top);
-        railLayout.Children.Add(navigation);
-        var railFooter = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom };
-        railFooter.Children.Add(new Border { Height = 1, Background = new SolidColorBrush(Color.FromArgb(0x30, 255, 255, 255)),
-            Margin = new Thickness(0, 10, 0, 12) });
-        railFooter.Children.Add(progress);
-        railFooter.Children.Add(stepLabel);
-        DockPanel.SetDock(railFooter, Dock.Bottom);
-        railLayout.Children.Add(railFooter);
-        rail.Child = railLayout;
-        root.Children.Add(rail);
-
-        var contentLayout = new DockPanel { Margin = new Thickness(3, 5, 6, 5) };
-        var header = new Grid { Margin = new Thickness(4, 0, 0, 17) };
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var titleBlock = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        titleBlock.Children.Add(stageTitle);
-        titleBlock.Children.Add(stageDescription);
-        header.Children.Add(titleBlock);
-        Window dialog = null;
-        var close = new Button { Content = "\uE8BB", FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
-            Width = 34, Height = 34, Padding = new Thickness(0), ToolTip = T("Cerrar"),
-            VerticalAlignment = VerticalAlignment.Top };
-        close.Click += (_, _) => dialog.Close();
-        WindowChrome.SetIsHitTestVisibleInChrome(close, true);
-        System.Windows.Automation.AutomationProperties.SetName(close, T("Cerrar"));
-        Grid.SetColumn(close, 1);
-        close.Margin = new Thickness(8, 0, 0, 0);
-        header.Children.Add(close);
-        DockPanel.SetDock(header, Dock.Top);
-        contentLayout.Children.Add(header);
-        DockPanel.SetDock(footer, Dock.Bottom);
-        footer.Margin = new Thickness(0, 15, 0, 2);
-        contentLayout.Children.Add(footer);
-        var pageCard = new Border
-        {
-            Background = (Brush)FindResource("SettingsCard"),
-            BorderBrush = (Brush)FindResource("SettingsStroke"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(26, 24, 26, 22),
-            Child = new ScrollViewer { Content = pageHost, Style = (Style)FindResource("LyricsScroll"), VerticalScrollBarVisibility = ScrollBarVisibility.Auto }
-        };
-        contentLayout.Children.Add(pageCard);
-        Grid.SetColumn(contentLayout, 1);
-        root.Children.Add(contentLayout);
-        dialog = new Window
-        {
-            Owner = this,
-            Title = T("Primeros pasos"),
-            Width = 900,
-            Height = 620,
-            MinWidth = 790,
-            MinHeight = 550,
-            ResizeMode = ResizeMode.CanResize,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            WindowStyle = WindowStyle.None,
-            Background = (Brush)FindResource("SettingsBackground"),
-            Content = root
+            Owner = sender is DependencyObject element ? Window.GetWindow(element) ?? this : this,
+            Title = T("Primeros pasos"), Icon = Icon, FontFamily = FontFamily, FontSize = 14,
+            Width = 960, Height = 710, MinWidth = 740, MinHeight = 525,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, WindowStyle = WindowStyle.None,
+            ResizeMode = ResizeMode.CanResize, UseLayoutRounding = true, Content = root,
+            ShowInTaskbar = false
         };
         WindowChrome.SetWindowChrome(dialog, new WindowChrome
         {
-            CaptionHeight = 40,
-            ResizeBorderThickness = new Thickness(6),
-            GlassFrameThickness = new Thickness(0),
+            CaptionHeight = 34, ResizeBorderThickness = new Thickness(5), GlassFrameThickness = new Thickness(0),
             UseAeroCaptionButtons = false
         });
-        ApplyFluentDialog(dialog, root);
-        if (smokeTest && Environment.GetEnvironmentVariable("PRISMA_WELCOME_PREVIEW") is string welcomePreview)
+        var rail = new Border
         {
-            dialog.ContentRendered += (_, _) =>
-            {
-                int previewStep = 0;
-                void CaptureStep()
-                {
-                    var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)dialog.ActualWidth,
-                        (int)dialog.ActualHeight, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
-                    bitmap.Render(dialog);
-                    var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
-                    png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
-                    string path = previewStep == 0 ? welcomePreview :
-                        Path.Combine(Path.GetDirectoryName(welcomePreview)!,
-                            Path.GetFileNameWithoutExtension(welcomePreview) + $"-step-{previewStep + 1}.png");
-                    using (var stream = File.Create(path)) png.Save(stream);
-                    if (++previewStep == pages.Length)
-                    {
-                        dialog.Close();
-                        return;
-                    }
-                    SetStep(previewStep);
-                    dialog.Dispatcher.BeginInvoke(CaptureStep, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
-                }
-                CaptureStep();
-            };
-        }
-        void SetStep(int step)
-        {
-            currentStep = Math.Clamp(step, 0, pages.Length - 1);
-            pageHost.Content = pages[currentStep];
-            stepLabel.Text = LocalTextExtension.Format("Paso {0} de 4", currentStep + 1);
-            progress.Value = currentStep + 1;
-            back.IsEnabled = currentStep > 0;
-            forward.Content = T(currentStep == pages.Length - 1 ? "Comenzar" : "Continuar");
-            string[] titles = { T("Elige tu idioma"), T("Añade tu biblioteca"), T("Personaliza Prisma"), T("Listo para escuchar") };
-            string[] descriptions =
-            {
-                T("Los menús estarán en el idioma que prefieras."),
-                T("Elige una carpeta local, de red o prueba las demos."),
-                T("Elige el aspecto de Prisma Music."),
-                T("Revisa tus opciones antes de entrar a tu biblioteca.")
-            };
-            stageTitle.Text = titles[currentStep];
-            stageDescription.Text = descriptions[currentStep];
-            for (int index = 0; index < stepButtons.Length; index++)
-            {
-                bool selected = index == currentStep;
-                stepButtons[index].Background = selected
-                    ? new SolidColorBrush(Color.FromArgb(0x26, 255, 255, 255)) : Brushes.Transparent;
-                stepButtons[index].Foreground = Brushes.White;
-                stepIconTiles[index].Background = selected
-                    ? new SolidColorBrush(Color.FromArgb(0x32, 255, 255, 255))
-                    : new SolidColorBrush(Color.FromArgb(0x18, 255, 255, 255));
-                stepIconTiles[index].BorderBrush = selected
-                    ? (Brush)FindResource("AccentBrush")
-                    : new SolidColorBrush(Color.FromArgb(0x20, 255, 255, 255));
-                System.Windows.Automation.AutomationProperties.SetItemStatus(stepButtons[index],
-                    selected ? T("Paso actual") : "");
-            }
-            if (currentStep == pages.Length - 1)
-            {
-                string librarySummary = selectedFolder == null ? T("Sin carpeta seleccionada") : selectedFolder;
-                pages[3].Children.OfType<TextBlock>().Last().Text =
-                    T("Tu biblioteca queda en este equipo. Las letras se pueden traducir localmente: Prisma prepara el runtime y el modelo al solicitar la traducción, sin que tengas que instalar Python.") +
-                    Environment.NewLine + Environment.NewLine +
-                    LocalTextExtension.Format("Carpeta elegida: {0}", librarySummary) + Environment.NewLine +
-                    LocalTextExtension.Format("Apariencia elegida: {0}", T(AppearanceProfileNames[chosenAppearance]));
-            }
-        }
-        back.Click += (_, _) => SetStep(currentStep - 1);
-        skip.Click += (_, _) =>
-        {
-            selectedFolder = null;
-            completed = true;
-            dialog.Close();
+            CornerRadius = new CornerRadius(24), BorderThickness = new Thickness(1),
+            Padding = new Thickness(28, 30, 20, 20), Margin = new Thickness(18, 18, 0, 18)
         };
+        rail.SetResourceReference(Border.BackgroundProperty, "WelcomeSurface");
+        rail.SetResourceReference(Border.BorderBrushProperty, "SettingsStroke");
+        var railContent = new DockPanel();
+        rail.Child = railContent;
+        root.Children.Add(rail);
+
+        var brand = new StackPanel();
+        var wave = new System.Windows.Shapes.Path
+        {
+            Style = (Style)FindResource("VisualizerIcon"), Width = 64, Height = 55,
+            StrokeThickness = 1.6, HorizontalAlignment = HorizontalAlignment.Left
+        };
+        wave.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "AccentBrush");
+        brand.Children.Add(wave);
+        var wordmark = Copy("P R I S M A\nM U S I C", 26, false);
+        wordmark.FontWeight = FontWeights.SemiBold;
+        wordmark.Margin = new Thickness(0, 22, 0, 12);
+        brand.Children.Add(wordmark);
+        brand.Children.Add(Copy(T("Tu música. Tu espacio.\nA tu manera."), 13));
+        DockPanel.SetDock(brand, Dock.Top);
+        railContent.Children.Add(brand);
+        var sideFooter = Copy("01 — 04  /  PRISMA", 10);
+        sideFooter.FontFamily = new FontFamily("Consolas");
+        sideFooter.Margin = new Thickness(0, 15, 0, 0);
+        DockPanel.SetDock(sideFooter, Dock.Bottom);
+        railContent.Children.Add(sideFooter);
+        var sideSteps = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom };
+        var navigation = new Button[steps.Length];
+        Action<int> navigateStep = null;
+        for (int i = 0; i < steps.Length; i++)
+        {
+            int index = i;
+            navigation[i] = IconButton(steps[i], icons[i], () => navigateStep(index));
+            navigation[i].Style = (Style)FindResource("FluentNavigationButton");
+            navigation[i].HorizontalContentAlignment = HorizontalAlignment.Left;
+            navigation[i].Margin = new Thickness(-8, 2, 0, 2);
+            navigation[i].MinHeight = 38;
+            sideSteps.Children.Add(navigation[i]);
+        }
+        railContent.Children.Add(sideSteps);
+
+        var content = new DockPanel { Margin = new Thickness(28, 23, 26, 18) };
+        Grid.SetColumn(content, 1);
+        root.Children.Add(content);
+        var stepLabel = Copy("", 12, false);
+        stepLabel.FontFamily = new FontFamily("Consolas");
+        stepLabel.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
+        var close = IconButton("Cerrar", "\uE8BB", dialog.Close, iconOnly: true);
+        WindowChrome.SetIsHitTestVisibleInChrome(close, true);
+        var stepHeader = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        DockPanel.SetDock(close, Dock.Right);
+        stepHeader.Children.Add(close);
+        stepHeader.Children.Add(stepLabel);
+        DockPanel.SetDock(stepHeader, Dock.Top);
+        content.Children.Add(stepHeader);
+
+        var back = IconButton("Atrás", "\uE72B", () => navigateStep(step - 1));
+        var later = IconButton("Más tarde", null, () => { postpone = true; dialog.Close(); });
+        var next = IconButton("Continuar", null, () =>
+        {
+            if (step < steps.Length - 1) navigateStep(step + 1);
+            else { finish = true; dialog.Close(); }
+        });
+        next.IsDefault = true;
+        MarkPrimary(next);
+        var footer = new DockPanel { Margin = new Thickness(0, 11, 0, 0), LastChildFill = false };
+        var nextActions = new StackPanel { Orientation = Orientation.Horizontal };
+        later.Margin = new Thickness(0, 0, 8, 0);
+        nextActions.Children.Add(later);
+        nextActions.Children.Add(next);
+        DockPanel.SetDock(nextActions, Dock.Right);
+        footer.Children.Add(nextActions);
+        DockPanel.SetDock(back, Dock.Left);
+        footer.Children.Add(back);
+        var footerLayout = new StackPanel();
+        footerLayout.Children.Add(Divider(new Thickness(0, 6, 0, 0)));
+        footerLayout.Children.Add(footer);
+        DockPanel.SetDock(footerLayout, Dock.Bottom);
+        content.Children.Add(footerLayout);
+
+        var title = Copy("", 36, false);
+        title.FontWeight = FontWeights.SemiBold;
+        title.Margin = new Thickness(0, 0, 0, 12);
+        var description = Copy("", 15);
+        description.Margin = new Thickness(0, 0, 0, 16);
+        var pageHost = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        var sheet = new StackPanel();
+        sheet.Children.Add(title);
+        sheet.Children.Add(description);
+        sheet.Children.Add(pageHost);
+        var scroll = new ScrollViewer
+        {
+            Style = (Style)FindResource("LyricsScroll"), Content = sheet,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        content.Children.Add(scroll);
+
+        string[] languageNames = { "Español", "English", "Português" };
+        for (int i = 0; i < codes.Length; i++)
+        {
+            string code = codes[i];
+            var radio = Choice(languageNames[i], "WelcomeLanguage", language == code);
+            radio.Margin = new Thickness(0, 0, 0, 12);
+            radio.MinHeight = 60;
+            var label = Copy(languageNames[i], 16, false);
+            label.VerticalAlignment = VerticalAlignment.Center;
+            label.Margin = new Thickness(10, 0, 0, 0);
+            label.FontWeight = FontWeights.SemiBold;
+            var mark = Copy("○", 18);
+            mark.Margin = new Thickness(0, 0, 10, 0);
+            mark.VerticalAlignment = VerticalAlignment.Center;
+            var row = new DockPanel();
+            DockPanel.SetDock(mark, Dock.Right);
+            row.Children.Add(mark);
+            row.Children.Add(label);
+            radio.Content = row;
+            void MarkLanguage()
+            {
+                bool selected = radio.IsChecked == true;
+                mark.Text = selected ? "✓" : "○";
+                mark.SetResourceReference(TextBlock.ForegroundProperty, selected ? "AccentBrush" : "Muted");
+            }
+            MarkLanguage();
+            radio.Checked += (_, _) => { language = code; MarkLanguage(); };
+            radio.Unchecked += (_, _) => MarkLanguage();
+            pages[0].Children.Add(radio);
+        }
+
+        var selection = Copy("", 13);
+        void AddSources(System.Collections.Generic.IEnumerable<string> paths)
+        {
+            foreach (string path in paths) sources.Add(path);
+            selection.Text = LocalTextExtension.Format("{0:N0} canciones · {1:N0} ubicaciones",
+                library.Tracks.Count, library.Folders.Concat(sources).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            selection.ToolTip = sources.Count == 0 ? null : string.Join(Environment.NewLine, sources.Take(12));
+        }
+        AddSources(Array.Empty<string>());
+        var libraryActions = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var add = IconButton("Añadir música", "\uE710");
+        var addMenu = new ContextMenu { Style = (Style)FindResource("PlayerMenu") };
+        AddImport("Añadir carpetas", () =>
+        {
+            var picker = new Microsoft.Win32.OpenFolderDialog { Multiselect = true, Title = T("Añadir carpetas") };
+            if (picker.ShowDialog(dialog) == true) AddSources(picker.FolderNames);
+        });
+        AddImport("Añadir archivos", () =>
+        {
+            var picker = new Microsoft.Win32.OpenFileDialog { Multiselect = true, Title = T("Añadir archivos"),
+                Filter = T("Archivos de audio") + "|" + LibraryScanner.AudioFilePattern };
+            if (picker.ShowDialog(dialog) == true) AddSources(picker.FileNames);
+        });
+        add.Click += (_, _) =>
+        {
+            addMenu.PlacementTarget = add;
+            addMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            addMenu.IsOpen = true;
+        };
+        libraryActions.Children.Add(add);
+        var nas = IconButton("Conectar NAS", "\uE968", () =>
+        {
+            if (AskNasSource(dialog) is string path) AddSources(new[] { path });
+        });
+        MarkPrimary(add);
+        MarkPrimary(nas);
+        nas.Margin = new Thickness(8, 0, 8, 0);
+        libraryActions.Children.Add(nas);
+        libraryActions.Children.Add(IconButton("Probar demos", null, () => AddSources(new[] { Path.Combine(AppContext.BaseDirectory, "Demo") })));
+        pages[1].Children.Add(libraryActions);
+        pages[1].Children.Add(selection);
+        var recurse = Check("Incluir subcarpetas al escanear", scanSubfolders);
+        var launch = Check("Leer etiquetas al iniciar", scanOnLaunch);
+        pages[1].Children.Add(recurse);
+        pages[1].Children.Add(launch);
+        pages[1].Children.Add(Divider(new Thickness(0, 13, 0, 13)));
+        pages[1].Children.Add(Copy(T("Las etiquetas editadas se guardan en Prisma y se aplican a tu biblioteca."), 13));
+        var edit = IconButton("Editar etiquetas de biblioteca", "\uE70F", () =>
+            EditLibraryTags(Selected ?? library.Tracks.FirstOrDefault(), dialog));
+        edit.IsEnabled = library.Tracks.Count > 0;
+        edit.HorizontalAlignment = HorizontalAlignment.Left;
+        edit.Margin = new Thickness(0, 10, 0, 1);
+        pages[1].Children.Add(edit);
+        var online = Check("Completar desde internet", autoArtwork || autoLyrics);
+        pages[1].Children.Add(online);
+        pages[1].Children.Add(Copy(T("Prisma consulta catálogos de carátulas y letras usando los metadatos de la pista."), 13));
+
+        var profiles = new System.Windows.Controls.Primitives.UniformGrid { Columns = 3, Margin = new Thickness(0, 0, 0, 14) };
+        string[] profileLabels = { "Cristal vivo", "Calma", "Contraste" };
+        string[] profileGlyphs = { "M 5,0 C 5,0 0,6 0,9 A 5,5 0 0 0 10,9 C 10,6 5,0 5,0", "\uE708", "◐" };
+        for (int i = 0; i < profileLabels.Length; i++)
+        {
+            int value = i;
+            var profile = Choice(T(profileLabels[i]), "WelcomeProfiles", selectedProfile == i);
+            var tile = new StackPanel { Margin = new Thickness(0, 6, 0, 6) };
+            FrameworkElement symbol = i == 0 ? new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse(profileGlyphs[i]), StrokeThickness = 1.5,
+                Width = 15, Height = 20, Stretch = Stretch.Uniform
+            } : i == 1 ? Glyph(profileGlyphs[i], 20) : Copy(profileGlyphs[i], 20, false);
+            if (symbol is System.Windows.Shapes.Path path) path.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Ink");
+            symbol.HorizontalAlignment = HorizontalAlignment.Center;
+            tile.Children.Add(symbol);
+            var label = Copy(T(profileLabels[i]), 13, false);
+            label.TextAlignment = TextAlignment.Center;
+            label.Margin = new Thickness(0, 8, 0, 0);
+            tile.Children.Add(label);
+            profile.Content = tile;
+            profile.MinHeight = 76;
+            profile.Checked += (_, _) => { selectedProfile = value; UpdatePalette(); };
+            profiles.Children.Add(profile);
+        }
+        pages[2].Children.Add(profiles);
+        pages[2].Children.Add(Segments("Tema", new[] { "Sistema", "Oscuro", "Claro" }, selectedTheme,
+            index => { selectedTheme = index; UpdatePalette(); }));
+        var accents = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        foreach (var accent in AccentChoices)
+        {
+            var option = new RadioButton
+            {
+                Style = (Style)FindResource("AccentSwatch"), GroupName = "WelcomeAccents",
+                Background = new SolidColorBrush(accent.Color), Foreground = new SolidColorBrush(ColorContrast(accent.Color)),
+                Width = 49, Content = T(accent.Label), IsChecked = selectedAccent == accent.Id, ToolTip = T(accent.Label)
+            };
+            AutomationProperties.SetName(option, T(accent.Label));
+            option.Checked += (_, _) => { accentChanged = true; selectedAccent = accent.Id; UpdatePalette(); };
+            accents.Children.Add(option);
+        }
+        pages[2].Children.Add(accents);
+        var fromCover = Check("Adaptar colores a la carátula", artworkColors);
+        pages[2].Children.Add(fromCover);
+        var transparencyLabel = Copy(T("Transparencia del cristal"), 13, false);
+        transparencyLabel.Margin = new Thickness(0, 10, 0, 8);
+        var transparency = new Slider { Style = (Style)FindResource("TransportSlider"),
+            Minimum = 0, Maximum = 1, Value = surfaceTransparency, Height = 22, IsMoveToPointEnabled = true };
+        AutomationProperties.SetLabeledBy(transparency, transparencyLabel);
+        transparency.ValueChanged += (_, _) => { previewTransparency = transparency.Value; UpdatePalette(); };
+        pages[2].Children.Add(transparencyLabel);
+        pages[2].Children.Add(transparency);
+        var reactToMusic = Check("Fondo que responde al audio", audioBackdrop);
+        var animations = Check("Animaciones de la interfaz", interfaceAnimations);
+        pages[2].Children.Add(reactToMusic);
+        pages[2].Children.Add(animations);
+
+        string[] startupNames = { "Inicio", "Canciones", "Álbumes", "Última sección" };
+        int[] startupValues = { 3, 0, 1, 2 };
+        var startupPicker = new ComboBox
+        {
+            Style = (Style)FindResource("FilterCombo"), ItemsSource = startupNames.Select(T).ToArray(),
+            Width = 198, SelectedIndex = Array.IndexOf(startupValues, startupSection)
+        };
+        startupPicker.SetResourceReference(ForegroundProperty, "Ink");
+        var startupLabel = Copy(T("Pantalla de inicio"), 14, false);
+        startupLabel.VerticalAlignment = VerticalAlignment.Center;
+        startupLabel.Margin = new Thickness(0, 0, 12, 0);
+        AutomationProperties.SetLabeledBy(startupPicker, startupLabel);
+        var startupRow = new WrapPanel { Margin = new Thickness(0, 0, 0, 7) };
+        startupRow.Children.Add(startupLabel);
+        startupRow.Children.Add(startupPicker);
+        pages[3].Children.Add(startupRow);
+        var remember = Check("Recordar canción y posición", rememberPosition);
+        var covers = Check("Buscar carátulas faltantes", autoArtwork);
+        var lyrics = Check("Buscar letras faltantes", autoLyrics);
+        online.Click += (_, _) => covers.IsChecked = lyrics.IsChecked = online.IsChecked == true;
+        covers.Click += (_, _) => online.IsChecked = covers.IsChecked == true || lyrics.IsChecked == true;
+        lyrics.Click += (_, _) => online.IsChecked = covers.IsChecked == true || lyrics.IsChecked == true;
+        pages[3].Children.Add(remember);
+        pages[3].Children.Add(covers);
+        pages[3].Children.Add(lyrics);
+        int readers = parallelTagReads;
+        var readerChoices = Segments("Lecturas simultáneas", TagReaderLabels, Array.IndexOf(TagReaderOptions, readers),
+            index => readers = TagReaderOptions[index]);
+        readerChoices.Margin = new Thickness(0, 10, 0, 8);
+        pages[3].Children.Add(readerChoices);
+        pages[3].Children.Add(Copy(T("Automático ajusta las lecturas a la carpeta. Elige 2, 4 u 8 para fijar un límite."), 13));
+        var note = new Border { CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 18, 0, 0), Padding = new Thickness(16),
+            Child = Copy(T("Puedes volver a esta bienvenida desde Configuración."), 14, false) };
+        note.SetResourceReference(Border.BackgroundProperty, "WelcomeSurface");
+        note.SetResourceReference(Border.BorderBrushProperty, "SettingsStroke");
+        pages[3].Children.Add(note);
+
         dialog.PreviewKeyDown += (_, key) =>
         {
             if (key.Key != System.Windows.Input.Key.Escape) return;
             key.Handled = true;
             dialog.Close();
         };
-        forward.Click += (_, _) =>
+        dialog.SourceInitialized += (_, _) => UpdateWindowCaptionTheme(dialog);
+        navigateStep = ShowStep;
+        ShowStep(0);
+        UpdatePalette();
+        if (smokeTest && Environment.GetEnvironmentVariable("PRISMA_WELCOME_PREVIEW") is string preview)
         {
-            if (currentStep < pages.Length - 1)
+            dialog.ContentRendered += (_, _) =>
             {
-                SetStep(currentStep + 1);
-                return;
-            }
-            if (language.SelectedIndex < 0) return;
-            restartForLanguage = codes[language.SelectedIndex] != LocalTextExtension.Language;
-            if (restartForLanguage)
+                int index = 0;
+                void Capture()
+                {
+                    string suffix = index == 0 ? "" : $"-step-{index + 1}";
+                    string path = Path.Combine(Path.GetDirectoryName(preview)!, Path.GetFileNameWithoutExtension(preview) + suffix + ".png");
+                    var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap((int)root.ActualWidth, (int)root.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                    bitmap.Render(root);
+                    var image = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                    image.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                    using (var stream = File.Create(path)) image.Save(stream);
+                    if (++index == pages.Length) { dialog.Close(); return; }
+                    ShowStep(index);
+                    dialog.Dispatcher.BeginInvoke(Capture, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                }
+                Capture();
+            };
+        }
+        dialog.ShowDialog();
+        if (smokeTest || (!finish && !postpone)) return;
+        if (finish)
+        {
+            if (language != LocalTextExtension.Language)
             {
-                try { LocalTextExtension.SaveLanguage(codes[language.SelectedIndex]); }
+                try { LocalTextExtension.SaveLanguage(language); }
                 catch (Exception error)
                 {
-                    Status.Text = LocalTextExtension.Translate("No se pudo guardar el idioma. ") + error.Message;
-                    restartForLanguage = false;
-                    return;
+                    Status.Text = T("No se pudo guardar el idioma. ") + error.Message;
+                    language = LocalTextExtension.Language;
                 }
             }
-            completed = true;
-            dialog.Close();
-        };
-        SetStep(0);
-        dialog.ShowDialog();
-        if (smokeTest) return;
-        if (!completed) return;
-        ApplyAppearanceProfile(chosenAppearance);
-        if (accentChoices.SelectedIndex >= 0)
-            ApplyAccentPreset(new[] { "artwork", "blue", "violet" }[accentChoices.SelectedIndex]);
-        SaveAudioSettings();
+            scanSubfolders = recurse.IsChecked == true;
+            scanOnLaunch = launch.IsChecked == true;
+            parallelTagReads = readers;
+            rememberPosition = remember.IsChecked == true;
+            autoArtwork = covers.IsChecked == true;
+            autoLyrics = lyrics.IsChecked == true;
+            startupSection = startupPicker.SelectedIndex >= 0 ? startupValues[startupPicker.SelectedIndex] : startupSection;
+            appearanceProfile = selectedProfile;
+            artworkColors = fromCover.IsChecked == true;
+            if (accentChanged || (!artworkColors && accentPreset == "artwork")) accentPreset = selectedAccent;
+            surfaceTransparency = transparency.Value;
+            interfaceAnimations = animations.IsChecked == true;
+            audioBackdrop = reactToMusic.IsChecked == true;
+            ApplyTheme(selectedTheme);
+            SaveAudioSettings();
+        }
         try
         {
             Directory.CreateDirectory(DataDirectory);
             File.WriteAllText(WelcomeFile, "1");
         }
-        catch (Exception error) { System.Diagnostics.Trace.WriteLine(error); }
-        if (!string.IsNullOrEmpty(selectedFolder))
-            await Scan(new[] { selectedFolder }, true);
-        if (restartForLanguage) RestartForLanguage();
-    }
+        catch (Exception error) { Trace.WriteLine(error); }
+        if (finish && sources.Count != 0) await Scan(sources.ToArray(), add: true);
+        if (finish && language != LocalTextExtension.Language) RestartForLanguage();
 
-    private void ApplyAccentPreset(string preset)
-    {
-        accentPreset = NormalizeAccent(preset);
-        artworkColors = accentPreset == "artwork";
-        RefreshArtworkTheme();
-        SaveAudioSettings();
+        TextBlock Copy(string text, double size, bool muted = true)
+        {
+            var block = new TextBlock { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap };
+            block.SetResourceReference(TextBlock.ForegroundProperty, muted ? "Muted" : "Ink");
+            return block;
+        }
+
+        TextBlock Glyph(string glyph, double size = 15) => new()
+        {
+            Text = glyph, FontSize = size, FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        Button IconButton(string label, string glyph, Action action = null, bool iconOnly = false)
+        {
+            var button = new Button { MinHeight = 34, Padding = new Thickness(10, 5, 10, 5) };
+            AutomationProperties.SetName(button, T(label));
+            if (glyph == null) button.Content = T(label);
+            else
+            {
+                var panel = new StackPanel { Orientation = Orientation.Horizontal };
+                panel.Children.Add(Glyph(glyph));
+                if (!iconOnly) panel.Children.Add(new TextBlock { Text = T(label), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+                button.Content = panel;
+            }
+            if (action != null) button.Click += (_, _) => action();
+            return button;
+        }
+
+        void MarkPrimary(Button button)
+        {
+            button.SetResourceReference(BackgroundProperty, "AccentBrush");
+            button.SetResourceReference(ForegroundProperty, "OnAccentBrush");
+        }
+
+        RadioButton Choice(string caption, string group, bool selected)
+        {
+            var button = new RadioButton { Content = caption, GroupName = group, IsChecked = selected,
+                Style = (Style)FindResource("WelcomeChoice"), HorizontalContentAlignment = HorizontalAlignment.Stretch };
+            AutomationProperties.SetName(button, caption);
+            return button;
+        }
+
+        CheckBox Check(string label, bool enabled) => new()
+        {
+            Content = T(label), IsChecked = enabled, Style = (Style)FindResource("WelcomeCheck")
+        };
+
+        Border Divider(Thickness margin)
+        {
+            var rule = new Border { Height = 1, Margin = margin };
+            rule.SetResourceReference(Border.BackgroundProperty, "SettingsStroke");
+            return rule;
+        }
+
+        WrapPanel Segments(string label, string[] options, int selected, Action<int> change)
+        {
+            var row = new WrapPanel();
+            var caption = Copy(T(label), 14, false);
+            caption.VerticalAlignment = VerticalAlignment.Center;
+            caption.Margin = new Thickness(0, 0, 12, 0);
+            row.Children.Add(caption);
+            for (int i = 0; i < options.Length; i++)
+            {
+                int index = i;
+                var option = Choice(T(options[i]), "Welcome-" + label, selected == i);
+                option.Margin = new Thickness(0, 0, 4, 3);
+                option.Padding = new Thickness(10, 5, 10, 5);
+                option.Checked += (_, _) => change(index);
+                row.Children.Add(option);
+            }
+            return row;
+        }
+
+        void AddImport(string name, Action select)
+        {
+            var item = new MenuItem { Header = T(name), Style = (Style)FindResource("PlayerMenuItem") };
+            item.Click += (_, _) => select();
+            addMenu.Items.Add(item);
+        }
+
+        void ShowStep(int index)
+        {
+            step = Math.Clamp(index, 0, pages.Length - 1);
+            stepLabel.Text = $"{step + 1:00}  /  {steps.Length:00}";
+            title.Text = T(steps[step]);
+            description.Text = T(descriptions[step]);
+            pageHost.Content = pages[step];
+            back.Visibility = step == 0 ? Visibility.Hidden : Visibility.Visible;
+            string nextLabel = T(step == pages.Length - 1 ? "Empezar a escuchar" : "Continuar");
+            next.Content = nextLabel;
+            AutomationProperties.SetName(next, nextLabel);
+            for (int i = 0; i < navigation.Length; i++)
+            {
+                bool active = i == step;
+                if (active) navigation[i].SetResourceReference(BackgroundProperty, "ControlFill");
+                else navigation[i].Background = Brushes.Transparent;
+                navigation[i].SetResourceReference(ForegroundProperty, active ? "AccentBrush" : "Muted");
+                if (navigation[i].Content is StackPanel row)
+                    foreach (var label in row.Children.OfType<TextBlock>())
+                        label.SetResourceReference(TextBlock.ForegroundProperty, active ? "AccentBrush" : "Muted");
+                AutomationProperties.SetItemStatus(navigation[i], i == step ? T("Paso actual") : "");
+            }
+            scroll.ScrollToTop();
+            if (animations.IsChecked == true && SystemParameters.ClientAreaAnimation)
+                pageHost.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(.84, 1,
+                    TimeSpan.FromMilliseconds(140)) { FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop });
+        }
+
+        void UpdatePalette()
+        {
+            bool isLight = selectedTheme == 2 || (selectedTheme == 0 && IsWindowsLightTheme());
+            var accent = AccentChoices.First(choice => choice.Id == selectedAccent).Color;
+            var strongAccent = isLight ? Mix(accent, Color.FromRgb(35, 22, 56), .49) : accent;
+            foreach (var (key, dark, light) in ThemeColors)
+                root.Resources[key] = new SolidColorBrush(FromArgb(isLight ? light : dark));
+            root.Resources["AccentBrush"] = new SolidColorBrush(strongAccent);
+            root.Resources["OnAccentBrush"] = new SolidColorBrush(ColorContrast(strongAccent));
+            Color start = isLight ? Color.FromRgb(248, 241, 243) : Color.FromRgb(37, 22, 21);
+            Color end = isLight ? Color.FromRgb(253, 249, 249) : Color.FromRgb(15, 10, 14);
+            if (selectedProfile == 1) start = Mix(start, isLight ? Colors.White : Color.FromRgb(24, 28, 36), .58);
+            if (selectedProfile == 2) start = end = isLight ? Color.FromRgb(247, 247, 249) : Color.FromRgb(24, 24, 28);
+            root.Background = new LinearGradientBrush(Mix(start, accent, selectedProfile == 0 ? .07 : .025), end, 47);
+            byte alpha = (byte)(isLight ? 235 - 85 * previewTransparency : 51 - 25 * previewTransparency);
+            root.Resources["WelcomeSurface"] = new SolidColorBrush(Color.FromArgb(alpha, 255, 255, 255));
+        }
+
+        static Color FromArgb(uint value) =>
+            Color.FromArgb((byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value);
     }
 
     private void RestartForLanguage()

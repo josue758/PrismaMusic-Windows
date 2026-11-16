@@ -43,8 +43,8 @@ public partial class MainWindow
         UpdateListeningPanelWidth();
         Listening.Visibility = listeningPanelHidden ? Visibility.Collapsed : Visibility.Visible;
         string label = T(listeningPanelHidden ? "Mostrar panel de reproducción" : "Plegar panel de reproducción");
-        ListeningPanelButton.ToolTip = label;
-        AutomationProperties.SetName(ListeningPanelButton, label);
+        ListeningPanelMenuItem.Header = label;
+        AutomationProperties.SetName(ListeningPanelMenuItem, label);
         UpdateListeningPanelCommands();
     }
 

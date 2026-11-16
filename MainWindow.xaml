@@ -613,13 +613,14 @@
             <Button x:Name="EqualizerToolbarButton" Content="EQ" FontFamily="Segoe UI" FontSize="11" FontWeight="SemiBold"
                     Style="{StaticResource TransportIcon}" Width="30" Click="OpenEqualizer"
                     AutomationProperties.Name="{local:LocalText Text=Ecualizador}" ToolTip="{local:LocalText Text=Ecualizador}"/>
+            <Button x:Name="AudioOutputButton" Content="&#xE7F5;" Style="{StaticResource TransportIcon}" Width="30"
+                    Click="ShowAudioOutputMenu" AutomationProperties.Name="{local:LocalText Text=Salida de audio}" ToolTip="{local:LocalText Text=Salida de audio}"/>
             <Button x:Name="CastToolbarButton" Content="&#xE7F4;" Style="{StaticResource TransportIcon}" Width="30" Click="CastTrack"
                     AutomationProperties.Name="{local:LocalText Text=Transmitir (Miracast)}" ToolTip="{local:LocalText Text=Transmitir (Miracast)}"/>
             <Button x:Name="PipToolbarButton" Content="&#xE8A7;" Style="{StaticResource TransportIcon}" Width="30" Click="Mini"
                     AutomationProperties.Name="{local:LocalText Text=Modo PiP}" ToolTip="{local:LocalText Text=Modo PiP}"/>
-            <Button x:Name="ListeningPanelButton" Content="&#xE8A1;" Style="{StaticResource TransportIcon}" Width="32" Click="ToggleListeningPanel"
-                    AutomationProperties.Name="{local:LocalText Text=Plegar panel de reproducción}" ToolTip="{local:LocalText Text=Plegar panel de reproducción}"/>
-            <Button x:Name="AudioOutputButton" Content="&#xE7F5;" Style="{StaticResource TransportIcon}" Width="32" Click="ShowAudioOutputMenu" AutomationProperties.Name="{local:LocalText Text=Salida de audio}" ToolTip="{local:LocalText Text=Salida de audio}"/>
+            <Button x:Name="FullscreenToolbarButton" Content="&#xE740;" Style="{StaticResource TransportIcon}" Width="30"
+                    Click="Fullscreen" AutomationProperties.Name="{local:LocalText Text=Sala de escucha}" ToolTip="{local:LocalText Text=Sala de escucha · F11}"/>
             <Button x:Name="ListeningMenuButton" Content="&#xE712;" Style="{StaticResource TransportIcon}" Width="32" Click="ShowListeningMenu" AutomationProperties.Name="{local:LocalText Text=Más opciones}" ToolTip="{local:LocalText Text=Más opciones}">
               <Button.ContextMenu>
                 <ContextMenu Style="{StaticResource PlayerMenu}">
@@ -640,6 +641,9 @@
                     <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE77B;"/></MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
+                  <MenuItem x:Name="ListeningPanelMenuItem" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Plegar panel de reproducción}" Click="ToggleListeningPanel">
+                    <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8A1;"/></MenuItem.Icon>
+                  </MenuItem>
                   <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Modo PiP}" Click="Mini">
                     <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8A7;"/></MenuItem.Icon>
                   </MenuItem>

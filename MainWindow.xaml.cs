@@ -113,7 +113,7 @@ public record Track(string Path, string Name, string Artist, string Album, strin
 public partial class MainWindow : Window
 {
 
-	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0, bool CompactRows = false, bool ShowTrackQuality = true, bool MiniAlwaysOnTop = true, bool FollowLyrics = true, int AlbumSize = 1, bool AutoArtwork = true, bool AutoLyrics = false, bool KeepAwake = false, int StartupSection = 0, double EqPreamp = 0, bool EqAutoHeadroom = true, bool InterfaceAnimations = true, bool PointerEffects = true, bool UndoNotices = true, bool AudioBackdrop = true, bool ArtworkMotion = true, int Theme = 1, double SurfaceTransparency = 1, double AmbientLight = 1);
+	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0, bool CompactRows = false, bool ShowTrackQuality = true, bool MiniAlwaysOnTop = true, bool FollowLyrics = true, int AlbumSize = 1, bool AutoArtwork = true, bool AutoLyrics = false, bool KeepAwake = false, int StartupSection = 0, double EqPreamp = 0, bool EqAutoHeadroom = true, bool InterfaceAnimations = true, bool PointerEffects = true, bool UndoNotices = true, bool AudioBackdrop = true, bool ArtworkMotion = true, int Theme = 1, double SurfaceTransparency = 1, double AmbientLight = 1, bool ScanSubfolders = true, bool ScanOnLaunch = false, int ParallelTagReads = 0);
 
 	private enum RepeatMode
 	{
@@ -407,7 +407,9 @@ public partial class MainWindow : Window
 			}
 			else
 			{
+				bool rescanOnLaunch = scanOnLaunch && library.Folders.Count != 0;
 				ShowWelcomeOnFirstRun();
+				if (rescanOnLaunch) await Scan(library.Folders.ToArray(), add: false);
 			}
 		};
 	}
@@ -948,9 +950,13 @@ public partial class MainWindow : Window
 			if (!details.Audio.Any(row => row.Label == "Frecuencia" && row.Value.EndsWith(" Hz")))
 				throw new InvalidOperationException("File details did not expose the sample rate.");
 			var listeningMenu = ListeningMenuButton.ContextMenu;
+			var playbackTools = (StackPanel)EqualizerToolbarButton.Parent;
+			var expectedTools = new[] { EqualizerToolbarButton, AudioOutputButton, CastToolbarButton, PipToolbarButton, FullscreenToolbarButton };
+			if (!playbackTools.Children.OfType<System.Windows.Controls.Button>().Take(expectedTools.Length).SequenceEqual(expectedTools))
+				throw new InvalidOperationException("Playback toolbar actions are out of order.");
 			listeningMenu.StaysOpen = true;
 			ShowListeningMenu(ListeningMenuButton, new RoutedEventArgs());
-			if (!listeningMenu.IsOpen || listeningMenu.Items.OfType<MenuItem>().Count() != 11)
+			if (!listeningMenu.IsOpen || listeningMenu.Items.OfType<MenuItem>().Count() != 12)
 				throw new InvalidOperationException("Listening menu did not expose all commands.");
 			CaptureDesignPreview(listeningMenu, "PRISMA_LISTENING_MENU_PREVIEW");
 			listeningMenu.IsOpen = false;
@@ -1402,15 +1408,21 @@ public partial class MainWindow : Window
 
 	private async void ConnectNas(object sender, RoutedEventArgs args)
 	{
-		if (scanning)
+		if (scanning || AskNasSource(this) is not string source) return;
+		await Scan(new[] { source }, add: true);
+		if (library.Folders.Contains(source, StringComparer.OrdinalIgnoreCase))
 		{
-			return;
+			RestoreLibraryFilters(new LibraryFilters("", null, null, null, 0));
+			ShowLibrarySource(source);
 		}
+	}
 
+	private string AskNasSource(Window owner)
+	{
 		Window dialog = new Window
 		{
 			Title = LocalTextExtension.Translate("Conectar NAS"),
-			Owner = this,
+			Owner = owner,
 			WindowStartupLocation = WindowStartupLocation.CenterOwner,
 			Width = 500,
 			SizeToContent = SizeToContent.Height,
@@ -1536,16 +1548,7 @@ public partial class MainWindow : Window
 				dialog.SetResourceReference(BackgroundProperty, "SettingsBackground");
 		dialog.Content = content;
 
-		if (dialog.ShowDialog() == true)
-		{
-			string source = pathInput.Text;
-			await Scan(new[] { source }, add: true);
-			if (library.Folders.Contains(source, StringComparer.OrdinalIgnoreCase))
-			{
-				RestoreLibraryFilters(new LibraryFilters("", null, null, null, 0));
-				ShowLibrarySource(source);
-			}
-		}
+		return dialog.ShowDialog() == true ? pathInput.Text : null;
 	}
 
 	private void RefreshLibrarySources()
@@ -1654,7 +1657,8 @@ public partial class MainWindow : Window
 	{
 		try
 		{
-			Process.Start(new ProcessStartInfo("explorer.exe", path) { UseShellExecute = true });
+			string location = System.IO.File.Exists(path) ? $"/select,\"{path}\"" : $"\"{path}\"";
+			Process.Start(new ProcessStartInfo("explorer.exe", location) { UseShellExecute = true });
 		}
 		catch (Exception ex)
 		{
@@ -1752,8 +1756,9 @@ public partial class MainWindow : Window
 		ScanProgressPanel.Visibility = Visibility.Visible;
 		ScanProgressText.Text = LocalTextExtension.Translate("Preparando el escaneo…");
 		Status.Text = "";
-		Dictionary<string, Track> indexed = library.Tracks.ToDictionary((Track t) => t.Path, StringComparer.OrdinalIgnoreCase);
-		Dictionary<string, Track> originalTracks = new Dictionary<string, Track>(indexed, StringComparer.OrdinalIgnoreCase);
+		bool recurse = scanSubfolders;
+		int readers = parallelTagReads;
+		Track[] tracksBeforeScan = library.Tracks.ToArray();
 		List<string> errors = new List<string>();
 		List<string> addedFolders = new List<string>();
 		int filesProcessed = 0;
@@ -1761,6 +1766,11 @@ public partial class MainWindow : Window
 		int reusedTracks = 0;
 		try
 		{
+			var (originalTracks, indexed) = await Task.Run(() =>
+			{
+				var original = tracksBeforeScan.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
+				return (original, new Dictionary<string, Track>(original, StringComparer.OrdinalIgnoreCase));
+			}, token);
 			foreach (string requestedFolder in folders)
 			{
 				token.ThrowIfCancellationRequested();
@@ -1785,7 +1795,8 @@ public partial class MainWindow : Window
 						ScanProgressText.Text = LocalTextExtension.Format("{0:N0} revisados · {1:N0} ya indexados · {2:N0} errores\n{3}",
 							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item);
 					});
-					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks), token);
+					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
+						includeSubfolders: recurse, parallelReads: readers), token);
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
 					errorsProcessed += tuple.Item2;
 					foreach (Track item in tuple.Item1)
@@ -1797,7 +1808,9 @@ public partial class MainWindow : Window
 					{
 						HashSet<string> seen = tuple.Item1.Select((Track t) => t.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
 						string prefix = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
-						string[] array = indexed.Keys.Where((string path) => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && !seen.Contains(path)).ToArray();
+						string[] array = indexed.Keys.Where(path => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+							&& (recurse || string.Equals(Path.GetDirectoryName(path), Path.TrimEndingDirectorySeparator(folder), StringComparison.OrdinalIgnoreCase))
+							&& !seen.Contains(path)).ToArray();
 						foreach (string key in array)
 						{
 							indexed.Remove(key);
@@ -2758,6 +2771,9 @@ public partial class MainWindow : Window
 			miniAlwaysOnTop = audioSettings.MiniAlwaysOnTop;
 			followLyrics = audioSettings.FollowLyrics;
 			albumSize = Math.Clamp(audioSettings.AlbumSize, 0, 2);
+			scanSubfolders = audioSettings.ScanSubfolders;
+			scanOnLaunch = audioSettings.ScanOnLaunch;
+			parallelTagReads = audioSettings.ParallelTagReads is 2 or 4 or 8 ? audioSettings.ParallelTagReads : 0;
 			autoArtwork = audioSettings.AutoArtwork;
 			autoLyrics = audioSettings.AutoLyrics;
 			keepAwake = audioSettings.KeepAwake;
@@ -2821,7 +2837,7 @@ public partial class MainWindow : Window
 		try
 		{
 			Directory.CreateDirectory(DataDirectory);
-			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics, albumSize, autoArtwork, autoLyrics, keepAwake, startupSection, eqPreamp, eqAutoHeadroom, interfaceAnimations, pointerEffects, undoNotices, audioBackdrop, artworkMotion, themePreference, surfaceTransparency, ambientLight)));
+			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics, albumSize, autoArtwork, autoLyrics, keepAwake, startupSection, eqPreamp, eqAutoHeadroom, interfaceAnimations, pointerEffects, undoNotices, audioBackdrop, artworkMotion, themePreference, surfaceTransparency, ambientLight, scanSubfolders, scanOnLaunch, parallelTagReads)));
 			System.IO.File.Move(AudioSettingsFile + ".tmp", AudioSettingsFile, overwrite: true);
 			return true;
 		}

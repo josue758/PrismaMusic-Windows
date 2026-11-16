@@ -53,6 +53,25 @@ public sealed class LibraryScannerTests : IDisposable
     }
 
     [Fact]
+    public void ScansSingleFilesAndHonorsNonRecursiveMode()
+    {
+        string subfolder = Path.Combine(directory, "Album");
+        Directory.CreateDirectory(subfolder);
+        string first = Path.Combine(directory, "first.wav");
+        string second = Path.Combine(subfolder, "second.wav");
+        foreach (string path in new[] { first, second })
+        {
+            var format = new WaveFormat(44100, 16, 2);
+            using var writer = new WaveFileWriter(path, format);
+            var silence = new byte[format.AverageBytesPerSecond];
+            writer.Write(silence, 0, silence.Length);
+        }
+        Assert.Equal(first, Assert.Single(LibraryScanner.ReadFolder(directory, includeSubfolders: false, parallelReads: 2).Tracks).Path);
+        Assert.Equal(2, LibraryScanner.ReadFolder(directory).Tracks.Count);
+        Assert.Equal(second, Assert.Single(LibraryScanner.ReadFolder(second).Tracks).Path);
+    }
+
+    [Fact]
     public void ScannerIgnoresUnsupportedFiles()
     {
         Directory.CreateDirectory(directory);
