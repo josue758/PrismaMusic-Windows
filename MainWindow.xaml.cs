@@ -1809,15 +1809,38 @@ public partial class MainWindow : Window
 							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item)
 							+ $"\n{value.TracksFound:N0} pistas válidas en esta fuente · {value.Skipped:N0} archivos auxiliares omitidos";
 					});
-					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
-						includeSubfolders: recurse, parallelReads: readers, checkpoint: batch => Dispatcher.Invoke(() =>
+					var checkpoints = new System.Collections.Concurrent.ConcurrentQueue<IReadOnlyList<Track>>();
+					void DrainCheckpoints()
+					{
+						if (!ReferenceEquals(scanCancellation, cancellation)) return;
+						bool changed = false;
+						while (checkpoints.TryDequeue(out var batch))
 						{
 							foreach (Track item in batch) indexed[item.Path] = item;
-							library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
-							Save(tracksChanged: true);
-							RefreshFilters();
-							RefreshRows();
-						}), onError: (path, message) => scanFailures.Enqueue($"{path}\t{message}")), token);
+							changed = true;
+						}
+						if (!changed) return;
+						library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
+						Save(tracksChanged: true);
+						RefreshFilters();
+						RefreshRows();
+					}
+					(List<Track>, int) tuple;
+					try
+					{
+						tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
+							includeSubfolders: recurse, parallelReads: readers, checkpoint: batch =>
+							{
+								checkpoints.Enqueue(batch);
+								// Never wait on the UI dispatcher from inside scanner locks.
+								_ = Dispatcher.InvokeAsync(DrainCheckpoints);
+							}, onError: (path, message) => scanFailures.Enqueue($"{path}\t{message}")), token);
+					}
+					finally
+					{
+						// Include every queued batch before reconciling or reporting cancellation.
+						DrainCheckpoints();
+					}
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
 					errorsProcessed += tuple.Item2;
 					foreach (Track item in tuple.Item1)
