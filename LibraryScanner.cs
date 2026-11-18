@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace PrismaMusic;
 
-internal sealed record LibraryScanProgress(string Path, int FilesProcessed, int TracksFound, int Errors, Track CurrentTrack, string Error = null, int Reused = 0);
+internal sealed record LibraryScanProgress(string Path, int FilesProcessed, int TracksFound, int Errors, Track CurrentTrack, string Error = null, int Reused = 0, int Skipped = 0);
 
 internal static class LibraryScanner
 {
@@ -27,6 +27,7 @@ internal static class LibraryScanner
         int errors = 0;
         int processed = 0;
         int reused = 0;
+        int skipped = 0;
         var gate = new object();
         long lastReport = Environment.TickCount64;
         int reportedCount = 0;
@@ -80,7 +81,7 @@ internal static class LibraryScanner
             FlushCheckpoint();
         }
         cancellationToken.ThrowIfCancellationRequested();
-        if (processed != reportedCount && progress != null) Report();
+        if (progress != null) Report();
         tracks.Sort((left, right) => StringComparer.OrdinalIgnoreCase.Compare(left.Path, right.Path));
         return (tracks, errors);
 
@@ -93,6 +94,12 @@ internal static class LibraryScanner
             foreach (var info in files)
             {
                 if (!Extensions.Contains(info.Extension)) continue;
+                // AppleDouble files are macOS resource forks, not audio, even when named .flac or .m4a.
+                if (info.Name.StartsWith("._", StringComparison.Ordinal))
+                {
+                    lock (gate) { skipped++; }
+                    continue;
+                }
                 long length;
                 long stamp;
                 try
@@ -158,7 +165,7 @@ internal static class LibraryScanner
         void Report()
         {
             reportedCount = processed;
-            progress.Report(new LibraryScanProgress(last.Path, processed, tracks.Count, errors, last.Track, last.Error, reused));
+            progress.Report(new LibraryScanProgress(last.Path, processed, tracks.Count, errors, last.Track, last.Error, reused, skipped));
         }
     }
 
@@ -188,12 +195,22 @@ internal static class LibraryScanner
                         reportUnavailableFolder(folder.FullName, error.Message);
                         break;
                     }
-                    if (entries.Current is DirectoryInfo child && includeSubfolders) folders.Push(child);
+                    if (entries.Current is DirectoryInfo child && includeSubfolders &&
+                        !IsMetadataDirectory(child.Name)) folders.Push(child);
                     else if (entries.Current is FileInfo file) yield return file;
                 }
             }
         }
     }
+
+    private static bool IsMetadataDirectory(string name) =>
+        name.Equals("__MACOSX", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals(".AppleDouble", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals(".AppleDB", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals(".AppleDesktop", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals(".Spotlight-V100", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals(".Trashes", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals(".fseventsd", StringComparison.OrdinalIgnoreCase);
 
     private static Track ReadTrack(string path, long length, long stamp)
     {
