@@ -17,10 +17,12 @@ internal static class LibraryScanner
 
     public static (List<Track> Tracks, int Errors) ReadFolder(string folder, CancellationToken cancellationToken = default,
         IProgress<LibraryScanProgress> progress = null, IReadOnlyDictionary<string, Track> cache = null,
-        bool includeSubfolders = true, int parallelReads = 0)
+        bool includeSubfolders = true, int parallelReads = 0,
+        Action<IReadOnlyList<Track>> checkpoint = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var tracks = new List<Track>();
+        var pending = new List<Track>(256);
         int errors = 0;
         int processed = 0;
         int reused = 0;
@@ -46,14 +48,18 @@ internal static class LibraryScanner
             MaxDegreeOfParallelism = workers
         }, entry =>
         {
-            try { Record(entry.Path, ReadTrack(entry.Path, entry.Length, entry.Stamp), null); }
+            Track track;
+            try { track = ReadTrack(entry.Path, entry.Length, entry.Stamp); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
                 or TagLib.CorruptFileException or TagLib.UnsupportedFormatException)
             {
                 Record(entry.Path, null, ex.Message);
+                return;
             }
+            Record(entry.Path, track, null);
         });
         cancellationToken.ThrowIfCancellationRequested();
+        FlushCheckpoint();
         if (processed != reportedCount && progress != null) Report();
         tracks.Sort((left, right) => StringComparer.OrdinalIgnoreCase.Compare(left.Path, right.Path));
         return (tracks, errors);
@@ -95,7 +101,15 @@ internal static class LibraryScanner
         {
             lock (gate)
             {
-                if (track != null) tracks.Add(track);
+                if (track != null)
+                {
+                    tracks.Add(track);
+                    if (!cached && checkpoint != null)
+                    {
+                        pending.Add(track);
+                        if (pending.Count >= 256) FlushCheckpoint();
+                    }
+                }
                 else errors++;
                 if (cached) reused++;
                 processed++;
@@ -106,6 +120,13 @@ internal static class LibraryScanner
                 lastReport = now;
                 Report();
             }
+        }
+
+        void FlushCheckpoint()
+        {
+            if (pending.Count == 0) return;
+            checkpoint?.Invoke(pending.ToArray());
+            pending.Clear();
         }
 
         void Report()
@@ -152,7 +173,7 @@ internal static class LibraryScanner
     {
         using var file = TagLib.File.Create(path);
         var tag = file.Tag;
-        var audio = file.Properties;
+        var audio = file.Properties ?? throw new IOException("No se pudieron leer las propiedades de audio.");
         string name = string.IsNullOrWhiteSpace(tag.Title) ? Path.GetFileNameWithoutExtension(path) : tag.Title;
         return new Track(path, name, tag.FirstPerformer ?? "Artista desconocido",
             tag.Album ?? "Sin álbum", tag.FirstAlbumArtist ?? "", tag.FirstGenre ?? "",
