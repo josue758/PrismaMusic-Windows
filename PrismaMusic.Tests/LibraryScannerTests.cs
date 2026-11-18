@@ -110,6 +110,42 @@ public sealed class LibraryScannerTests : IDisposable
         }
     }
 
+    [Fact]
+    public void SuccessfulScanCheckpointsSurviveCancellationAndReload()
+    {
+        string music = Path.Combine(directory, "Music");
+        Directory.CreateDirectory(music);
+        var format = new WaveFormat(44100, 16, 2);
+        for (int i = 0; i < 260; i++)
+        {
+            using var writer = new WaveFileWriter(Path.Combine(music, $"{i:D4}.wav"), format);
+            var silence = new byte[format.AverageBytesPerSecond];
+            writer.Write(silence, 0, silence.Length);
+        }
+
+        var database = new LibraryDatabase(Path.Combine(directory, "State"));
+        var library = database.Load();
+        library.Folders.Add(music);
+        using var cancellation = new CancellationTokenSource();
+        Assert.Throws<OperationCanceledException>(() => LibraryScanner.ReadFolder(music, cancellation.Token,
+            parallelReads: 1, checkpoint: batch =>
+            {
+                library.Tracks.AddRange(batch);
+                database.Save(library, true);
+                cancellation.Cancel();
+            }));
+
+        var reopened = new LibraryDatabase(Path.Combine(directory, "State")).Load();
+        Assert.Equal(music, Assert.Single(reopened.Folders));
+        Assert.InRange(reopened.Tracks.Count, 256, 260);
+        var cache = reopened.Tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
+        var resumed = LibraryScanner.ReadFolder(music, cache: cache, parallelReads: 1);
+        Assert.Equal(0, resumed.Errors);
+        Assert.Equal(260, resumed.Tracks.Count);
+        Assert.All(resumed.Tracks.Where(track => cache.ContainsKey(track.Path)),
+            track => Assert.Same(cache[track.Path], track));
+    }
+
     [Theory]
     [InlineData("smb://fiberhome/Musica%20FLAC/Album/", @"\\fiberhome\Musica FLAC\Album")]
     [InlineData(@"\\fiberhome\Musica\", @"\\fiberhome\Musica")]
