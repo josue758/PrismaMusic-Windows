@@ -1766,6 +1766,7 @@ public partial class MainWindow : Window
 		int readers = parallelTagReads;
 		Track[] tracksBeforeScan = library.Tracks.ToArray();
 		List<string> errors = new List<string>();
+		var scanFailures = new System.Collections.Concurrent.ConcurrentQueue<string>();
 		List<string> addedFolders = new List<string>();
 		int filesProcessed = 0;
 		int errorsProcessed = 0;
@@ -1805,7 +1806,8 @@ public partial class MainWindow : Window
 							? value.CurrentTrack.Name + " · " + value.CurrentTrack.Artist
 							: Path.GetFileName(value.Path) + " · " + value.Error;
 						ScanProgressText.Text = LocalTextExtension.Format("{0:N0} revisados · {1:N0} ya indexados · {2:N0} errores\n{3}",
-							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item);
+							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item)
+							+ $"\n{value.TracksFound:N0} pistas válidas en esta fuente";
 					});
 					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
 						includeSubfolders: recurse, parallelReads: readers, checkpoint: batch => Dispatcher.Invoke(() =>
@@ -1813,7 +1815,9 @@ public partial class MainWindow : Window
 							foreach (Track item in batch) indexed[item.Path] = item;
 							library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
 							Save(tracksChanged: true);
-						})), token);
+							RefreshFilters();
+							RefreshRows();
+						}), onError: (path, message) => scanFailures.Enqueue($"{path}\t{message}")), token);
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
 					errorsProcessed += tuple.Item2;
 					foreach (Track item in tuple.Item1)
@@ -1845,6 +1849,7 @@ public partial class MainWindow : Window
 				catch (Exception ex2)
 				{
 					errors.Add(ex2.GetBaseException().Message);
+					scanFailures.Enqueue($"{requestedFolder}\t{ex2.GetBaseException().Message}");
 				}
 			}
 			token.ThrowIfCancellationRequested();
@@ -1892,6 +1897,18 @@ public partial class MainWindow : Window
 		}
 		finally
 		{
+			if (!smokeTest)
+			{
+				try
+				{
+					Directory.CreateDirectory(DataDirectory);
+					string report = Path.Combine(DataDirectory, "scan-report.txt");
+					var header = new[] { $"Fecha: {DateTime.Now:O}", $"Pistas en biblioteca: {library.Tracks.Count}", $"Guardado: {(librarySaveFailed ? "ERROR" : "OK")}", $"Errores registrados: {scanFailures.Count}" };
+					File.WriteAllLines(report, header.Concat(scanFailures));
+					if (!scanFailures.IsEmpty) Status.Text += $" · Informe: {report}";
+				}
+				catch (Exception ex) { Status.Text += " · No se pudo escribir el informe: " + ex.Message; }
+			}
 			scanning = false;
 			CancelScanButton.Visibility = Visibility.Collapsed;
 			ScanProgressPanel.Visibility = Visibility.Collapsed;
