@@ -170,6 +170,31 @@ public sealed class LibraryScannerTests : IDisposable
         Assert.False(string.IsNullOrWhiteSpace(failures[0].Message));
     }
 
+    [Fact]
+    public void AppleDoubleSidecarsAreNotAudioErrorsOrDuplicateTracks()
+    {
+        string album = Path.Combine(directory, "Album");
+        Directory.CreateDirectory(album);
+        var format = new WaveFormat(44100, 16, 2);
+        for (int i = 0; i < 12; i++)
+        {
+            string path = Path.Combine(album, $"song-{i}.wav");
+            using (var writer = new WaveFileWriter(path, format))
+                writer.Write(new byte[format.AverageBytesPerSecond], 0, format.AverageBytesPerSecond);
+            File.WriteAllBytes(Path.Combine(album, $"._song-{i}.wav"), new byte[] { 0, 5, 22, 7 });
+        }
+        File.WriteAllBytes(Path.Combine(album, "._example.flac"), new byte[] { 0, 5, 22, 7 });
+        string metadata = Path.Combine(directory, "__MACOSX");
+        Directory.CreateDirectory(metadata);
+        File.WriteAllBytes(Path.Combine(metadata, "metadata.flac"), new byte[64]);
+        var failures = new System.Collections.Generic.List<string>();
+        var result = LibraryScanner.ReadFolder(directory, onError: (path, message) => failures.Add(path));
+        Assert.Equal(12, result.Tracks.Count);
+        Assert.Equal(0, result.Errors);
+        Assert.Empty(failures);
+        Assert.Empty(LibraryScanner.ReadFolder(Path.Combine(album, "._example.flac")).Tracks);
+    }
+
     [Theory]
     [InlineData("smb://fiberhome/Musica%20FLAC/Album/", @"\\fiberhome\Musica FLAC\Album")]
     [InlineData(@"\\fiberhome\Musica\", @"\\fiberhome\Musica")]
