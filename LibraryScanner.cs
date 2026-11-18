@@ -13,6 +13,38 @@ internal static class LibraryScanner
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
         { ".mp3", ".wav", ".flac", ".m4a", ".aac", ".wma", ".aiff", ".aif", ".ogg", ".opus" };
 
+    // A timed-out SMB call can remain blocked inside Windows. Bound outstanding calls
+    // across scans so cancellation cannot create an unlimited number of workers.
+    private static readonly SemaphoreSlim NetworkSlots = new(8, 8);
+    private static readonly TimeSpan NetworkDeadline = TimeSpan.FromSeconds(20);
+
+    internal static T RunNetworkOperation<T>(Func<T> operation, CancellationToken token, TimeSpan? deadline = null)
+    {
+        token.ThrowIfCancellationRequested();
+        if (!NetworkSlots.Wait(0))
+            throw new NetworkScanUnavailableException("Demasiadas operaciones SMB sin respuesta. Reconecta el NAS.");
+        Task<T> work;
+        try
+        {
+            work = Task.Factory.StartNew(() =>
+            {
+                try { return operation(); }
+                finally { NetworkSlots.Release(); }
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+        catch
+        {
+            NetworkSlots.Release();
+            throw;
+        }
+        // Observe faults even if the caller has already timed out or cancelled.
+        _ = work.ContinueWith(t => { _ = t.Exception; }, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return work.WaitAsync(deadline ?? NetworkDeadline, token).GetAwaiter().GetResult();
+    }
+
+    private sealed class NetworkScanUnavailableException(string message) : Exception(message);
+
     internal static string AudioFilePattern { get; } = string.Join(";", System.Linq.Enumerable.Select(Extensions, ext => "*" + ext));
 
     public static (List<Track> Tracks, int Errors) ReadFolder(string folder, CancellationToken cancellationToken = default,
@@ -58,7 +90,13 @@ internal static class LibraryScanner
                     for (int attempt = 0; ; attempt++)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        try { track = ReadTrack(entry.Path, entry.Length, entry.Stamp); break; }
+                        try
+                        {
+                            track = network
+                                ? RunNetworkOperation(() => ReadTrack(entry.Path, entry.Length, entry.Stamp), cancellationToken)
+                                : ReadTrack(entry.Path, entry.Length, entry.Stamp);
+                            break;
+                        }
                         catch (IOException) when (attempt < 2 && network)
                         {
                             if (cancellationToken.WaitHandle.WaitOne(150 * (attempt + 1)))
@@ -67,7 +105,7 @@ internal static class LibraryScanner
                     }
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
-                    or TagLib.CorruptFileException or TagLib.UnsupportedFormatException)
+                    or TagLib.CorruptFileException or TagLib.UnsupportedFormatException or TimeoutException)
                 {
                     Record(entry.Path, null, $"{ex.GetType().Name} (0x{ex.HResult:X8}): {ex.Message}");
                     return;
@@ -87,10 +125,11 @@ internal static class LibraryScanner
 
         IEnumerable<(string Path, long Length, long Stamp)> FilesNeedingTags()
         {
-            IEnumerable<FileInfo> files = Extensions.Contains(Path.GetExtension(folder)) && File.Exists(folder)
+            IEnumerable<FileInfo> files = Extensions.Contains(Path.GetExtension(folder)) &&
+                (network ? RunNetworkOperation(() => File.Exists(folder), cancellationToken) : File.Exists(folder))
                 ? new[] { new FileInfo(folder) }
                 : EnumerateFiles(new DirectoryInfo(folder), options, cancellationToken,
-                    (path, error) => Record(path, null, error), includeSubfolders);
+                    (path, error) => Record(path, null, error), includeSubfolders, network);
             foreach (var info in files)
             {
                 if (!Extensions.Contains(info.Extension)) continue;
@@ -104,10 +143,11 @@ internal static class LibraryScanner
                 long stamp;
                 try
                 {
-                    length = info.Length;
-                    stamp = info.LastWriteTimeUtc.Ticks;
+                    (length, stamp) = network
+                        ? RunNetworkOperation(() => (info.Length, info.LastWriteTimeUtc.Ticks), cancellationToken)
+                        : (info.Length, info.LastWriteTimeUtc.Ticks);
                 }
-                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException or TimeoutException)
                 {
                     Record(info.FullName, null, error.Message);
                     continue;
@@ -170,7 +210,7 @@ internal static class LibraryScanner
     }
 
     private static IEnumerable<FileInfo> EnumerateFiles(DirectoryInfo root, EnumerationOptions options,
-        CancellationToken cancellationToken, Action<string, string> reportUnavailableFolder, bool includeSubfolders)
+        CancellationToken cancellationToken, Action<string, string> reportUnavailableFolder, bool includeSubfolders, bool network)
     {
         var folders = new Stack<DirectoryInfo>();
         folders.Push(root);
@@ -178,8 +218,15 @@ internal static class LibraryScanner
         {
             cancellationToken.ThrowIfCancellationRequested();
             IEnumerator<FileSystemInfo> entries;
-            try { entries = folder.EnumerateFileSystemInfos("*", options).GetEnumerator(); }
-            catch (Exception error) when (folder != root && error is (IOException or UnauthorizedAccessException))
+            try
+            {
+                // Materialize just one directory on SMB so a stalled enumeration has a deadline.
+                entries = network
+                    ? ((IEnumerable<FileSystemInfo>)RunNetworkOperation(
+                        () => folder.GetFileSystemInfos("*", options), cancellationToken)).GetEnumerator()
+                    : folder.EnumerateFileSystemInfos("*", options).GetEnumerator();
+            }
+            catch (Exception error) when (folder != root && error is (IOException or UnauthorizedAccessException or TimeoutException))
             {
                 reportUnavailableFolder(folder.FullName, error.Message);
                 continue;
@@ -190,7 +237,7 @@ internal static class LibraryScanner
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     try { if (!entries.MoveNext()) break; }
-                    catch (Exception error) when (folder != root && error is (IOException or UnauthorizedAccessException))
+                    catch (Exception error) when (folder != root && error is (IOException or UnauthorizedAccessException or TimeoutException))
                     {
                         reportUnavailableFolder(folder.FullName, error.Message);
                         break;
