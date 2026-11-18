@@ -132,7 +132,7 @@ public sealed class LibraryScannerTests : IDisposable
             {
                 library.Tracks.AddRange(batch);
                 database.Save(library, true);
-                cancellation.Cancel();
+                if (library.Tracks.Count >= 256) cancellation.Cancel();
             }));
 
         var reopened = new LibraryDatabase(Path.Combine(directory, "State")).Load();
@@ -144,6 +144,30 @@ public sealed class LibraryScannerTests : IDisposable
         Assert.Equal(260, resumed.Tracks.Count);
         Assert.All(resumed.Tracks.Where(track => cache.ContainsKey(track.Path)),
             track => Assert.Same(cache[track.Path], track));
+    }
+
+    [Fact]
+    public void ScannerReportsCorruptAudioAndIndexesOtherFiles()
+    {
+        Directory.CreateDirectory(directory);
+        string good = Path.Combine(directory, "good.wav");
+        string bad = Path.Combine(directory, "broken.flac");
+        var format = new WaveFormat(44100, 16, 2);
+        using (var writer = new WaveFileWriter(good, format))
+            writer.Write(new byte[format.AverageBytesPerSecond], 0, format.AverageBytesPerSecond);
+        File.WriteAllBytes(bad, new byte[64]);
+
+        var failures = new System.Collections.Generic.List<(string Path, string Message)>();
+        var checkpoints = new System.Collections.Generic.List<Track>();
+        var result = LibraryScanner.ReadFolder(directory, parallelReads: 1,
+            checkpoint: batch => checkpoints.AddRange(batch),
+            onError: (path, message) => failures.Add((path, message)));
+
+        Assert.Equal(good, Assert.Single(result.Tracks).Path);
+        Assert.Equal(good, Assert.Single(checkpoints).Path);
+        Assert.Equal(1, result.Errors);
+        Assert.Equal(bad, Assert.Single(failures).Path);
+        Assert.False(string.IsNullOrWhiteSpace(failures[0].Message));
     }
 
     [Theory]
