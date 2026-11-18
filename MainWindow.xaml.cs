@@ -1779,6 +1779,11 @@ public partial class MainWindow : Window
 					string folder = requestedFolder;
 					if (add && !library.Folders.Contains(requestedFolder, StringComparer.OrdinalIgnoreCase))
 						folder = await Task.Run(() => NetworkMusicSource.Normalize(requestedFolder) ?? requestedFolder, token);
+					if (add && !library.Folders.Contains(folder, StringComparer.OrdinalIgnoreCase))
+					{
+						library.Folders.Add(folder);
+						Save();
+					}
 					ScanProgressText.Text = LocalTextExtension.Format("Escaneando carpeta: {0}", folder);
 					int folderFileOffset = filesProcessed;
 					int folderErrorOffset = errorsProcessed;
@@ -1796,7 +1801,12 @@ public partial class MainWindow : Window
 							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item);
 					});
 					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
-						includeSubfolders: recurse, parallelReads: readers), token);
+						includeSubfolders: recurse, parallelReads: readers, checkpoint: batch => Dispatcher.Invoke(() =>
+						{
+							foreach (Track item in batch) indexed[item.Path] = item;
+							library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
+							Save(tracksChanged: true);
+						})), token);
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
 					errorsProcessed += tuple.Item2;
 					foreach (Track item in tuple.Item1)
@@ -1804,7 +1814,7 @@ public partial class MainWindow : Window
 						if (originalTracks.TryGetValue(item.Path, out var previous) && ReferenceEquals(previous, item)) reusedTracks++;
 						indexed[item.Path] = item;
 					}
-					if (tuple.Item2 == 0)
+					if (tuple.Item2 == 0 && !folder.StartsWith(@"\\", StringComparison.Ordinal))
 					{
 						HashSet<string> seen = tuple.Item1.Select((Track t) => t.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
 						string prefix = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
@@ -1816,7 +1826,7 @@ public partial class MainWindow : Window
 							indexed.Remove(key);
 						}
 					}
-					else
+					else if (tuple.Item2 != 0)
 					{
 						errors.Add($"{tuple.Item2} errores en {folder}");
 					}
@@ -1861,7 +1871,10 @@ public partial class MainWindow : Window
 				Save(tracksChanged);
 				RefreshLibrarySources();
 			}
-			else if (unsavedTracks) Save();
+			else Save();
+			if (unsavedTracks && !smokeTest)
+				Status.Text = "No se guardó la biblioteca. Vuelve a intentar el escaneo.";
+			RefreshLibrarySources();
 			if (tracksChanged)
 			{
 				RefreshFilters();
@@ -1871,6 +1884,9 @@ public partial class MainWindow : Window
 		catch (OperationCanceledException) when (token.IsCancellationRequested)
 		{
 			Status.Text = LocalTextExtension.Translate("Escaneo cancelado. La biblioteca anterior se conservó.");
+			RefreshLibrarySources();
+			RefreshFilters();
+			RefreshRows();
 		}
 		finally
 		{
