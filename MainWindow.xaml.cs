@@ -1807,7 +1807,7 @@ public partial class MainWindow : Window
 							: Path.GetFileName(value.Path) + " · " + value.Error;
 						ScanProgressText.Text = LocalTextExtension.Format("{0:N0} revisados · {1:N0} ya indexados · {2:N0} errores\n{3}",
 							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item)
-							+ $"\n{value.TracksFound:N0} pistas válidas en esta fuente";
+							+ $"\n{value.TracksFound:N0} pistas válidas en esta fuente · {value.Skipped:N0} archivos auxiliares omitidos";
 					});
 					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
 						includeSubfolders: recurse, parallelReads: readers, checkpoint: batch => Dispatcher.Invoke(() =>
