@@ -195,6 +195,35 @@ public sealed class LibraryScannerTests : IDisposable
         Assert.Empty(LibraryScanner.ReadFolder(Path.Combine(album, "._example.flac")).Tracks);
     }
 
+    [Fact]
+    public void NetworkDeadlineDoesNotWaitIndefinitelyForBlockedRead()
+    {
+        var release = new System.Threading.Tasks.TaskCompletionSource<bool>(
+            System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            Assert.Throws<TimeoutException>(() => LibraryScanner.RunNetworkOperation(
+                () => release.Task.GetAwaiter().GetResult(), CancellationToken.None, TimeSpan.FromMilliseconds(100)));
+            Assert.Equal(42, LibraryScanner.RunNetworkOperation(() => 42, CancellationToken.None));
+        }
+        finally { release.TrySetResult(true); }
+    }
+
+    [Fact]
+    public void NetworkDeadlineHonorsScanCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var release = new System.Threading.Tasks.TaskCompletionSource<bool>(
+            System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            cancellation.CancelAfter(100);
+            Assert.ThrowsAny<OperationCanceledException>(() => LibraryScanner.RunNetworkOperation(
+                () => release.Task.GetAwaiter().GetResult(), cancellation.Token));
+        }
+        finally { release.TrySetResult(true); }
+    }
+
     [Theory]
     [InlineData("smb://fiberhome/Musica%20FLAC/Album/", @"\\fiberhome\Musica FLAC\Album")]
     [InlineData(@"\\fiberhome\Musica\", @"\\fiberhome\Musica")]
