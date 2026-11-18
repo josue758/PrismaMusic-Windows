@@ -18,11 +18,12 @@ internal static class LibraryScanner
     public static (List<Track> Tracks, int Errors) ReadFolder(string folder, CancellationToken cancellationToken = default,
         IProgress<LibraryScanProgress> progress = null, IReadOnlyDictionary<string, Track> cache = null,
         bool includeSubfolders = true, int parallelReads = 0,
-        Action<IReadOnlyList<Track>> checkpoint = null)
+        Action<IReadOnlyList<Track>> checkpoint = null, Action<string, string> onError = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var tracks = new List<Track>();
         var pending = new List<Track>(256);
+        long lastCheckpoint = Environment.TickCount64;
         int errors = 0;
         int processed = 0;
         int reused = 0;
@@ -39,9 +40,9 @@ internal static class LibraryScanner
 
         // NAS file opens wait for network I/O. Cache hits stay in the directory enumerator
         // and never consume a worker reserved for reading tags.
-        int workers = parallelReads > 0 ? parallelReads : folder.StartsWith(@"\\", StringComparison.Ordinal)
-            ? Math.Clamp(Environment.ProcessorCount * 2, 4, 12)
-            : Math.Clamp(Environment.ProcessorCount, 1, 4);
+        bool network = folder.StartsWith(@"\\", StringComparison.Ordinal);
+        int workers = network ? Math.Clamp(parallelReads > 0 ? parallelReads : 2, 1, 4)
+            : parallelReads > 0 ? parallelReads : Math.Clamp(Environment.ProcessorCount, 1, 4);
         try
         {
             Parallel.ForEach(FilesNeedingTags(), new ParallelOptions
@@ -51,11 +52,23 @@ internal static class LibraryScanner
             }, entry =>
             {
                 Track track;
-                try { track = ReadTrack(entry.Path, entry.Length, entry.Stamp); }
+                try
+                {
+                    for (int attempt = 0; ; attempt++)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        try { track = ReadTrack(entry.Path, entry.Length, entry.Stamp); break; }
+                        catch (IOException) when (attempt < 2 && network)
+                        {
+                            if (cancellationToken.WaitHandle.WaitOne(150 * (attempt + 1)))
+                                cancellationToken.ThrowIfCancellationRequested();
+                        }
+                    }
+                }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
                     or TagLib.CorruptFileException or TagLib.UnsupportedFormatException)
                 {
-                    Record(entry.Path, null, ex.Message);
+                    Record(entry.Path, null, $"{ex.GetType().Name} (0x{ex.HResult:X8}): {ex.Message}");
                     return;
                 }
                 Record(entry.Path, track, null);
@@ -114,10 +127,15 @@ internal static class LibraryScanner
                     if (!cached && checkpoint != null)
                     {
                         pending.Add(track);
-                        if (pending.Count >= 256) FlushCheckpoint();
+                        if (pending.Count >= 256 || Environment.TickCount64 - lastCheckpoint >= 2000)
+                            FlushCheckpoint();
                     }
                 }
-                else errors++;
+                else
+                {
+                    errors++;
+                    onError?.Invoke(path, error);
+                }
                 if (cached) reused++;
                 processed++;
                 if (progress == null) return;
@@ -134,6 +152,7 @@ internal static class LibraryScanner
             if (pending.Count == 0) return;
             checkpoint?.Invoke(pending.ToArray());
             pending.Clear();
+            lastCheckpoint = Environment.TickCount64;
         }
 
         void Report()
@@ -178,7 +197,7 @@ internal static class LibraryScanner
 
     private static Track ReadTrack(string path, long length, long stamp)
     {
-        using var file = TagLib.File.Create(path);
+        using var file = TagLib.File.Create(new ScanFileAbstraction(path));
         var tag = file.Tag;
         var audio = file.Properties ?? throw new IOException("No se pudieron leer las propiedades de audio.");
         string name = string.IsNullOrWhiteSpace(tag.Title) ? Path.GetFileNameWithoutExtension(path) : tag.Title;
@@ -186,6 +205,15 @@ internal static class LibraryScanner
             tag.Album ?? "Sin álbum", tag.FirstAlbumArtist ?? "", tag.FirstGenre ?? "",
             tag.Year, tag.Disc, tag.Track, (int)audio.Duration.TotalSeconds,
             ReadCodec(audio), audio.AudioSampleRate, audio.BitsPerSample, length, stamp);
+    }
+
+    private sealed class ScanFileAbstraction(string path) : TagLib.File.IFileAbstraction
+    {
+        public string Name => path;
+        public Stream ReadStream => new FileStream(path, FileMode.Open, FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete, 64 * 1024, FileOptions.RandomAccess);
+        public Stream WriteStream => throw new NotSupportedException("El escaneo no modifica archivos de música.");
+        public void CloseStream(Stream stream) => stream.Dispose();
     }
 
     private static string ReadCodec(TagLib.Properties audio)
