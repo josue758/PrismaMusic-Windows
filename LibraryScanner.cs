@@ -42,24 +42,31 @@ internal static class LibraryScanner
         int workers = parallelReads > 0 ? parallelReads : folder.StartsWith(@"\\", StringComparison.Ordinal)
             ? Math.Clamp(Environment.ProcessorCount * 2, 4, 12)
             : Math.Clamp(Environment.ProcessorCount, 1, 4);
-        Parallel.ForEach(FilesNeedingTags(), new ParallelOptions
+        try
         {
-            CancellationToken = cancellationToken,
-            MaxDegreeOfParallelism = workers
-        }, entry =>
-        {
-            Track track;
-            try { track = ReadTrack(entry.Path, entry.Length, entry.Stamp); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
-                or TagLib.CorruptFileException or TagLib.UnsupportedFormatException)
+            Parallel.ForEach(FilesNeedingTags(), new ParallelOptions
             {
-                Record(entry.Path, null, ex.Message);
-                return;
-            }
-            Record(entry.Path, track, null);
-        });
+                CancellationToken = cancellationToken,
+                MaxDegreeOfParallelism = workers
+            }, entry =>
+            {
+                Track track;
+                try { track = ReadTrack(entry.Path, entry.Length, entry.Stamp); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                    or TagLib.CorruptFileException or TagLib.UnsupportedFormatException)
+                {
+                    Record(entry.Path, null, ex.Message);
+                    return;
+                }
+                Record(entry.Path, track, null);
+            });
+        }
+        finally
+        {
+            // Parallel.ForEach has joined all readers before this flush.
+            FlushCheckpoint();
+        }
         cancellationToken.ThrowIfCancellationRequested();
-        FlushCheckpoint();
         if (processed != reportedCount && progress != null) Report();
         tracks.Sort((left, right) => StringComparer.OrdinalIgnoreCase.Compare(left.Path, right.Path));
         return (tracks, errors);
