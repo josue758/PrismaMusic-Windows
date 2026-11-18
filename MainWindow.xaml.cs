@@ -138,6 +138,7 @@ public partial class MainWindow : Window
 	private LibraryDatabase database;
 
 	private bool unsavedTracks;
+	private bool librarySaveFailed;
 
 	private CancellationTokenSource scanCancellation;
 
@@ -330,6 +331,7 @@ public partial class MainWindow : Window
 			CancelPendingOpen();
 			if (!smokeTest)
 			{
+				if (database != null && (unsavedTracks || librarySaveFailed)) Save();
 				SaveSession();
 				SaveAudioSettings();
 			}
@@ -1376,14 +1378,18 @@ public partial class MainWindow : Window
 		try
 		{
 			unsavedTracks |= tracksChanged;
+			if (database == null && !smokeTest)
+				throw new InvalidOperationException("La base de datos no está disponible.");
 			if (database != null)
 			{
 				database.Save(library, unsavedTracks);
 				unsavedTracks = false;
+				librarySaveFailed = false;
 			}
 		}
 		catch (Exception ex)
 		{
+			librarySaveFailed = true;
 			Status.Text = LocalTextExtension.Translate("No se guardó la biblioteca. ") + ex.Message;
 		}
 	}
@@ -1760,6 +1766,7 @@ public partial class MainWindow : Window
 		int readers = parallelTagReads;
 		Track[] tracksBeforeScan = library.Tracks.ToArray();
 		List<string> errors = new List<string>();
+		var scanFailures = new System.Collections.Concurrent.ConcurrentQueue<string>();
 		List<string> addedFolders = new List<string>();
 		int filesProcessed = 0;
 		int errorsProcessed = 0;
@@ -1779,6 +1786,12 @@ public partial class MainWindow : Window
 					string folder = requestedFolder;
 					if (add && !library.Folders.Contains(requestedFolder, StringComparer.OrdinalIgnoreCase))
 						folder = await Task.Run(() => NetworkMusicSource.Normalize(requestedFolder) ?? requestedFolder, token);
+					if (add && !library.Folders.Contains(folder, StringComparer.OrdinalIgnoreCase))
+					{
+						library.Folders.Add(folder);
+						addedFolders.Add(folder);
+						Save();
+					}
 					ScanProgressText.Text = LocalTextExtension.Format("Escaneando carpeta: {0}", folder);
 					int folderFileOffset = filesProcessed;
 					int folderErrorOffset = errorsProcessed;
@@ -1793,10 +1806,41 @@ public partial class MainWindow : Window
 							? value.CurrentTrack.Name + " · " + value.CurrentTrack.Artist
 							: Path.GetFileName(value.Path) + " · " + value.Error;
 						ScanProgressText.Text = LocalTextExtension.Format("{0:N0} revisados · {1:N0} ya indexados · {2:N0} errores\n{3}",
-							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item);
+							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item)
+							+ $"\n{value.TracksFound:N0} pistas válidas en esta fuente · {value.Skipped:N0} archivos auxiliares omitidos";
 					});
-					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
-						includeSubfolders: recurse, parallelReads: readers), token);
+					var checkpoints = new System.Collections.Concurrent.ConcurrentQueue<IReadOnlyList<Track>>();
+					void DrainCheckpoints()
+					{
+						if (!ReferenceEquals(scanCancellation, cancellation)) return;
+						bool changed = false;
+						while (checkpoints.TryDequeue(out var batch))
+						{
+							foreach (Track item in batch) indexed[item.Path] = item;
+							changed = true;
+						}
+						if (!changed) return;
+						library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
+						Save(tracksChanged: true);
+						RefreshFilters();
+						RefreshRows();
+					}
+					(List<Track>, int) tuple;
+					try
+					{
+						tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
+							includeSubfolders: recurse, parallelReads: readers, checkpoint: batch =>
+							{
+								checkpoints.Enqueue(batch);
+								// Never wait on the UI dispatcher from inside scanner locks.
+								_ = Dispatcher.InvokeAsync(DrainCheckpoints);
+							}, onError: (path, message) => scanFailures.Enqueue($"{path}\t{message}")), token);
+					}
+					finally
+					{
+						// Include every queued batch before reconciling or reporting cancellation.
+						DrainCheckpoints();
+					}
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
 					errorsProcessed += tuple.Item2;
 					foreach (Track item in tuple.Item1)
@@ -1804,7 +1848,7 @@ public partial class MainWindow : Window
 						if (originalTracks.TryGetValue(item.Path, out var previous) && ReferenceEquals(previous, item)) reusedTracks++;
 						indexed[item.Path] = item;
 					}
-					if (tuple.Item2 == 0)
+					if (tuple.Item2 == 0 && !folder.StartsWith(@"\\", StringComparison.Ordinal))
 					{
 						HashSet<string> seen = tuple.Item1.Select((Track t) => t.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
 						string prefix = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
@@ -1816,14 +1860,9 @@ public partial class MainWindow : Window
 							indexed.Remove(key);
 						}
 					}
-					else
+					else if (tuple.Item2 != 0)
 					{
 						errors.Add($"{tuple.Item2} errores en {folder}");
-					}
-					if (add && !library.Folders.Contains(folder, StringComparer.OrdinalIgnoreCase) &&
-						!addedFolders.Contains(folder, StringComparer.OrdinalIgnoreCase))
-					{
-						addedFolders.Add(folder);
 					}
 				}
 				catch (OperationCanceledException) when (token.IsCancellationRequested)
@@ -1833,6 +1872,7 @@ public partial class MainWindow : Window
 				catch (Exception ex2)
 				{
 					errors.Add(ex2.GetBaseException().Message);
+					scanFailures.Enqueue($"{requestedFolder}\t{ex2.GetBaseException().Message}");
 				}
 			}
 			token.ThrowIfCancellationRequested();
@@ -1857,12 +1897,14 @@ public partial class MainWindow : Window
 				: LocalTextExtension.Format("Escaneo parcial: {0:N0} pistas nuevas, {1:N0} etiquetas actualizadas. {2}", newTracks, updatedTracks, errors[0]);
 			if (tracksChanged || addedFolders.Count != 0)
 			{
-				library.Folders.AddRange(addedFolders);
 				Save(tracksChanged);
 				RefreshLibrarySources();
 			}
-			else if (unsavedTracks) Save();
-			if (tracksChanged)
+			else Save();
+			if (librarySaveFailed && !smokeTest)
+				Status.Text = "No se guardó la biblioteca. Vuelve a intentar el escaneo.";
+			RefreshLibrarySources();
+			if (tracksChanged || addedFolders.Count != 0)
 			{
 				RefreshFilters();
 				RefreshRows();
@@ -1870,10 +1912,26 @@ public partial class MainWindow : Window
 		}
 		catch (OperationCanceledException) when (token.IsCancellationRequested)
 		{
-			Status.Text = LocalTextExtension.Translate("Escaneo cancelado. La biblioteca anterior se conservó.");
+			Save();
+			if (!librarySaveFailed) Status.Text = LocalTextExtension.Translate("Escaneo cancelado. La biblioteca anterior se conservó.");
+			RefreshLibrarySources();
+			RefreshFilters();
+			RefreshRows();
 		}
 		finally
 		{
+			if (!smokeTest)
+			{
+				try
+				{
+					Directory.CreateDirectory(DataDirectory);
+					string report = Path.Combine(DataDirectory, "scan-report.txt");
+					var header = new[] { $"Fecha: {DateTime.Now:O}", $"Pistas en biblioteca: {library.Tracks.Count}", $"Guardado: {(librarySaveFailed ? "ERROR" : "OK")}", $"Errores registrados: {scanFailures.Count}" };
+					System.IO.File.WriteAllLines(report, header.Concat(scanFailures));
+					if (!scanFailures.IsEmpty) Status.Text += $" · Informe: {report}";
+				}
+				catch (Exception ex) { Status.Text += " · No se pudo escribir el informe: " + ex.Message; }
+			}
 			scanning = false;
 			CancelScanButton.Visibility = Visibility.Collapsed;
 			ScanProgressPanel.Visibility = Visibility.Collapsed;

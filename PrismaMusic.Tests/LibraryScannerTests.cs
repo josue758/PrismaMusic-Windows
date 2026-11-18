@@ -110,6 +110,120 @@ public sealed class LibraryScannerTests : IDisposable
         }
     }
 
+    [Fact]
+    public void SuccessfulScanCheckpointsSurviveCancellationAndReload()
+    {
+        string music = Path.Combine(directory, "Music");
+        Directory.CreateDirectory(music);
+        var format = new WaveFormat(44100, 16, 2);
+        for (int i = 0; i < 260; i++)
+        {
+            using var writer = new WaveFileWriter(Path.Combine(music, $"{i:D4}.wav"), format);
+            var silence = new byte[format.AverageBytesPerSecond];
+            writer.Write(silence, 0, silence.Length);
+        }
+
+        var database = new LibraryDatabase(Path.Combine(directory, "State"));
+        var library = database.Load();
+        library.Folders.Add(music);
+        using var cancellation = new CancellationTokenSource();
+        Assert.Throws<OperationCanceledException>(() => LibraryScanner.ReadFolder(music, cancellation.Token,
+            parallelReads: 1, checkpoint: batch =>
+            {
+                library.Tracks.AddRange(batch);
+                database.Save(library, true);
+                if (library.Tracks.Count >= 256) cancellation.Cancel();
+            }));
+
+        var reopened = new LibraryDatabase(Path.Combine(directory, "State")).Load();
+        Assert.Equal(music, Assert.Single(reopened.Folders));
+        Assert.InRange(reopened.Tracks.Count, 256, 260);
+        var cache = reopened.Tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
+        var resumed = LibraryScanner.ReadFolder(music, cache: cache, parallelReads: 1);
+        Assert.Equal(0, resumed.Errors);
+        Assert.Equal(260, resumed.Tracks.Count);
+        Assert.All(resumed.Tracks.Where(track => cache.ContainsKey(track.Path)),
+            track => Assert.Same(cache[track.Path], track));
+    }
+
+    [Fact]
+    public void ScannerReportsCorruptAudioAndIndexesOtherFiles()
+    {
+        Directory.CreateDirectory(directory);
+        string good = Path.Combine(directory, "good.wav");
+        string bad = Path.Combine(directory, "broken.flac");
+        var format = new WaveFormat(44100, 16, 2);
+        using (var writer = new WaveFileWriter(good, format))
+            writer.Write(new byte[format.AverageBytesPerSecond], 0, format.AverageBytesPerSecond);
+        File.WriteAllBytes(bad, new byte[64]);
+
+        var failures = new System.Collections.Generic.List<(string Path, string Message)>();
+        var checkpoints = new System.Collections.Generic.List<Track>();
+        var result = LibraryScanner.ReadFolder(directory, parallelReads: 1,
+            checkpoint: batch => checkpoints.AddRange(batch),
+            onError: (path, message) => failures.Add((path, message)));
+
+        Assert.Equal(good, Assert.Single(result.Tracks).Path);
+        Assert.Equal(good, Assert.Single(checkpoints).Path);
+        Assert.Equal(1, result.Errors);
+        Assert.Equal(bad, Assert.Single(failures).Path);
+        Assert.False(string.IsNullOrWhiteSpace(failures[0].Message));
+    }
+
+    [Fact]
+    public void AppleDoubleSidecarsAreNotAudioErrorsOrDuplicateTracks()
+    {
+        string album = Path.Combine(directory, "Album");
+        Directory.CreateDirectory(album);
+        var format = new WaveFormat(44100, 16, 2);
+        for (int i = 0; i < 12; i++)
+        {
+            string path = Path.Combine(album, $"song-{i}.wav");
+            using (var writer = new WaveFileWriter(path, format))
+                writer.Write(new byte[format.AverageBytesPerSecond], 0, format.AverageBytesPerSecond);
+            File.WriteAllBytes(Path.Combine(album, $"._song-{i}.wav"), new byte[] { 0, 5, 22, 7 });
+        }
+        File.WriteAllBytes(Path.Combine(album, "._example.flac"), new byte[] { 0, 5, 22, 7 });
+        string metadata = Path.Combine(directory, "__MACOSX");
+        Directory.CreateDirectory(metadata);
+        File.WriteAllBytes(Path.Combine(metadata, "metadata.flac"), new byte[64]);
+        var failures = new System.Collections.Generic.List<string>();
+        var result = LibraryScanner.ReadFolder(directory, onError: (path, message) => failures.Add(path));
+        Assert.Equal(12, result.Tracks.Count);
+        Assert.Equal(0, result.Errors);
+        Assert.Empty(failures);
+        Assert.Empty(LibraryScanner.ReadFolder(Path.Combine(album, "._example.flac")).Tracks);
+    }
+
+    [Fact]
+    public void NetworkDeadlineDoesNotWaitIndefinitelyForBlockedRead()
+    {
+        var release = new System.Threading.Tasks.TaskCompletionSource<bool>(
+            System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            Assert.Throws<TimeoutException>(() => LibraryScanner.RunNetworkOperation(
+                () => release.Task.GetAwaiter().GetResult(), CancellationToken.None, TimeSpan.FromMilliseconds(100)));
+            Assert.Equal(42, LibraryScanner.RunNetworkOperation(() => 42, CancellationToken.None));
+        }
+        finally { release.TrySetResult(true); }
+    }
+
+    [Fact]
+    public void NetworkDeadlineHonorsScanCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var release = new System.Threading.Tasks.TaskCompletionSource<bool>(
+            System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            cancellation.CancelAfter(100);
+            Assert.ThrowsAny<OperationCanceledException>(() => LibraryScanner.RunNetworkOperation(
+                () => release.Task.GetAwaiter().GetResult(), cancellation.Token));
+        }
+        finally { release.TrySetResult(true); }
+    }
+
     [Theory]
     [InlineData("smb://fiberhome/Musica%20FLAC/Album/", @"\\fiberhome\Musica FLAC\Album")]
     [InlineData(@"\\fiberhome\Musica\", @"\\fiberhome\Musica")]
