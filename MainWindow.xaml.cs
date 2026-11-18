@@ -138,6 +138,7 @@ public partial class MainWindow : Window
 	private LibraryDatabase database;
 
 	private bool unsavedTracks;
+	private bool librarySaveFailed;
 
 	private CancellationTokenSource scanCancellation;
 
@@ -330,6 +331,7 @@ public partial class MainWindow : Window
 			CancelPendingOpen();
 			if (!smokeTest)
 			{
+				if (database != null && (unsavedTracks || librarySaveFailed)) Save();
 				SaveSession();
 				SaveAudioSettings();
 			}
@@ -1376,14 +1378,18 @@ public partial class MainWindow : Window
 		try
 		{
 			unsavedTracks |= tracksChanged;
+			if (database == null && !smokeTest)
+				throw new InvalidOperationException("La base de datos no está disponible.");
 			if (database != null)
 			{
 				database.Save(library, unsavedTracks);
 				unsavedTracks = false;
+				librarySaveFailed = false;
 			}
 		}
 		catch (Exception ex)
 		{
+			librarySaveFailed = true;
 			Status.Text = LocalTextExtension.Translate("No se guardó la biblioteca. ") + ex.Message;
 		}
 	}
@@ -1782,6 +1788,7 @@ public partial class MainWindow : Window
 					if (add && !library.Folders.Contains(folder, StringComparer.OrdinalIgnoreCase))
 					{
 						library.Folders.Add(folder);
+						addedFolders.Add(folder);
 						Save();
 					}
 					ScanProgressText.Text = LocalTextExtension.Format("Escaneando carpeta: {0}", folder);
@@ -1830,11 +1837,6 @@ public partial class MainWindow : Window
 					{
 						errors.Add($"{tuple.Item2} errores en {folder}");
 					}
-					if (add && !library.Folders.Contains(folder, StringComparer.OrdinalIgnoreCase) &&
-						!addedFolders.Contains(folder, StringComparer.OrdinalIgnoreCase))
-					{
-						addedFolders.Add(folder);
-					}
 				}
 				catch (OperationCanceledException) when (token.IsCancellationRequested)
 				{
@@ -1867,15 +1869,14 @@ public partial class MainWindow : Window
 				: LocalTextExtension.Format("Escaneo parcial: {0:N0} pistas nuevas, {1:N0} etiquetas actualizadas. {2}", newTracks, updatedTracks, errors[0]);
 			if (tracksChanged || addedFolders.Count != 0)
 			{
-				library.Folders.AddRange(addedFolders);
 				Save(tracksChanged);
 				RefreshLibrarySources();
 			}
 			else Save();
-			if (unsavedTracks && !smokeTest)
+			if (librarySaveFailed && !smokeTest)
 				Status.Text = "No se guardó la biblioteca. Vuelve a intentar el escaneo.";
 			RefreshLibrarySources();
-			if (tracksChanged)
+			if (tracksChanged || addedFolders.Count != 0)
 			{
 				RefreshFilters();
 				RefreshRows();
@@ -1883,7 +1884,8 @@ public partial class MainWindow : Window
 		}
 		catch (OperationCanceledException) when (token.IsCancellationRequested)
 		{
-			Status.Text = LocalTextExtension.Translate("Escaneo cancelado. La biblioteca anterior se conservó.");
+			Save();
+			if (!librarySaveFailed) Status.Text = LocalTextExtension.Translate("Escaneo cancelado. La biblioteca anterior se conservó.");
 			RefreshLibrarySources();
 			RefreshFilters();
 			RefreshRows();
