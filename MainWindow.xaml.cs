@@ -1904,7 +1904,7 @@ public partial class MainWindow : Window
 					Directory.CreateDirectory(DataDirectory);
 					string report = Path.Combine(DataDirectory, "scan-report.txt");
 					var header = new[] { $"Fecha: {DateTime.Now:O}", $"Pistas en biblioteca: {library.Tracks.Count}", $"Guardado: {(librarySaveFailed ? "ERROR" : "OK")}", $"Errores registrados: {scanFailures.Count}" };
-					File.WriteAllLines(report, header.Concat(scanFailures));
+					System.IO.File.WriteAllLines(report, header.Concat(scanFailures));
 					if (!scanFailures.IsEmpty) Status.Text += $" · Informe: {report}";
 				}
 				catch (Exception ex) { Status.Text += " · No se pudo escribir el informe: " + ex.Message; }
