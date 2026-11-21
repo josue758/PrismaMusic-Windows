@@ -378,6 +378,10 @@ public sealed class LocalTextExtension : MarkupExtension
         ["Contraído"] = ("Collapsed", "Recolhido"),
         ["Expandido"] = ("Expanded", "Expandido"),
         ["Añadir a la cola"] = ("Add to queue", "Adicionar à fila"),
+        ["Reintentar pista"] = ("Retry track", "Tentar novamente"),
+        ["No se pudo abrir «{0}» en el NAS. Comprueba la conexión y vuelve a intentarlo."] =
+            ("Could not open “{0}” on the NAS. Check the connection and try again.",
+             "Não foi possível abrir “{0}” no NAS. Confira a conexão e tente novamente."),
         ["Dispositivo guardado no disponible"] = ("Saved device unavailable", "Dispositivo salvo indisponível"),
         ["Consultando dispositivos…"] = ("Checking devices…", "Consultando dispositivos…"),
         ["Señal de salida"] = ("Output signal", "Sinal de saída"),

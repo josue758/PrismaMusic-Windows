@@ -15,6 +15,30 @@ public partial class MainWindow
     private DispatcherTimer searchDebounce;
     private readonly ConditionalWeakTable<Track, LibraryRow> cachedSongRows = new();
     private static readonly ConditionalWeakTable<Track, string> cachedSearchText = new();
+    private readonly Dictionary<int, Track[]> sortedLibraryTracks = new();
+    private List<Track> indexedLibraryTracks;
+    private int indexedLibraryCount;
+
+    private Track[] OrderedLibraryTracks(int order)
+    {
+        if (!ReferenceEquals(indexedLibraryTracks, library.Tracks) || indexedLibraryCount != library.Tracks.Count)
+        {
+            indexedLibraryTracks = library.Tracks;
+            indexedLibraryCount = indexedLibraryTracks.Count;
+            sortedLibraryTracks.Clear();
+        }
+        if (sortedLibraryTracks.TryGetValue(order, out var existing)) return existing;
+        var comparer = StringComparer.CurrentCultureIgnoreCase;
+        var ordered = order switch
+        {
+            1 => library.Tracks.OrderBy(track => track.Artist, comparer).ThenBy(track => track.Name, comparer),
+            2 => library.Tracks.OrderByDescending(track => track.Year).ThenBy(track => track.Name, comparer),
+            3 => library.Tracks.OrderBy(track => track.Album, comparer).ThenBy(track => track.Disc)
+                .ThenBy(track => track.Number).ThenBy(track => track.Name, comparer),
+            _ => library.Tracks.OrderBy(track => track.Name, comparer)
+        };
+        return sortedLibraryTracks[order] = ordered.ToArray();
+    }
 
     private void AnimateLibraryNavigation()
     {
@@ -55,8 +79,17 @@ public partial class MainWindow
 
     public bool WideLibraryColumns => (bool)GetValue(WideLibraryColumnsProperty);
 
-    private void UpdateWideLibraryColumns() =>
+    private static readonly DependencyPropertyKey ShowAlbumColumnsPropertyKey =
+        DependencyProperty.RegisterReadOnly(nameof(ShowAlbumColumns), typeof(bool), typeof(MainWindow), new PropertyMetadata(false));
+
+    public static readonly DependencyProperty ShowAlbumColumnsProperty = ShowAlbumColumnsPropertyKey.DependencyProperty;
+    public bool ShowAlbumColumns => (bool)GetValue(ShowAlbumColumnsProperty);
+
+    private void UpdateWideLibraryColumns()
+    {
         SetValue(WideLibraryColumnsPropertyKey, Rows.ActualWidth >= 780);
+        SetValue(ShowAlbumColumnsPropertyKey, WideLibraryColumns && (collection == null || !albumPage));
+    }
 
     private IEnumerable<Track> ResolveSavedTracks(IEnumerable<string> paths)
     {

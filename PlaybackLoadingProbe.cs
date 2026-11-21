@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -7,6 +8,26 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
+    private async Task VerifyNetworkRetry(Track localTrack)
+    {
+        var prepare = prepareAudioFile;
+        var previousTrack = current;
+        var networkTrack = localTrack with { Path = @"\\127.0.0.1\PrismaValidation\track.m4a" };
+        try
+        {
+            prepareAudioFile = (_, _) => throw new IOException("Simulated disconnected share.");
+            await OpenTrack(networkTrack, remember: false, position: 1.25, autoplay: false, recordHistory: false);
+            if (playbackRetry?.Track != networkTrack || current != previousTrack || RetryTrackButton.Visibility != Visibility.Visible)
+                throw new InvalidOperationException("A NAS failure did not retain the intended track.");
+            prepareAudioFile = (_, strict) => prepare(localTrack.Path, strict);
+            await ResumeNetworkTrack();
+            if (current != networkTrack || playbackRetry != null || playing || Math.Abs(player.Position.TotalSeconds - 1.25) > .15)
+                throw new InvalidOperationException("NAS retry did not restore the requested position and pause state.");
+            await Play(localTrack, false, 0);
+            Console.WriteLine("NAS retry restored the pending song, position, and pause state.");
+        }
+        finally { prepareAudioFile = prepare; }
+    }
     private async Task VerifyCancelableOpen(Track slow, Track latest)
     {
         var originalPrepare = prepareAudioFile;

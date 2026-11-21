@@ -69,7 +69,7 @@ public sealed class Library
 	public Dictionary<string, LibraryTagEdit> TagEdits { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
-public record LibraryRow(string Name, string Detail, Track[] Tracks, string Footnote = null)
+public record LibraryRow(string Name, string Detail, Track[] Tracks, string Footnote = null, string AlbumPosition = null)
 {
 	public string TileCaption
 	{
@@ -93,6 +93,9 @@ public record LibraryRow(string Name, string Detail, Track[] Tracks, string Foot
 
 	public string FormatLabel => Tracks.Length == 1 ? Tracks[0].FormatLabel : "";
 	public string LibraryFormatLabel => Tracks.Length == 1 ? Tracks[0].LibraryFormatLabel : "";
+	public string AlbumAndYear => Tracks.Length == 1 && AlbumPosition == null
+		? string.Join(" · ", new[] { Tracks[0].Album, Tracks[0].Year > 0 ? Tracks[0].Year.ToString() : null }
+			.Where(value => !string.IsNullOrWhiteSpace(value))) : "";
 }
 
 public record Track(string Path, string Name, string Artist, string Album, string AlbumArtist, string Genre, uint Year, uint Disc, uint Number, int Seconds,
@@ -734,6 +737,13 @@ public partial class MainWindow : Window
 			{
 				throw new InvalidOperationException("Album header did not show its summary.");
 			}
+			var taggedTracks = demo.Tracks.Take(2).Select((item, index) => item with
+				{ Album = libraryRow2.Name, Disc = (uint)(index + 1), Number = (uint)(index + 6) }).ToArray();
+			collection = libraryRow2 with { Tracks = taggedTracks };
+			RefreshRows();
+			if (ShowAlbumColumns || !Rows.Items.OfType<LibraryRow>().Select(item => item.AlbumPosition)
+				.SequenceEqual(new[] { "1.06", "2.07" }))
+				throw new InvalidOperationException("Album rows did not use the disc and track numbers.");
 			string environmentVariable9 = Environment.GetEnvironmentVariable("PRISMA_ALBUM_PREVIEW");
 			if (environmentVariable9 != null)
 			{
@@ -745,6 +755,9 @@ public partial class MainWindow : Window
 				using FileStream stream4 = System.IO.File.Create(environmentVariable9);
 				pngBitmapEncoder4.Save(stream4);
 			}
+			collection = libraryRow2;
+			RefreshRows();
+			Rows.SelectedIndex = 0;
 			BrowseRelatedArtist(this, new RoutedEventArgs());
 			if (collection?.Name != libraryRow.Tracks[0].Artist)
 			{
@@ -930,6 +943,7 @@ public partial class MainWindow : Window
 			}
 			Console.WriteLine("Queue edit, shuffle and paused resume passed.");
 			await VerifyCancelableOpen(demo.Tracks[1], demo.Tracks[2]);
+			await VerifyNetworkRetry(demo.Tracks[2]);
 			player.Speed = 1.0;
 			Volume.Value = 0.0;
 			context = demo.Tracks.ToArray();
@@ -1291,6 +1305,18 @@ public partial class MainWindow : Window
 				UpdateLayout();
 				if (!WideLibraryColumns) throw new InvalidOperationException("Wide library did not reveal album and year columns.");
 				CaptureDesignPreview(Shell, "PRISMA_WIDE_PREVIEW");
+			}
+			if (Environment.GetEnvironmentVariable("PRISMA_COMPACT_SONGS_PREVIEW") != null)
+			{
+				Width = MinWidth;
+				Height = MinHeight;
+				LibrarySectionIndex = 0;
+				RefreshRows();
+				await Task.Delay(180);
+				var compactRows = Rows.Items.OfType<LibraryRow>().ToArray();
+				if (ShowAlbumColumns || compactRows.Length == 0 || !compactRows.Any(item => item.AlbumAndYear.Length > 0))
+					throw new InvalidOperationException("Compact library dropped album metadata.");
+				CaptureDesignPreview(Shell, "PRISMA_COMPACT_SONGS_PREVIEW");
 			}
 			VerifyWindowPlacement();
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
@@ -1927,6 +1953,7 @@ public partial class MainWindow : Window
 	{
 		if (refreshQueue) RefreshSideQueue();
 		galleryExportTracks = null;
+		UpdateWideLibraryColumns();
 		UpdateCollectionHeader();
 		System.Windows.Controls.ListBox rows = Rows;
 		bool flag = collection == null;
@@ -1959,18 +1986,29 @@ public partial class MainWindow : Window
 		}
 		if (collection != null)
 		{
-			Rows.ItemsSource = collection.Tracks.Select((Track track, int index) => new LibraryRow(albumPage ? $"{index + 1:00}  {track.Name}" : track.Name, track.Detail, new Track[1] { track })).ToArray();
+			bool multiDisc = albumPage && collection.Tracks.Any(track => track.Disc > 1);
+			bool hasTrackNumbers = albumPage && collection.Tracks.Any(track => track.Number > 0);
+			Rows.ItemsSource = collection.Tracks.Select((track, index) =>
+			{
+				uint number = track.Number > 0 ? track.Number : (uint)(index + 1);
+				string position = !albumPage ? null : hasTrackNumbers && track.Number == 0 ? "—" :
+					multiDisc && track.Disc > 0 ? $"{track.Disc}.{number:00}" : $"{number:00}";
+				return new LibraryRow(track.Name, track.Detail, new[] { track }, AlbumPosition: position);
+			}).ToArray();
 			UpdateEmptyLibrary();
 			return;
 		}
 		bool losslessView = ReferenceEquals(Navigation.SelectedItem, LosslessNavigation);
+		bool gallery = LibrarySectionIndex is 1 or 2;
+		var orderedTracks = !gallery && (LibrarySectionIndex < 4 || losslessView)
+			? OrderedLibraryTracks(Sort.SelectedIndex) : null;
 		IEnumerable<Track> source = LibrarySectionIndex switch
 		{
-			3 => library.Tracks.Where((Track t) => library.Favorites.Contains(t.Path)), 
+			3 => (orderedTracks ?? library.Tracks.ToArray()).Where(t => library.Favorites.Contains(t.Path)),
 			4 => queue, 
 			5 => ResolveSavedTracks(library.History),
 			6 => ResolveSavedTracks(ActivePlaylist),
-			_ => library.Tracks, 
+			_ => orderedTracks ?? (IEnumerable<Track>)library.Tracks,
 		};
 		if (losslessView) source = source.Where(track => track.IsLossless);
 		if (selectedLibrarySource != null)
@@ -1978,9 +2016,12 @@ public partial class MainWindow : Window
 			source = source.Where(track => IsTrackInSource(track.Path, selectedLibrarySource));
 		}
 		string[] query = Search.Text.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
-		source = source.Where(t => (Genre.SelectedIndex <= 0 || t.Genre.Equals((string)Genre.SelectedItem, StringComparison.CurrentCultureIgnoreCase))
-			&& (Year.SelectedIndex <= 0 || t.Year.ToString() == (string)Year.SelectedItem)
-			&& (ArtistFilter.SelectedIndex <= 0 || string.Equals(t.Artist, ArtistFilter.SelectedItem as string, StringComparison.CurrentCultureIgnoreCase))
+		string genre = Genre.SelectedIndex > 0 ? Genre.SelectedItem as string : null;
+		string artist = ArtistFilter.SelectedIndex > 0 ? ArtistFilter.SelectedItem as string : null;
+		uint? year = Year.SelectedIndex > 0 && uint.TryParse(Year.SelectedItem as string, out uint selectedYear) ? selectedYear : null;
+		source = source.Where(t => (genre == null || string.Equals(t.Genre, genre, StringComparison.CurrentCultureIgnoreCase))
+			&& (!year.HasValue || t.Year == year.Value)
+			&& (artist == null || string.Equals(t.Artist, artist, StringComparison.CurrentCultureIgnoreCase))
 			&& MatchesLibraryQuery(t, query));
 		if (LibrarySectionIndex == 1)
 		{
@@ -2016,20 +2057,6 @@ public partial class MainWindow : Window
 		}
 		else
 		{
-			if (LibrarySectionIndex < 4 || losslessView)
-			{
-				source = Sort.SelectedIndex switch
-				{
-					1 => (IEnumerable<Track>)(from t in source
-						orderby t.Artist, t.Name
-						select t), 
-					2 => from t in source
-						orderby t.Year descending, t.Name
-						select t, 
-					3 => source.OrderBy(t => t.Album).ThenBy(t => t.Disc).ThenBy(t => t.Number).ThenBy(t => t.Name),
-					_ => source.OrderBy((Track t) => t.Name), 
-				};
-			}
 			Rows.ItemsSource = source.Select(t => cachedSongRows.GetValue(t, static track =>
 				new LibraryRow(track.Name, track.Detail, new[] { track }))).ToArray();
 			if (losslessView)
@@ -2350,6 +2377,11 @@ public partial class MainWindow : Window
 		if (pendingTrack != null)
 		{
 			CancelPendingOpen();
+			return;
+		}
+		if (!opened && playbackRetry != null)
+		{
+			RetryNetworkTrack(sender, args);
 			return;
 		}
 		if (current == null)

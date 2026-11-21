@@ -1,6 +1,8 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 using NAudio.Wave;
 
 namespace PrismaMusic;
@@ -12,6 +14,28 @@ public partial class MainWindow
     private Track pendingTrack;
     private Func<string, bool, WaveStream> prepareAudioFile = AudioEngine.Prepare;
     private bool recoveringAudioOutput;
+    private sealed record PlaybackRetry(Track Track, bool Remember, double Position, bool Autoplay, bool RecordHistory);
+    private PlaybackRetry playbackRetry;
+
+    private void UpdatePlaybackRetry(Exception error, PlaybackRetry retry)
+    {
+        bool networkFile = retry.Track.Path.StartsWith(@"\\", StringComparison.Ordinal);
+        if (networkFile && (error is IOException or UnauthorizedAccessException ||
+            (uint)error.HResult is 0x80070035 or 0x80070040 or 0x80070043 or 0x800704CF))
+        {
+            playbackRetry = retry;
+            RetryTrackButton.ToolTip = retry.Track.Name;
+            RetryTrackButton.Visibility = Visibility.Visible;
+            Status.Text = LocalTextExtension.Format("No se pudo abrir «{0}» en el NAS. Comprueba la conexión y vuelve a intentarlo.", retry.Track.Name);
+        }
+        else Status.Text = LocalTextExtension.Translate("Windows no pudo reproducir el archivo. ") + error.Message;
+    }
+
+    private async void RetryNetworkTrack(object sender, RoutedEventArgs args) => await ResumeNetworkTrack();
+
+    private Task ResumeNetworkTrack() => playbackRetry is { } retry
+        ? OpenTrack(retry.Track, retry.Remember, retry.Position, retry.Autoplay, retry.RecordHistory)
+        : Task.CompletedTask;
 
     private async Task HandleAudioFailure(Exception error)
     {
@@ -19,7 +43,9 @@ public partial class MainWindow
         double position = player.Position.TotalSeconds;
         opened = false;
         SetPlaying(false);
-        Status.Text = LocalTextExtension.Translate("Windows no pudo reproducir el archivo. ") + error.Message;
+        if (current != null && pendingOpen == null)
+            UpdatePlaybackRetry(error, new(current, false, position, resume, false));
+        else Status.Text = LocalTextExtension.Translate("Windows no pudo reproducir el archivo. ") + error.Message;
         const int deviceInvalidated = unchecked((int)0x88890004);
         const int resourcesInvalidated = unchecked((int)0x88890026);
         if (error.HResult is not (deviceInvalidated or resourcesInvalidated) || player.StrictDirect ||
@@ -48,6 +74,8 @@ public partial class MainWindow
     private async Task OpenTrack(Track track, bool remember, double position, bool autoplay, bool recordHistory)
     {
         CancelPendingOpen();
+        playbackRetry = null;
+        RetryTrackButton.Visibility = Visibility.Collapsed;
         using var request = new CancellationTokenSource();
         pendingOpen = request;
         pendingTrack = track;
@@ -109,7 +137,7 @@ public partial class MainWindow
         catch (Exception error)
         {
             if (ReferenceEquals(pendingOpen, request))
-                Status.Text = LocalTextExtension.Translate("Windows no pudo reproducir el archivo. ") + error.Message;
+                UpdatePlaybackRetry(error, new(track, remember, position, autoplay, recordHistory));
         }
         finally
         {

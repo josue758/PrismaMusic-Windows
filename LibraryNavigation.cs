@@ -8,7 +8,7 @@ namespace PrismaMusic;
 public partial class MainWindow
 {
     private sealed record LibraryVisit(int Section, string Source, LibraryRow Collection, bool Album,
-        int GalleryPage, int Selection, LibraryFilters Filters);
+        int GalleryPage, LibraryRow Selection, bool GallerySelection, LibraryFilters Filters);
 
     private readonly List<LibraryVisit> libraryHistory = new();
     private bool restoringLibraryVisit;
@@ -18,7 +18,7 @@ public partial class MainWindow
         if (section < 0 || restoringLibraryVisit) return;
         if (libraryHistory.Count == 48) libraryHistory.RemoveAt(0);
         libraryHistory.Add(new LibraryVisit(section, selectedLibrarySource, collection, albumPage, galleryPage,
-            Rows.SelectedIndex, new LibraryFilters(Search.Text, ArtistFilter.SelectedItem as string,
+            Rows.SelectedItem as LibraryRow, Equals(Rows.Tag, "Gallery"), new LibraryFilters(Search.Text, ArtistFilter.SelectedItem as string,
                 Genre.SelectedItem as string, Year.SelectedItem as string, Sort.SelectedIndex)));
         LibraryBackButton.IsEnabled = true;
     }
@@ -41,10 +41,14 @@ public partial class MainWindow
             RestoreLibraryFilters(visit.Filters);
             RefreshLibrarySources();
             UpdateCollectionHeading();
-            if (visit.Selection >= 0 && visit.Selection < Rows.Items.Count)
+            if (visit.Selection is { } selection)
             {
-                Rows.SelectedIndex = visit.Selection;
-                Rows.ScrollIntoView(Rows.SelectedItem);
+                var restored = Rows.Items.OfType<LibraryRow>().FirstOrDefault(row => visit.GallerySelection
+                    ? string.Equals(row.Name, selection.Name, StringComparison.OrdinalIgnoreCase) &&
+                      (visit.Section != 1 || string.Equals(row.Detail, selection.Detail, StringComparison.OrdinalIgnoreCase))
+                    : string.Equals(row.Tracks[0].Path, selection.Tracks[0].Path, StringComparison.OrdinalIgnoreCase));
+                Rows.SelectedItem = restored;
+                if (restored != null) Rows.ScrollIntoView(restored);
             }
             if (Rows.IsVisible) Rows.Focus();
             else Navigation.Focus();

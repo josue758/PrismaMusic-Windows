@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.60.2
+
+- La lista compacta conserva artista, álbum, año y bitrate. La ficha de un álbum muestra los números de disco y pista y reduce las columnas repetidas.
+- La búsqueda de canciones reutiliza el orden de la biblioteca. Volver restaura la selección usando la identidad de la pista o colección.
+- Si falla la apertura de una pista del NAS, se puede reintentar conservando la posición solicitada y el estado de reproducción.
+
 ## 0.60.1
 
 - Identifica ALAC dentro de archivos M4A y lee su resolución, frecuencia, canales y bitrate medio de audio.

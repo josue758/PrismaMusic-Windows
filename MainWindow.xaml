@@ -222,7 +222,11 @@
           <Button Content="↓" Click="MoveQueueDown" AutomationProperties.Name="{local:LocalText Text=Bajar en la cola}" ToolTip="{local:LocalText Text=Bajar en la cola}"/>
           <Button Content="{local:LocalText Text=Quitar}" Click="RemoveFromQueue"/>
         </StackPanel>
-        <TextBlock x:Name="Status" DockPanel.Dock="Bottom" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,9,0,0"/>
+        <StackPanel DockPanel.Dock="Bottom">
+          <TextBlock x:Name="Status" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,9,0,0"/>
+          <Button x:Name="RetryTrackButton" Content="{local:LocalText Text=Reintentar pista}" Click="RetryNetworkTrack"
+                  HorizontalAlignment="Left" Visibility="Collapsed" Margin="0,4,0,0"/>
+        </StackPanel>
         <Border x:Name="ScanProgressPanel" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,8,0,2"
                 Padding="12,10" Background="{DynamicResource SettingsCard}" BorderBrush="{DynamicResource WorkspaceStroke}"
                 CornerRadius="8" BorderThickness="1">
@@ -267,10 +271,21 @@
             <TextBlock DockPanel.Dock="Right" Width="118" Margin="10,0,4,0"
                        Text="{local:LocalText Text=Formato}" FontSize="11" Foreground="{DynamicResource Muted}"
                        Visibility="{DynamicResource TrackQualityVisibility}"/>
-            <TextBlock DockPanel.Dock="Right" Width="48" Margin="8,0" TextAlignment="Right"
-                       Text="{local:LocalText Text=Año}" FontSize="11" Foreground="{DynamicResource Muted}"/>
-            <TextBlock DockPanel.Dock="Right" Width="180" Margin="8,0"
-                       Text="{local:LocalText Text=Álbum}" FontSize="11" Foreground="{DynamicResource Muted}"/>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+              <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                  <Setter Property="Visibility" Value="Collapsed"/>
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding ShowAlbumColumns, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                      <Setter Property="Visibility" Value="Visible"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </StackPanel.Style>
+              <TextBlock Width="180" Margin="8,0" Text="{local:LocalText Text=Álbum}" FontSize="11" Foreground="{DynamicResource Muted}"/>
+              <TextBlock Width="48" Margin="8,0" TextAlignment="Right"
+                         Text="{local:LocalText Text=Año}" FontSize="11" Foreground="{DynamicResource Muted}"/>
+            </StackPanel>
             <TextBlock Text="{local:LocalText Text=Canción}" Margin="54,0,0,0" FontSize="11" Foreground="{DynamicResource Muted}"/>
           </DockPanel>
         </Border>
@@ -314,7 +329,7 @@
               <Setter Property="FontSize" Value="12"/>
               <Setter Property="Visibility" Value="Collapsed"/>
               <Style.Triggers>
-                <DataTrigger Binding="{Binding WideLibraryColumns, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                <DataTrigger Binding="{Binding ShowAlbumColumns, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                   <Setter Property="Visibility" Value="Visible"/>
                 </DataTrigger>
               </Style.Triggers>
@@ -352,6 +367,19 @@
                            ToolTip="{Binding Tracks[0].Album}"/>
                 <StackPanel VerticalAlignment="Center">
                   <DockPanel>
+                    <TextBlock Text="{Binding AlbumPosition}" Foreground="{DynamicResource Muted}"
+                               FontSize="11" VerticalAlignment="Center">
+                      <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                          <Setter Property="Margin" Value="0,0,8,0"/>
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding AlbumPosition}" Value="{x:Null}">
+                              <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </TextBlock.Style>
+                    </TextBlock>
                     <TextBlock Text="&#xE767;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="13" Margin="0,0,7,0"
                                Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"
                                ToolTip="{local:LocalText Text=Reproduciendo ahora}">
@@ -374,13 +402,18 @@
                     </TextBlock>
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
                   </DockPanel>
-                  <TextBlock Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis" FontSize="12" Margin="0,3,0,0">
+                  <TextBlock Text="{Binding Tracks[0].Artist}" Foreground="{DynamicResource Muted}"
+                             TextTrimming="CharacterEllipsis" FontSize="12" Margin="0,3,0,0"/>
+                  <TextBlock Text="{Binding AlbumAndYear}" Foreground="{DynamicResource Muted}" ToolTip="{Binding AlbumAndYear}"
+                             TextTrimming="CharacterEllipsis" FontSize="11" Margin="0,2,0,0">
                     <TextBlock.Style>
                       <Style TargetType="TextBlock">
-                        <Setter Property="Text" Value="{Binding Detail}"/>
                         <Style.Triggers>
                           <DataTrigger Binding="{Binding WideLibraryColumns, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                            <Setter Property="Text" Value="{Binding Tracks[0].Artist}"/>
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                          </DataTrigger>
+                          <DataTrigger Binding="{Binding AlbumAndYear}" Value="">
+                            <Setter Property="Visibility" Value="Collapsed"/>
                           </DataTrigger>
                         </Style.Triggers>
                       </Style>
