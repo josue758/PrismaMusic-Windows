@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Linq;
+using System.Buffers.Binary;
+using System.Text;
 using NAudio.Wave;
 using PrismaMusic;
 using Xunit;
@@ -15,6 +17,62 @@ public sealed class LibraryScannerTests : IDisposable
     public void Dispose()
     {
         if (Directory.Exists(directory)) Directory.Delete(directory, true);
+    }
+
+    [Fact]
+    public void ScansFlacTagsAfterABigEmbeddedPicture()
+    {
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "record.flac");
+        using (var writer = new BinaryWriter(File.Create(path)))
+        {
+            writer.Write("fLaC"u8);
+            WriteBlockHeader(writer, 0, 34);
+            var streamInfo = new byte[34];
+            BinaryPrimitives.WriteUInt64BigEndian(streamInfo.AsSpan(10), (96000UL << 44) | (1UL << 41) |
+                (23UL << 36) | (96000UL * 185));
+            writer.Write(streamInfo);
+
+            const int pictureSize = 2 * 1024 * 1024;
+            WriteBlockHeader(writer, 6, pictureSize);
+            writer.Write(new byte[pictureSize]);
+
+            using var comments = new MemoryStream();
+            using var tags = new BinaryWriter(comments);
+            tags.Write(0); // Vendor length.
+            var fields = new[] { "title=Río", "ALBUM ARTIST=Prisma", "DATE=2004-05-01", "TRACKNUMBER=7/12", "DISCNUMBER=2/3" };
+            tags.Write(fields.Length);
+            foreach (string field in fields)
+            {
+                byte[] value = Encoding.UTF8.GetBytes(field);
+                tags.Write(value.Length);
+                tags.Write(value);
+            }
+            WriteBlockHeader(writer, 128 | 4, (int)comments.Length);
+            writer.Write(comments.ToArray());
+            writer.Write((byte)0xFF);
+        }
+
+        var result = LibraryScanner.ReadFolder(directory);
+        Assert.Equal(0, result.Errors);
+        var track = Assert.Single(result.Tracks);
+        Assert.Equal("Río", track.Name);
+        Assert.Equal("Prisma", track.Artist);
+        Assert.Equal("Prisma", track.AlbumArtist);
+        Assert.Equal(2004u, track.Year);
+        Assert.Equal(7u, track.Number);
+        Assert.Equal(2u, track.Disc);
+        Assert.Equal(96000, track.SampleRate);
+        Assert.Equal(24, track.BitDepth);
+        Assert.Equal(185, track.Seconds);
+
+        static void WriteBlockHeader(BinaryWriter writer, byte type, int size)
+        {
+            writer.Write(type);
+            writer.Write((byte)(size >> 16));
+            writer.Write((byte)(size >> 8));
+            writer.Write((byte)size);
+        }
     }
 
     [Fact]

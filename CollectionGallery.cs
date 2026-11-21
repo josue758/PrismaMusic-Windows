@@ -18,6 +18,7 @@ public partial class MainWindow
     private int galleryPage;
     private IEnumerable<Track> galleryExportTracks;
     private readonly SemaphoreSlim artworkWorkers = new(2);
+    private readonly SemaphoreSlim artistArtworkWorkers = new(2);
     private readonly Dictionary<Track, BitmapImage> trackThumbnails = new();
 
     private void SetGalleryRows(LibraryRow[] rows)
@@ -52,14 +53,28 @@ public partial class MainWindow
     {
         if (sender is not Image image || image.DataContext is not LibraryRow row) return;
         bool artist = LibrarySectionIndex == 2;
-        await artworkWorkers.WaitAsync();
+        var workers = artist ? artistArtworkWorkers : artworkWorkers;
+        await workers.WaitAsync();
         try
         {
             if (!image.IsLoaded || !ReferenceEquals(image.DataContext, row)) return;
             var bitmap = await LoadCollectionArtwork(row, artist, 160);
             if (image.IsLoaded && ReferenceEquals(image.DataContext, row)) image.Source = bitmap;
         }
-        finally { artworkWorkers.Release(); }
+        finally { workers.Release(); }
+    }
+
+    private void GalleryArtworkChanged(object sender, DependencyPropertyChangedEventArgs args)
+    {
+        if (sender is not Image image) return;
+        image.Source = null;
+        if (image.IsLoaded) LoadGalleryCard(image, new RoutedEventArgs());
+    }
+
+    private void RoundGalleryArtwork(object sender, SizeChangedEventArgs args)
+    {
+        if (sender is FrameworkElement artwork)
+            artwork.Clip = new System.Windows.Media.RectangleGeometry(new Rect(args.NewSize), 8, 8);
     }
 
     private void TrackArtworkChanged(object sender, DependencyPropertyChangedEventArgs args)
@@ -97,20 +112,26 @@ public partial class MainWindow
 
     private async Task<BitmapImage> LoadCollectionArtwork(LibraryRow page, bool artist, int size)
     {
-        var bitmap = await Task.Run(() => ReadCollectionImage(page, artist, size));
+        var bitmap = await Task.Run(() => artist ? ReadArtistPortrait(page.Name, size) : ReadCollectionImage(page, false, size));
         if (bitmap != null) return bitmap;
-        if (!autoArtwork || page.Tracks.All(IsDemo)) return null;
         if (artist)
         {
-            try
+            if (autoArtwork && !page.Tracks.All(IsDemo))
             {
-                if (await EnsureArtistPortrait(page.Name))
-                    return await Task.Run(() => ReadCollectionImage(page, artist: true, size));
+                try
+                {
+                    if (await EnsureArtistPortrait(page.Name))
+                    {
+                        bitmap = await Task.Run(() => ReadArtistPortrait(page.Name, size));
+                        if (bitmap != null) return bitmap;
+                    }
+                }
+                catch (Exception error) { System.Diagnostics.Trace.WriteLine($"Online artist portrait lookup failed: {error.Message}"); }
             }
-            catch (Exception error) { System.Diagnostics.Trace.WriteLine($"Online artist portrait lookup failed: {error.Message}"); }
-            return null;
+            return await Task.Run(() => ReadCollectionImage(page, false, size));
         }
 
+        if (!autoArtwork || page.Tracks.All(IsDemo)) return null;
         Track track = page.Tracks.FirstOrDefault();
         if (track == null) return null;
         try
@@ -131,19 +152,7 @@ public partial class MainWindow
 
     private BitmapImage ReadCollectionImage(LibraryRow page, bool artist, int size)
     {
-        if (artist)
-        {
-            try
-            {
-                var path = PortraitPath(page.Name);
-                if (File.Exists(path))
-                {
-                    using var stream = File.OpenRead(path);
-                    return DecodeArtwork(stream, size);
-                }
-            }
-            catch (Exception error) { System.Diagnostics.Trace.WriteLine(error.Message); }
-        }
+        if (artist && ReadArtistPortrait(page.Name, size) is { } portrait) return portrait;
         foreach (var track in page.Tracks.Take(3))
         {
             try
@@ -156,6 +165,22 @@ public partial class MainWindow
             catch (Exception error) { System.Diagnostics.Trace.WriteLine(error.Message); }
         }
         return null;
+    }
+
+    private BitmapImage ReadArtistPortrait(string artist, int size)
+    {
+        try
+        {
+            var path = PortraitPath(artist);
+            if (!File.Exists(path)) return null;
+            using var stream = File.OpenRead(path);
+            return DecodeArtwork(stream, size);
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Trace.WriteLine(error.Message);
+            return null;
+        }
     }
 
     private byte[] ReadArtworkPayload(string path)

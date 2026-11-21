@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -18,39 +20,76 @@ public partial class MainWindow
     private Window artistProfileWindow;
     private static readonly ConcurrentDictionary<string, Lazy<Task<bool>>> AutomaticPortraits =
         new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, long> PortraitRetryAfter =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private static async Task<bool> EnsureArtistPortrait(string artist)
     {
+        if (File.Exists(PortraitPath(artist))) return true;
+        if (PortraitRetryAfter.TryGetValue(artist, out long retry) && retry > Environment.TickCount64) return false;
         Lazy<Task<bool>> request = AutomaticPortraits.GetOrAdd(artist,
             name => new Lazy<Task<bool>>(() => DownloadArtistPortrait(name)));
-        try { return await request.Value; }
-        catch
+        try
         {
-            AutomaticPortraits.TryRemove(artist, out _);
-            throw;
+            if (await request.Value) return true;
+            if (PortraitRetryAfter.Count >= 1024) PortraitRetryAfter.Clear();
+            PortraitRetryAfter[artist] = Environment.TickCount64 + (long)TimeSpan.FromMinutes(30).TotalMilliseconds;
+            return false;
         }
+        finally { AutomaticPortraits.TryRemove(new(artist, request)); }
     }
 
-    private static async Task<bool> DownloadArtistPortrait(string artist)
+    private static async Task<bool> DownloadArtistPortrait(string artist, string destination = null)
     {
-        string destination = PortraitPath(artist);
+        destination ??= PortraitPath(artist);
         if (File.Exists(destination)) return true;
         string language = LocalTextExtension.Language;
-        JsonElement[] pages = await SearchArtist(artist, language);
-        if (pages.Length == 0 && language != "en") pages = await SearchArtist(artist, "en");
-        foreach (JsonElement page in pages)
+        foreach (string edition in new[] { language, "en" }.Distinct())
         {
-            if (!page.TryGetProperty("thumbnail", out JsonElement thumbnail) ||
-                !thumbnail.TryGetProperty("source", out JsonElement source) ||
-                !Uri.TryCreate(source.GetString(), UriKind.Absolute, out Uri image) ||
-                image.Scheme != "https" || image.Host != "upload.wikimedia.org") continue;
-            PortraitCredit attribution = await FindPortraitCredit(page);
-            await SaveArtistPortrait(artist, image);
-            await File.WriteAllTextAsync(destination + ".json", JsonSerializer.Serialize(attribution));
-            return true;
+            var pages = await SearchArtist(artist, edition, portraitOnly: true);
+            foreach (JsonElement page in pages)
+            {
+                if (!MatchesPortraitArtist(page, artist) ||
+                    !page.TryGetProperty("thumbnail", out JsonElement thumbnail) ||
+                    !thumbnail.TryGetProperty("source", out JsonElement source) ||
+                    !Uri.TryCreate(source.GetString(), UriKind.Absolute, out Uri image) ||
+                    !IsWikimediaPortrait(image)) continue;
+                try
+                {
+                    PortraitCredit attribution = await FindPortraitCredit(page);
+                    if (string.IsNullOrWhiteSpace(attribution?.Page) || string.IsNullOrWhiteSpace(attribution.License))
+                        continue;
+                    if (File.Exists(destination)) return true;
+                    await SaveArtistPortrait(artist, image, destination, overwrite: false);
+                    await File.WriteAllTextAsync(destination + ".json", JsonSerializer.Serialize(attribution));
+                    return true;
+                }
+                catch (IOException) when (File.Exists(destination)) { return true; }
+                catch (HttpRequestException error) when (error.StatusCode == System.Net.HttpStatusCode.NotFound)
+                { Trace.WriteLine(error.Message); }
+            }
         }
         return false;
     }
+
+    private static bool IsWikimediaPortrait(Uri image) =>
+        image.Scheme == "https" && image.Host is "upload.wikimedia.org" or "thumb.wikimedia.org";
+
+    private static bool MatchesPortraitArtist(JsonElement page, string artist)
+    {
+        string title = page.GetProperty("title").GetString().Split(" (", 2)[0];
+        if (NormalizeArtistName(title) != NormalizeArtistName(artist)) return false;
+        if (!page.TryGetProperty("extract", out var extract)) return false;
+        string biography = extract.GetString() ?? "";
+        return new[] { "músic", "music", "cantant", "cantor", "cantaut", "singer", "songwriter", "banda", "band",
+            "raper", "rapper", "compositor", "composer", "guitarr", "guitarist", "vocalist", "orquest", "orquestr",
+            "duo", "dúo", "disc jockey", "pianist", "discográf", "record producer" }
+            .Any(term => biography.Contains(term, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string NormalizeArtistName(string name) => string.Concat(name.Normalize(NormalizationForm.FormD)
+        .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark &&
+            char.IsLetterOrDigit(character))).ToUpperInvariant();
 
     private async void ArtistProfile(object sender, RoutedEventArgs args)
     {
@@ -184,7 +223,7 @@ public partial class MainWindow
                     if (page.TryGetProperty("thumbnail", out var thumbnail) &&
                         thumbnail.TryGetProperty("source", out var imageSourceNode) &&
                         Uri.TryCreate(imageSourceNode.GetString(), UriKind.Absolute, out var image) &&
-                        image.Scheme == "https" && image.Host == "upload.wikimedia.org")
+                        IsWikimediaPortrait(image))
                     {
                         BitmapImage bitmap = await LoadArtistImage(image);
                         if (revision != selectionRevision || picker.SelectedIndex != index) return;
@@ -360,7 +399,8 @@ public partial class MainWindow
         return bitmap;
     }
 
-    private static async Task SaveArtistPortrait(string artist, Uri image, string path = null, bool frameOnFace = false)
+    private static async Task SaveArtistPortrait(string artist, Uri image, string path = null, bool frameOnFace = false,
+        bool overwrite = true)
     {
         const int limit = 2 * 1024 * 1024;
         using var request = new HttpRequestMessage(HttpMethod.Get, image);
@@ -389,19 +429,23 @@ public partial class MainWindow
         try
         {
             await File.WriteAllBytesAsync(staging, imageBytes);
-            File.Move(staging, path, true);
+            File.Move(staging, path, overwrite);
         }
         finally { File.Delete(staging); }
     }
 
-    private static async Task<JsonElement[]> SearchArtist(string artist, string language)
+    private static async Task<JsonElement[]> SearchArtist(string artist, string language, bool portraitOnly = false)
     {
         string qualifier = language switch { "es" => "música", "pt" => "música", _ => "music" };
         string root = $"https://{language}.wikipedia.org/w/api.php?action=query&format=json&formatversion=2" +
             "&prop=extracts%7Cpageimages%7Cinfo&exintro=1&explaintext=1&exlimit=5&exchars=1800" +
-            "&inprop=url&piprop=thumbnail%7Cname&pithumbsize=360";
+            "&inprop=url&piprop=thumbnail%7Cname&pithumbsize=360" + (portraitOnly ? "&pilicense=free" : "");
         var results = await ReadArtistPages(root + "&generator=search&gsrnamespace=0&gsrlimit=5&gsrsearch=" +
             Uri.EscapeDataString(artist + " " + qualifier), artist);
+        if (portraitOnly && results.Any(page => MatchesPortraitArtist(page, artist) && page.TryGetProperty("thumbnail", out _)))
+            return results;
+        if (portraitOnly)
+            return await ReadArtistPages(root + "&redirects=1&titles=" + Uri.EscapeDataString(artist), artist);
         return results.Length > 0 ? results : await ReadArtistPages(root + "&titles=" + Uri.EscapeDataString(artist), artist);
     }
 
@@ -423,7 +467,8 @@ public partial class MainWindow
                     !page.TryGetProperty("title", out var titleNode) ||
                     titleNode.ValueKind != JsonValueKind.String) return false;
                 string title = titleNode.GetString();
-                return title.Contains(artist, StringComparison.OrdinalIgnoreCase) ||
+                return NormalizeArtistName(title.Split(" (", 2)[0]) == NormalizeArtistName(artist) ||
+                    title.Contains(artist, StringComparison.OrdinalIgnoreCase) ||
                     artistWords.Length > 0 && artistWords.All(word => title.Contains(word, StringComparison.OrdinalIgnoreCase));
             })
             .OrderBy(page => page.GetProperty("title").GetString().Equals(artist, StringComparison.OrdinalIgnoreCase) ? 0 : 1)

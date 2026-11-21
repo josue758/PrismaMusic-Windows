@@ -137,7 +137,7 @@ public partial class MainWindow
         stage.Children.Add(lyricSection);
 
         var lyricHeader = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
-        var translate = SettingsButton("Traducir al español", TranslateLyrics);
+        var translate = SettingsButton("Traducir letra", TranslateLyrics);
         lyricHeader.Children.Add(translate);
         var translation = new CheckBox { Content = T("Español junto al original"), Style = (Style)FindResource("SettingsToggle"),
             IsChecked = showRoomTranslation, Margin = new Thickness(6, 0, 0, 0) };

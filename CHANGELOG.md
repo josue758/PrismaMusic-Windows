@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.60.0
+
+- Lee rápidamente etiquetas FLAC y omite la transferencia de carátulas incrustadas durante el escaneo.
+- Carga retratos acreditados de Wikimedia en la galería y en la ficha del artista, con las portadas del álbum como alternativa.
+- Permite elegir idioma original y de destino para traducir con modelos locales. Muestra original y traducción juntos tanto en las letras sincronizadas como en las simples.
+
 ## 0.59.1
 
 - Guarda las pistas nuevas durante el escaneo y conserva el progreso cuando se cancela.

@@ -19,7 +19,23 @@ public partial class MainWindow
     private static readonly SemaphoreSlim TranslationSetupGate = new(1);
     private static readonly HttpClient TranslatorHttp = new() { Timeout = TimeSpan.FromMinutes(15) };
 
-    private static async Task<string> InstallLocalTranslator(string basePython, string root, string language, Action<string> progress)
+    private const string LocalModelRoute = """
+        def translation_packages(packages):
+            return {(p.from_code, p.to_code): p for p in packages
+                    if p.type == "translate" and
+                    ((p.from_code, p.to_code) != ("es", "en") or p.package_version == "1.0")}
+
+        def route(pairs, source, target):
+            if (source, target) in pairs:
+                return [(source, target)]
+            if (source, "en") in pairs and ("en", target) in pairs:
+                return [(source, "en"), ("en", target)]
+            return []
+
+        """;
+
+    private static async Task<string> InstallLocalTranslator(string basePython, string root, string language,
+        Action<string> progress, string target = "es")
     {
         await TranslationSetupGate.WaitAsync();
         try
@@ -44,21 +60,51 @@ public partial class MainWindow
                     await RunTranslatorSetup(basePython, root, "-m", "venv", venv);
                 }
             }
-            progress("Instalando Argos Translate…");
-            await RunTranslatorSetup(python, root, "-m", "pip", "install", "--disable-pip-version-check", "argostranslate==1.11.0");
+            string engineMarker = Path.Combine(Path.GetDirectoryName(python), "..", "Lib", "site-packages",
+                "argostranslate-1.11.0.dist-info", "METADATA");
+            if (string.Equals(Path.GetDirectoryName(python), Path.Combine(root, "python"), StringComparison.OrdinalIgnoreCase))
+                engineMarker = Path.Combine(root, "python", "Lib", "site-packages", "argostranslate-1.11.0.dist-info", "METADATA");
+            if (!File.Exists(engineMarker))
+            {
+                progress("Instalando Argos Translate…");
+                await RunTranslatorSetup(python, root, "-m", "pip", "install", "--disable-pip-version-check", "argostranslate==1.11.0");
+            }
             progress("Descargando el modelo de idioma…");
-            await RunTranslatorSetup(python, root, "-c", """
+            const string installModels = LocalModelRoute + """
                 import sys
+                from pathlib import Path
                 from argostranslate import package
 
-                source = sys.argv[1]
-                if not any(p.from_code == source and p.to_code == "es" for p in package.get_installed_packages()):
+                source, target, pinned_model = sys.argv[1:4]
+                installed = translation_packages(package.get_installed_packages())
+                if not route(installed, source, target):
                     package.update_package_index()
-                    match = next((p for p in package.get_available_packages() if p.from_code == source and p.to_code == "es"), None)
-                    if match is None:
-                        raise RuntimeError("No direct Argos model for " + source + " → es.")
-                    package.install_from_path(match.download())
-                """, language);
+                    available = translation_packages(package.get_available_packages())
+                    selected = route(installed.keys() | available.keys() | {("es", "en")}, source, target)
+                    if not selected:
+                        raise RuntimeError("PRISMA_NO_TRANSLATION_ROUTE")
+                    for pair in selected:
+                        if pair not in installed:
+                            if pair == ("es", "en"):
+                                if not pinned_model:
+                                    raise RuntimeError("PRISMA_PINNED_SPANISH_MODEL")
+                                package.install_from_path(Path(pinned_model))
+                            else:
+                                package.install_from_path(available[pair].download())
+                """;
+            try { await RunTranslatorSetup(python, root, "-c", installModels, language, target, ""); }
+            catch (InvalidOperationException error) when (error.Message.Contains("PRISMA_PINNED_SPANISH_MODEL", StringComparison.Ordinal))
+            {
+                // Argos #522: the current 1.9 Spanish-English package can return repeated text.
+                string model = Path.Combine(root, "spanish-english-1.0.argosmodel");
+                try
+                {
+                    await DownloadTranslatorAsset("https://data.argosopentech.com/argospm/v1/translate-es_en-1_0.argosmodel",
+                        model, 128 * 1024 * 1024, "1b963aa0e0cb6e5ce874f0aa1a1949a19bc4d762e833532239a8834340f6b378");
+                    await RunTranslatorSetup(python, root, "-c", installModels, language, target, model);
+                }
+                finally { if (File.Exists(model)) File.Delete(model); }
+            }
             return python;
         }
         finally { TranslationSetupGate.Release(); }
@@ -123,6 +169,7 @@ public partial class MainWindow
     private static async Task DownloadTranslatorAsset(string url, string destination, long maximumBytes, string expectedSha256 = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.UserAgent.ParseAdd("PrismaMusicWindows/0.60 (https://github.com/josue758/PrismaMusic-Windows)");
         using var response = await TranslatorHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength > maximumBytes)

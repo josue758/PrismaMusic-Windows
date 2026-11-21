@@ -1,10 +1,7 @@
 using System;
-using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
 
 namespace PrismaMusic;
 
@@ -67,14 +64,15 @@ public partial class MainWindow
     private async void LoadCollectionArtwork(LibraryRow page)
     {
         bool artist = !albumPage;
-        await artworkWorkers.WaitAsync();
+        var workers = artist ? artistArtworkWorkers : artworkWorkers;
+        await workers.WaitAsync();
         try
         {
             if (!ReferenceEquals(artRequest, page)) return;
-            var artwork = await Task.Run(() => ReadCollectionImage(page, artist, 300));
+            var artwork = await LoadCollectionArtwork(page, artist, 300);
             if (ReferenceEquals(artRequest, page)) CollectionArt.Source = artwork;
         }
-        finally { artworkWorkers.Release(); }
+        finally { workers.Release(); }
     }
 
     private void PlayCollection(object sender, RoutedEventArgs args) => StartCollection(false);

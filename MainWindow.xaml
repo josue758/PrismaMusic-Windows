@@ -392,9 +392,9 @@
             <DataTemplate x:Key="GalleryCard">
               <StackPanel Width="{DynamicResource GalleryTileSize}" Margin="2,2,2,4">
                 <Border Height="{DynamicResource GalleryTileSize}" CornerRadius="8" Background="#20FFFFFF" Margin="0,0,0,10">
-                  <Grid ClipToBounds="True">
+                  <Grid ClipToBounds="True" SizeChanged="RoundGalleryArtwork">
                     <local:ArtworkTile Caption="{Binding TileCaption}"/>
-                    <Image Loaded="LoadGalleryCard" Stretch="UniformToFill"/>
+                    <Image Loaded="LoadGalleryCard" DataContextChanged="GalleryArtworkChanged" Stretch="UniformToFill"/>
                   </Grid>
                 </Border>
                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>

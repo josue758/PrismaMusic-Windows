@@ -165,6 +165,9 @@ internal static class LibraryScanner
 
     private static Track ReadTrack(string path, long length, long stamp)
     {
+        if (Path.GetExtension(path).Equals(".flac", StringComparison.OrdinalIgnoreCase) &&
+            FlacTagReader.Read(path, length, stamp) is { } flac) return flac;
+
         using var file = TagLib.File.Create(path);
         var tag = file.Tag;
         var audio = file.Properties;

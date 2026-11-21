@@ -564,6 +564,25 @@ public partial class MainWindow : Window
 				}
 				Console.WriteLine("Argos: English-to-Spanish local translation passed.");
 			}
+			string pivotRoot = Environment.GetEnvironmentVariable("PRISMA_TRANSLATION_PIVOT_PROBE");
+			if (!string.IsNullOrEmpty(pivotRoot))
+			{
+				string python = Path.Combine(pivotRoot, "venv", "Scripts", "python.exe");
+				python = await InstallLocalTranslator(python, pivotRoot, "es", Console.WriteLine, "fr");
+				string[] translated = await TranslateLocalLines(python, "es", new[] { "Buenos días." }, pivotRoot, "fr");
+				if (!translated[0].Contains("Bonjour", StringComparison.OrdinalIgnoreCase))
+					throw new InvalidOperationException("Spanish-to-French translation failed: " + translated[0]);
+				SetLyrics("Buenos días.\n\nHasta mañana.");
+				translatedLines = new Dictionary<string, string> { ["Buenos días."] = translated[0] };
+				RefreshLyrics();
+				if (!Lyrics.Text.Contains(translated[0], StringComparison.Ordinal))
+					throw new InvalidOperationException("Plain lyrics did not render their translation.");
+				TranslateLyrics(this, new RoutedEventArgs());
+				if (lyricTranslationWindow is not { IsVisible: true })
+					throw new InvalidOperationException("The translation dialog did not open.");
+				lyricTranslationWindow.Close();
+				Console.WriteLine("Argos: Spanish-to-French translation, plain lyrics and dialog passed.");
+			}
 			string dbProbe = Environment.GetEnvironmentVariable("PRISMA_DATABASE_PROBE");
 			if (dbProbe != null)
 			{
@@ -794,6 +813,13 @@ public partial class MainWindow : Window
 					}
 					Console.WriteLine("Wikipedia profile: " + root);
 				}
+			}
+			if (Environment.GetEnvironmentVariable("PRISMA_PORTRAIT_PROBE") is { Length: > 0 } portraitPath)
+			{
+				if (!await DownloadArtistPortrait("Diana Krall", portraitPath) || !System.IO.File.Exists(portraitPath) ||
+					!System.IO.File.Exists(portraitPath + ".json"))
+					throw new InvalidOperationException("The automatic artist portrait or its credit did not download.");
+				Console.WriteLine("Wikimedia: downloaded an attributed artist portrait.");
 			}
 			LibrarySectionIndex = 4;
 			queue.Clear();

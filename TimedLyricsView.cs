@@ -71,7 +71,17 @@ public partial class MainWindow
         if (fullscreen) view.LineHeight = 28 * lyricScale;
         if (lyricLines.Length == 0)
         {
-            view.Text = sourceLyrics.Length == 0 ? LocalTextExtension.Translate("Sin letras disponibles") : sourceLyrics;
+            if (translatedLines == null || (fullscreen && !showRoomTranslation))
+            {
+                view.Text = sourceLyrics.Length == 0 ? LocalTextExtension.Translate("Sin letras disponibles") : sourceLyrics;
+                return;
+            }
+            foreach (string line in OriginalLyricLines())
+            {
+                view.Inlines.Add(new Run(line));
+                AddTranslatedVerse(view, line, active: false);
+                view.Inlines.Add(new LineBreak());
+            }
             return;
         }
         int start = followLyrics ? Math.Max(0, index - 1) : 0;
@@ -98,18 +108,19 @@ public partial class MainWindow
                 Tick();
             };
             view.Inlines.Add(verse);
-            if ((!fullscreen || showRoomTranslation) && translatedLines != null && translatedLines.TryGetValue(line.Text, out var translation) &&
-                !string.Equals(line.Text, translation, StringComparison.OrdinalIgnoreCase))
-            {
-                view.Inlines.Add(new LineBreak());
-                view.Inlines.Add(new Run(translation)
-                {
-                    Foreground = (Brush)FindResource(active ? "AccentBrush" : "Muted"),
-                    FontSize = (fullscreen ? 17 : 13) * lyricScale
-                });
-            }
+            if (!fullscreen || showRoomTranslation) AddTranslatedVerse(view, line.Text, active);
             view.Inlines.Add(new LineBreak());
             view.Inlines.Add(new LineBreak());
         }
+    }
+
+    private void AddTranslatedVerse(TextBlock view, string line, bool active)
+    {
+        if (translatedLines == null || !translatedLines.TryGetValue(line, out var translation) ||
+            string.Equals(line, translation, StringComparison.OrdinalIgnoreCase)) return;
+        view.Inlines.Add(new LineBreak());
+        var verse = new Run(translation) { FontSize = (view == roomLyrics ? 17 : 13) * lyricScale };
+        verse.SetResourceReference(TextElement.ForegroundProperty, active ? "AccentBrush" : "Muted");
+        view.Inlines.Add(verse);
     }
 }
