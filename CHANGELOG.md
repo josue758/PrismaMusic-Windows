@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.61.0
+
+- La galería de Artistas abre una ficha con retrato, biografía, canciones destacadas y álbumes de la biblioteca.
+- Las canciones más reproducidas se ordenan por el historial de reproducciones contado por Prisma. La ficha también permite abrir la lista completa.
+- Los álbumes se pueden abrir desde sus carátulas y el retrato se puede cambiar desde la ficha.
+
 ## 0.60.2
 
 - La lista compacta conserva artista, álbum, año y bitrate. La ficha de un álbum muestra los números de disco y pista y reduce las columnas repetidas.

@@ -91,9 +91,10 @@ public partial class MainWindow
         .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark &&
             char.IsLetterOrDigit(character))).ToUpperInvariant();
 
-    private async void ArtistProfile(object sender, RoutedEventArgs args)
+    private void ArtistProfile(object sender, RoutedEventArgs args) => ShowArtistProfile(Selected?.Artist);
+
+    private async void ShowArtistProfile(string artist)
     {
-        var artist = Selected?.Artist;
         if (string.IsNullOrWhiteSpace(artist)) return;
         if (artistProfileWindow is { IsVisible: true })
         {
@@ -256,6 +257,7 @@ public partial class MainWindow
                     await File.WriteAllTextAsync(PortraitPath(artist) + ".json", JsonSerializer.Serialize(attribution));
                     savePortrait.Content = LocalTextExtension.Translate("Retrato guardado");
                     artRequest = null;
+                    renderedArtistPage = null;
                     RefreshRows();
                 }
                 catch (Exception error)

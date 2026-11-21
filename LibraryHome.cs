@@ -177,7 +177,7 @@ public partial class MainWindow
         var art = new Grid { ClipToBounds = true, DataContext = album };
         art.Children.Add(new ArtworkTile { Caption = album.Name });
         var cover = new Image { Stretch = Stretch.UniformToFill };
-        cover.Loaded += LoadGalleryCard;
+        cover.Loaded += async (_, _) => await LoadArtworkCard(cover, artist: false);
         art.Children.Add(cover);
         art.SizeChanged += (_, _) =>
             art.Clip = new RectangleGeometry(new Rect(0, 0, art.ActualWidth, art.ActualHeight), 7, 7);

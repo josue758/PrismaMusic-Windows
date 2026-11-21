@@ -1,6 +1,6 @@
 # Prisma Music para Windows
 
-**Versión Windows 0.60.2** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
+**Versión Windows 0.61.0** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
 
 En **Configuración → Biblioteca** o en el menú **…** junto a los filtros, puedes exportar la colección a JSON o las pistas de la vista actual a M3U8. La exportación guarda metadatos y rutas. Los archivos de audio y las carátulas se conservan en sus ubicaciones.
 
@@ -14,7 +14,7 @@ Compatible con Windows 10 22H2 y Windows 11, x64. El ejecutable distribuido llev
 
 Esta versión mejora la experiencia de escaneo y la identificación de pistas, muestra los metadatos de etiquetas sin modificar archivos, busca carátulas y perfiles de artistas en línea cuando hace falta, y reorganiza la sala de escucha a pantalla completa y Configuración. El panel de fuentes permite gestionar carpetas locales y recursos NAS/SMB accesibles desde Windows.
 
-Descarga y ejecuta **Prisma-Music-Windows-0.60.2-Setup-x64.exe**. Se instala para tu usuario, incluye .NET y crea un acceso directo en Inicio. Puedes desinstalar Prisma desde Configuración de Windows y conservar la biblioteca en LocalAppData. [Descargas para Windows](https://github.com/josue758/PrismaMusic-Windows/releases)
+Descarga y ejecuta **Prisma-Music-Windows-0.61.0-Setup-x64.exe**. Se instala para tu usuario, incluye .NET y crea un acceso directo en Inicio. Puedes desinstalar Prisma desde Configuración de Windows y conservar la biblioteca en LocalAppData. [Descargas para Windows](https://github.com/josue758/PrismaMusic-Windows/releases)
 
 El asistente de **Primeros pasos** guía en cuatro etapas: idioma, colección, apariencia y preferencias de inicio. Para un NAS, conecta el recurso en el Explorador de archivos y selecciónalo en el asistente. La apariencia inicial incluye tres perfiles de material, tema, color de acento y una vista previa de la transparencia. Pulsa Enter o haz doble clic en una pista para reproducirla, Ctrl+F para buscar y Ctrl+I para ver información.
 
@@ -23,6 +23,8 @@ Incluye canciones, álbumes y artistas, filtros por género y año, búsqueda, a
 Para añadir música de un NAS, abre **Fuentes → Conectar NAS**. Escribe el nombre o la IP para listar las carpetas SMB, o usa una ruta como `\\servidor\Música`, una dirección `smb://servidor/Música` o una unidad de red conectada en Windows. Si Windows requiere credenciales, el diálogo ofrece su inicio de sesión. Al terminar el escaneo, la app abre esa fuente en Canciones. Al escanear de nuevo, reutiliza las etiquetas de los archivos que conservan el tamaño y la fecha de modificación.
 
 En **Letras → Traducir**, elige los idiomas de origen y destino. Prisma descarga los modelos compatibles cuando se usan por primera vez. La traducción se ejecuta en el equipo y aparece debajo del verso original también en la Sala de escucha.
+
+En **Artistas**, selecciona una tarjeta para abrir su ficha. Allí puedes reproducir sus canciones, abrir sus álbumes y ver un retrato y una biografía de Wikipedia o Wikimedia cuando Prisma encuentra una coincidencia fiable. **Más reproducidas en tu biblioteca** usa el contador local que Prisma registra desde la versión 0.61.0.
 
 El escaneo indica la carpeta y el archivo en proceso, las etiquetas reconocidas y los errores; al terminar informa las pistas nuevas y las etiquetas que actualizó en la biblioteca local. Lee etiquetas, pero no escribe ni retaggea los archivos de música. F11 abre la Sala de escucha con letras y carátula. F12 o el botón «Visualizador» abre su propia vista inmersiva de 48 bandas a pantalla completa. Los formatos reproducibles dependen de los códecs que Windows tenga disponibles.
 
@@ -34,7 +36,7 @@ Para compilar con el SDK .NET 8 en Windows:
 
 Para generar el instalador, indica al compilador de Inno Setup 7 la versión del proyecto, la ruta absoluta de `publish` y una carpeta de salida. Incluye los avisos de licencia del proyecto y sus dependencias en `publish` antes de compilar.
 
-    ISCC.exe /DAppVersion=0.60.2 "/DPayloadRoot=C:\ruta\publish" "/DSetupOutput=C:\ruta\dist" installer\PrismaMusic.iss
+    ISCC.exe /DAppVersion=0.61.0 "/DPayloadRoot=C:\ruta\publish" "/DSetupOutput=C:\ruta\dist" installer\PrismaMusic.iss
 
 El ejecutable admite --smoke-test para leer las tres demos y comprobar que avanza la reproducción.
 

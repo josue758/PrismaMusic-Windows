@@ -65,6 +65,7 @@ public sealed class Library
 	public Dictionary<string, List<string>> Playlists { get; set; } = new Dictionary<string, List<string>>();
 
 	public List<string> History { get; set; } = new List<string>();
+	public Dictionary<string, int> PlayCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
 	public Dictionary<string, LibraryTagEdit> TagEdits { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
@@ -1318,6 +1319,8 @@ public partial class MainWindow : Window
 					throw new InvalidOperationException("Compact library dropped album metadata.");
 				CaptureDesignPreview(Shell, "PRISMA_COMPACT_SONGS_PREVIEW");
 			}
+			if (Environment.GetEnvironmentVariable("PRISMA_ARTIST_PAGE_FIXTURE") is { Length: > 0 } artistFixture)
+				await VerifyArtistPage(artistFixture);
 			VerifyWindowPlacement();
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
@@ -1640,6 +1643,7 @@ public partial class MainWindow : Window
 		library.Favorites.RemoveWhere(removedPaths.Contains);
 		library.Playlist.RemoveAll(removedPaths.Contains);
 		library.History.RemoveAll(removedPaths.Contains);
+		foreach (string removed in removedPaths) library.PlayCounts.Remove(removed);
 		foreach (List<string> tracks in library.Playlists.Values)
 		{
 			tracks.RemoveAll(removedPaths.Contains);
@@ -1971,12 +1975,20 @@ public partial class MainWindow : Window
 		BackToCollection.Visibility = ((collection == null) ? Visibility.Collapsed : Visibility.Visible);
 		bool showHome = collection == null && ReferenceEquals(Navigation.SelectedItem, HomeNavigation) &&
 			string.IsNullOrWhiteSpace(Search.Text);
+		bool showArtist = collection != null && !albumPage && !showAllArtistSongs;
+		if (!showArtist && renderedArtistPage != null)
+		{
+			renderedArtistPage = null;
+			ArtistContent.Children.Clear();
+		}
+		ArtistView.Visibility = showArtist ? Visibility.Visible : Visibility.Collapsed;
+		LibraryHeader.Visibility = showArtist ? Visibility.Collapsed : Visibility.Visible;
 		HomeView.Visibility = showHome ? Visibility.Visible : Visibility.Collapsed;
 		CollectionCount.Visibility = showHome ? Visibility.Collapsed : Visibility.Visible;
 		LibraryImportCommand.Visibility = !showHome && collection == null && library.Tracks.Count > 0 && LibrarySectionIndex is >= 0 and <= 2
 			? Visibility.Visible : Visibility.Collapsed;
-		LibraryFilterBar.Visibility = showHome ? Visibility.Collapsed : Visibility.Visible;
-		rows.Visibility = showHome ? Visibility.Collapsed : Visibility.Visible;
+		LibraryFilterBar.Visibility = showHome || showArtist ? Visibility.Collapsed : Visibility.Visible;
+		rows.Visibility = showHome || showArtist ? Visibility.Collapsed : Visibility.Visible;
 		if (showHome)
 		{
 			Rows.ItemsSource = null;
@@ -1995,6 +2007,12 @@ public partial class MainWindow : Window
 					multiDisc && track.Disc > 0 ? $"{track.Disc}.{number:00}" : $"{number:00}";
 				return new LibraryRow(track.Name, track.Detail, new[] { track }, AlbumPosition: position);
 			}).ToArray();
+			if (showArtist)
+			{
+				EmptyLibraryView.Visibility = Visibility.Collapsed;
+				RenderArtistPage(collection);
+				return;
+			}
 			UpdateEmptyLibrary();
 			return;
 		}
@@ -2118,9 +2136,11 @@ public partial class MainWindow : Window
 		RememberLibraryView(LibrarySectionIndex);
 		albumPage = album;
 		collection = row;
+		showAllArtistSongs = false;
 		UpdateCollectionHeading();
 		Rows.SelectedIndex = 0;
-		Rows.Focus();
+		if (Rows.IsVisible) Rows.Focus();
+		else artistPagePlayButton?.Focus();
 	}
 
 	private void PlaySelectedSong(object sender, RoutedEventArgs args) => ActivateSelection();
@@ -2128,17 +2148,7 @@ public partial class MainWindow : Window
 	private void BrowseRelatedArtist(object sender, RoutedEventArgs args)
 	{
 		if (Rows.SelectedItem is LibraryRow libraryRow)
-		{
-			Track track = libraryRow.Tracks[0];
-			Track[] array = (from item in library.Tracks
-				where string.Equals(item.Artist, track.Artist, StringComparison.OrdinalIgnoreCase)
-				orderby item.Album, item.Disc, item.Number
-				select item).ToArray();
-			if (array.Length != 0)
-			{
-				OpenCollection(new LibraryRow(track.Artist, "", array), album: false);
-			}
-		}
+			OpenArtistCollection(libraryRow.Tracks[0].Artist);
 	}
 
 	private static string AlbumOwner(Track track)
@@ -2181,7 +2191,8 @@ public partial class MainWindow : Window
 		}
 		if (flag)
 		{
-			OpenCollection(libraryRow, LibrarySectionIndex == 1);
+			if (LibrarySectionIndex == 2) OpenArtistCollection(libraryRow.Name);
+			else OpenCollection(libraryRow, album: true);
 			return;
 		}
 		context = ((libraryRow.Tracks.Length > 1) ? libraryRow.Tracks : ((IEnumerable<LibraryRow>)Rows.ItemsSource).SelectMany((LibraryRow r) => r.Tracks).ToArray());

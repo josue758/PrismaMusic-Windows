@@ -28,6 +28,7 @@ public sealed class LibraryDatabaseTests : IDisposable
         library.Folders.Add(@"C:\Musica");
         library.Tracks.Add(Song(@"C:\Musica\a.flac"));
         library.Favorites.Add(@"C:\Musica\a.flac");
+        library.PlayCounts[@"C:\Musica\a.flac"] = 4;
         first.Save(library, true);
 
         var loaded = new LibraryDatabase(directory).Load();
@@ -35,6 +36,7 @@ public sealed class LibraryDatabaseTests : IDisposable
         Assert.Single(loaded.Tracks);
         Assert.Equal(@"C:\Musica", loaded.Folders.Single());
         Assert.Contains(@"c:\musica\A.FLAC", loaded.Favorites);
+        Assert.Equal(4, loaded.PlayCounts[@"c:\musica\A.FLAC"]);
     }
 
     [Fact]

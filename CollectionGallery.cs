@@ -51,8 +51,12 @@ public partial class MainWindow
 
     private async void LoadGalleryCard(object sender, RoutedEventArgs args)
     {
-        if (sender is not Image image || image.DataContext is not LibraryRow row) return;
-        bool artist = LibrarySectionIndex == 2;
+        if (sender is Image image) await LoadArtworkCard(image, artist: LibrarySectionIndex == 2);
+    }
+
+    private async Task LoadArtworkCard(Image image, bool artist)
+    {
+        if (image.DataContext is not LibraryRow row) return;
         var workers = artist ? artistArtworkWorkers : artworkWorkers;
         await workers.WaitAsync();
         try

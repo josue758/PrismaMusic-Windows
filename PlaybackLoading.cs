@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -124,6 +125,8 @@ public partial class MainWindow
             UpdateMini();
             if (recordHistory)
             {
+                int plays = library.PlayCounts.GetValueOrDefault(track.Path);
+                if (opened && autoplay && plays < int.MaxValue) library.PlayCounts[track.Path] = plays + 1;
                 library.History.Remove(track.Path);
                 library.History.Insert(0, track.Path);
                 if (library.History.Count > 500) library.History.RemoveAt(500);

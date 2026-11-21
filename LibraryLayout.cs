@@ -42,7 +42,7 @@ public partial class MainWindow
 
     private void AnimateLibraryNavigation()
     {
-        FrameworkElement view = HomeView.IsVisible ? HomeView : Rows;
+        FrameworkElement view = ArtistView.IsVisible ? ArtistView : HomeView.IsVisible ? HomeView : Rows;
         view.BeginAnimation(OpacityProperty, MotionEnabled
             ? new System.Windows.Media.Animation.DoubleAnimation(.80, 1, TimeSpan.FromMilliseconds(145))
                 { FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop, EasingFunction = new System.Windows.Media.Animation.CubicEase() }

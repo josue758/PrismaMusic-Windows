@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -6,12 +7,79 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using NAudio.CoreAudioApi;
 
 namespace PrismaMusic;
 
 public partial class MainWindow
 {
+    private async Task VerifyArtistPage(string fixture)
+    {
+        var result = await Task.Run(() => LibraryScanner.ReadFolder(fixture));
+        var tracks = result.Tracks.Where(track => track.Artist.Equals("Diana Krall", StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (tracks.Length < 2) throw new InvalidOperationException("The artist fixture needs at least two Diana Krall tracks.");
+        library.Tracks = tracks.ToList();
+        library.PlayCounts[tracks[0].Path] = 4;
+        library.PlayCounts[tracks[1].Path] = 7;
+        Search.Clear();
+        Width = 1630;
+        Height = 1050;
+        LibrarySectionIndex = 2;
+        RefreshRows();
+        Rows.SelectedIndex = 0;
+        ActivateSelection();
+        if (collection?.Name != tracks[0].Artist || albumPage || !ArtistView.IsVisible || Rows.IsVisible)
+            throw new InvalidOperationException("The artist gallery did not open the profile.");
+
+        Button GetButton(string label) => Descendants(ArtistContent).OfType<Button>()
+            .FirstOrDefault(button => AutomationProperties.GetName(button) == label);
+        bool ready = false;
+        for (int attempt = 0; attempt < 80; attempt++)
+        {
+            UpdateLayout();
+            bool portrait = Descendants(ArtistContent).OfType<Image>().Any(image =>
+                AutomationProperties.GetName(image) == LocalTextExtension.Format("Retrato de {0}", collection.Name) && image.Source != null);
+            if (portrait && GetButton(T("Artículo en Wikipedia"))?.IsVisible == true)
+            {
+                ready = true;
+                break;
+            }
+            await Task.Delay(250);
+        }
+        if (!ready) throw new InvalidOperationException("The profile did not contain the artist portrait and biography.");
+        var firstSong = Descendants(ArtistContent).OfType<Button>()
+            .FirstOrDefault(button => tracks.Any(track => AutomationProperties.GetName(button) ==
+                LocalTextExtension.Format("Reproducir {0}", track.Name)));
+        if (firstSong == null || AutomationProperties.GetName(firstSong) != LocalTextExtension.Format("Reproducir {0}", tracks[1].Name))
+            throw new InvalidOperationException("The profile did not order songs by local plays.");
+        CaptureDesignPreview(Shell, "PRISMA_ARTIST_PAGE_PREVIEW");
+        var album = GetButton(LocalTextExtension.Format("Abrir álbum {0}", tracks[0].Album)) ??
+            throw new InvalidOperationException("The artist's album did not appear.");
+        album.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        if (!albumPage || collection?.Name != tracks[0].Album || ArtistView.IsVisible)
+            throw new InvalidOperationException("Opening an album from the artist profile failed.");
+        CloseCollection(this, new RoutedEventArgs());
+        UpdateLayout();
+        var all = GetButton(T("Ver todas las canciones")) ?? throw new InvalidOperationException("All songs is missing.");
+        all.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        if (!Rows.IsVisible || Rows.Items.Count != tracks.Length || !ArtistOverviewButton.IsVisible)
+            throw new InvalidOperationException("Opening the artist's complete track list failed.");
+        ShowArtistOverview(this, new RoutedEventArgs());
+        if (!ArtistView.IsVisible) throw new InvalidOperationException("Return to artist profile failed.");
+        Console.WriteLine("Artist gallery: live portrait and biography, album navigation, and ranked and full song lists passed.");
+
+        static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+        {
+            for (int index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, index);
+                yield return child;
+                foreach (var descendant in Descendants(child)) yield return descendant;
+            }
+        }
+    }
     private static void VerifyAudioFormats(string directory)
     {
         Track ReadFixture(string name) => LibraryScanner.ReadFolder(Path.Combine(directory, name)).Tracks.Single();

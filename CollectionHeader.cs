@@ -11,6 +11,7 @@ public partial class MainWindow
     {
         var page = collection;
         bool detail = page != null;
+        ArtistOverviewButton.Visibility = detail && !albumPage && showAllArtistSongs ? Visibility.Visible : Visibility.Collapsed;
         CollectionArtTile.Visibility = CollectionKind.Visibility = CollectionActions.Visibility =
             detail ? Visibility.Visible : Visibility.Collapsed;
         ArtistFilter.Visibility = Genre.Visibility = Year.Visibility = Sort.Visibility = detail ? Visibility.Collapsed : Visibility.Visible;
@@ -46,7 +47,12 @@ public partial class MainWindow
             page.Tracks.Length == 1 ? LocalTextExtension.Translate("1 pista") : string.Format(LocalTextExtension.Translate("{0:N0} pistas"), page.Tracks.Length),
             duration.TotalHours >= 1 ? duration.ToString(@"h\:mm\:ss") : duration.ToString(@"m\:ss")
         }.Where(value => !string.IsNullOrWhiteSpace(value)));
-        if (artRequest != page)
+        if (detail && !albumPage && !showAllArtistSongs)
+        {
+            artRequest = null;
+            CollectionArt.Source = null;
+        }
+        else if (artRequest != page)
         {
             artRequest = page;
             CollectionArt.Source = null;
