@@ -31,9 +31,9 @@ public partial class MainWindow
 
     private static ((string Label, string Value)[] Tags, (string Label, string Value)[] Audio) ReadTrackDetails(Track track)
     {
-        using var file = TagLib.File.Create(track.Path);
+        using var file = AudioMetadata.Open(track.Path);
         var tag = file.Tag;
-        var format = file.Properties;
+        var format = AudioMetadata.ForTrack(track, file.Properties);
         string Number(uint index, uint count) => index == 0 ? "" : count == 0 ? index.ToString() : $"{index} / {count}";
         return (new[]
         {
@@ -48,11 +48,11 @@ public partial class MainWindow
             ("Carátula integrada", LocalTextExtension.Translate(tag.Pictures.Length > 0 ? "Sí" : "No"))
         }, new[]
         {
-            ("Formato de audio", format.Description),
-            ("Frecuencia", format.AudioSampleRate > 0 ? $"{format.AudioSampleRate:N0} Hz" : ""),
-            ("Resolución", format.BitsPerSample > 0 ? $"{format.BitsPerSample} bit" : ""),
-            ("Bitrate", format.AudioBitrate > 0 ? $"{format.AudioBitrate} kb/s" : ""),
-            ("Canales", format.AudioChannels > 0 ? format.AudioChannels.ToString() : ""),
+            ("Formato de audio", format.Codec ?? file.Properties.Description),
+            ("Frecuencia", format.SampleRate > 0 ? $"{format.SampleRate:N0} Hz" : ""),
+            ("Resolución", format.BitDepth > 0 ? $"{format.BitDepth} bit" : ""),
+            ("Bitrate", format.BitrateKbps > 0 ? $"{format.BitrateKbps:N0} kb/s" : ""),
+            ("Canales", format.Channels > 0 ? format.Channels.ToString() : ""),
             ("Tamaño", $"{new FileInfo(track.Path).Length:N0} B")
         });
     }
@@ -75,9 +75,14 @@ public partial class MainWindow
             Owner = listeningRoom ?? this, Title = LocalTextExtension.Translate("Información del archivo"),
             Width = 580, Height = 650, MinWidth = 420, MinHeight = 340,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new SolidColorBrush(Color.FromRgb(33, 34, 40)),
-            Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }
+            ShowInTaskbar = false
         };
+        dialog.SetResourceReference(Window.BackgroundProperty, "SettingsBackground");
+        dialog.SetResourceReference(Window.ForegroundProperty, "Ink");
+        var root = new Grid();
+        root.Children.Add(new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        dialog.Content = root;
+        ApplyFluentDialog(dialog, root);
         var close = new Button { Content = LocalTextExtension.Translate("Cerrar"), IsCancel = true,
             HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
         panel.Children.Add(close);

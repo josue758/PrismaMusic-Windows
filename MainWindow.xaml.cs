@@ -92,15 +92,18 @@ public record LibraryRow(string Name, string Detail, Track[] Tracks, string Foot
 	}
 
 	public string FormatLabel => Tracks.Length == 1 ? Tracks[0].FormatLabel : "";
+	public string LibraryFormatLabel => Tracks.Length == 1 ? Tracks[0].LibraryFormatLabel : "";
 }
 
 public record Track(string Path, string Name, string Artist, string Album, string AlbumArtist, string Genre, uint Year, uint Disc, uint Number, int Seconds,
-	string Codec = null, int SampleRate = 0, int BitDepth = 0, long FileLength = -1, long LastWriteUtcTicks = 0)
+	string Codec = null, int SampleRate = 0, int BitDepth = 0, long FileLength = -1, long LastWriteUtcTicks = 0,
+	int? BitrateKbps = null, int Channels = 0)
 {
 	public bool IsLossless => Codec is "FLAC" or "ALAC" or "PCM";
 	public string DurationLabel => Seconds > 0 ? TimeSpan.FromSeconds(Seconds).ToString(Seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss") : "";
-	public string FormatLabel => IsLossless && SampleRate > 0 && BitDepth > 0
-		? $"{Codec} · {BitDepth} bit / {SampleRate / 1000d:0.###} kHz"
+	public string FormatLabel => new AudioMetadata(Codec, SampleRate, BitDepth, Channels, BitrateKbps.GetValueOrDefault()).Label(Path);
+	public string LibraryFormatLabel => BitrateKbps is > 0
+		? $"{Codec ?? System.IO.Path.GetExtension(Path).TrimStart('.').ToUpperInvariant()} · {BitrateKbps:N0} kb/s"
 		: Codec ?? System.IO.Path.GetExtension(Path).TrimStart('.').ToUpperInvariant();
 
 	public string Detail => string.Join("  ·  ", new string[3]
@@ -660,6 +663,8 @@ public partial class MainWindow : Window
 			library.Tracks = demo.Tracks;
 			RefreshFilters();
 			Console.WriteLine("Lossless navigation, format metadata and combined artist/search filters passed.");
+			if (Environment.GetEnvironmentVariable("PRISMA_AUDIO_FORMAT_FIXTURES") is { Length: > 0 } audioFixtures)
+				VerifyAudioFormats(audioFixtures);
 			string environmentVariable7 = Environment.GetEnvironmentVariable("PRISMA_PREVIEW_PATH");
 			if (!string.IsNullOrEmpty(environmentVariable7))
 			{
@@ -2162,7 +2167,7 @@ public partial class MainWindow : Window
 	{
 		Cover.Tag = track.Album;
 		Cover.Source = null;
-		AudioFormat.Text = Path.GetExtension(track.Path).TrimStart('.').ToUpperInvariant();
+		AudioFormat.Text = track.FormatLabel;
 		UpdateMini();
 		Shell.Background = DefaultShellBrush();
 		SetLyrics("");
@@ -2170,7 +2175,7 @@ public partial class MainWindow : Window
 		{
 			string text = "";
 			BitmapImage bitmapImage = null;
-			List<string> list = new List<string> { Path.GetExtension(track.Path).TrimStart('.').ToUpperInvariant() };
+			string format = track.FormatLabel;
 			try
 			{
 				string path = Path.ChangeExtension(track.Path, ".lrc");
@@ -2183,26 +2188,14 @@ public partial class MainWindow : Window
 					string plainPath = Path.ChangeExtension(track.Path, ".txt");
 					if (System.IO.File.Exists(plainPath)) text = System.IO.File.ReadAllText(plainPath);
 				}
-				TagLib.File file = TagLib.File.Create(track.Path);
+				TagLib.File file = AudioMetadata.Open(track.Path);
 				try
 				{
 					if (text.Length == 0)
 					{
 						text = file.Tag.Lyrics ?? "";
 					}
-					Properties properties = file.Properties;
-					if (properties.BitsPerSample > 0)
-					{
-						list.Add($"{properties.BitsPerSample} bit");
-					}
-					if (properties.AudioSampleRate > 0)
-					{
-						list.Add($"{(double)properties.AudioSampleRate / 1000.0:0.##} kHz");
-					}
-					if (properties.AudioBitrate > 0)
-					{
-						list.Add($"{properties.AudioBitrate} kb/s");
-					}
+					format = AudioMetadata.ForTrack(track, file.Properties).Label(track.Path);
 					byte[] array = ReadArtworkPayload(track.Path, () => file.Tag.Pictures.FirstOrDefault()?.Data.Data);
 					if (array != null && array.Length > 0)
 					{
@@ -2227,7 +2220,7 @@ public partial class MainWindow : Window
 			catch (Exception)
 			{
 			}
-			return (lyrics: text, image: bitmapImage, format: string.Join(" · ", list));
+			return (lyrics: text, image: bitmapImage, format: format);
 		});
 		if (current != track)
 		{

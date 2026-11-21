@@ -24,7 +24,9 @@ internal static class FlacTagReader
         int sampleRate = (int)(audio >> 44);
         if (sampleRate == 0) return null;
         int bits = (int)((audio >> 36) & 31) + 1;
-        int seconds = (int)Math.Min(int.MaxValue, (audio & 0xFFFFFFFFFUL) / (ulong)sampleRate);
+        int channels = (int)((audio >> 41) & 7) + 1;
+        double duration = (audio & 0xFFFFFFFFFUL) / (double)sampleRate;
+        int seconds = (int)Math.Min(int.MaxValue, duration);
         var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         while ((header[0] & 128) == 0)
@@ -54,7 +56,8 @@ internal static class FlacTagReader
             Value("ALBUM") ?? "Sin álbum", Value("ALBUMARTIST", "ALBUM ARTIST", "ALBUM_ARTIST") ?? "",
             Value("GENRE") ?? "", Number(Value("DATE", "YEAR", "CREATIONDATE"), '-'),
             Number(Value("DISCNUMBER", "DISC"), '/'), Number(Value("TRACKNUMBER", "TRACK"), '/'),
-            seconds, "FLAC", sampleRate, bits, length, stamp);
+            seconds, "FLAC", sampleRate, bits, length, stamp,
+            AudioMetadata.Kilobits(length - file.Position, duration), channels);
 
         string Value(params string[] keys)
         {

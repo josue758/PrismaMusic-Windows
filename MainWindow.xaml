@@ -329,7 +329,7 @@
                   </Grid>
                 </Border>
                 <TextBlock DockPanel.Dock="Right" Text="{Binding DurationLabel}" Foreground="{DynamicResource Muted}" Width="42" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,3,0"/>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding FormatLabel}" Visibility="{DynamicResource TrackQualityVisibility}"
+                <TextBlock DockPanel.Dock="Right" Text="{Binding LibraryFormatLabel}" Visibility="{DynamicResource TrackQualityVisibility}"
                            Foreground="{DynamicResource Muted}" MaxWidth="145" TextTrimming="CharacterEllipsis" FontSize="11"
                            VerticalAlignment="Center" Margin="10,0,4,0" ToolTip="{Binding FormatLabel}">
                   <TextBlock.Style>

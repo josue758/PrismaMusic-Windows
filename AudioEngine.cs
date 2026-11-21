@@ -100,8 +100,9 @@ internal sealed class AudioEngine
         if (!strictDirect)
         {
             string extension = Path.GetExtension(path).ToLowerInvariant();
-            if (path.StartsWith(@"\\", StringComparison.Ordinal) && extension is not (".wav" or ".mp3" or ".aiff" or ".aif"))
-                return OpenSmbDecoder(path);
+            if (extension == ".alac" ||
+                (path.StartsWith(@"\\", StringComparison.Ordinal) && extension is not (".wav" or ".mp3" or ".aiff" or ".aif")))
+                return OpenStreamDecoder(path);
             return new AudioFileReader(path);
         }
         return Path.GetExtension(path).ToLowerInvariant() switch
@@ -118,7 +119,7 @@ internal sealed class AudioEngine
         using var metadata = TagLib.File.Create(path);
         if (metadata is not TagLib.Flac.File) throw new NotSupportedException("El archivo no contiene audio FLAC.");
         var original = metadata.Properties;
-        var decoded = path.StartsWith(@"\\", StringComparison.Ordinal) ? OpenSmbDecoder(path) : new MediaFoundationReader(path);
+        var decoded = path.StartsWith(@"\\", StringComparison.Ordinal) ? OpenStreamDecoder(path) : new MediaFoundationReader(path);
         var format = decoded.WaveFormat;
         if (original.BitsPerSample > 0 && format.BitsPerSample == original.BitsPerSample &&
             format.SampleRate == original.AudioSampleRate && format.Channels == original.AudioChannels)
@@ -127,18 +128,18 @@ internal sealed class AudioEngine
         throw new NotSupportedException("El descodificador de Windows no conservó el formato PCM original del FLAC.");
     }
 
-    private static MediaFoundationReader OpenSmbDecoder(string path)
+    private static MediaFoundationReader OpenStreamDecoder(string path)
     {
         var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        try { return new OwnedSmbReader(stream); }
+        try { return new OwnedStreamReader(stream); }
         catch { stream.Dispose(); throw; }
     }
 
-    private sealed class OwnedSmbReader : StreamMediaFoundationReader
+    private sealed class OwnedStreamReader : StreamMediaFoundationReader
     {
         private readonly Stream stream;
 
-        public OwnedSmbReader(Stream stream) : base(stream, new MediaFoundationReaderSettings { SingleReaderObject = true })
+        public OwnedStreamReader(Stream stream) : base(stream, new MediaFoundationReaderSettings { SingleReaderObject = true })
         {
             this.stream = stream;
         }

@@ -12,6 +12,33 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
+    private static void VerifyAudioFormats(string directory)
+    {
+        Track ReadFixture(string name) => LibraryScanner.ReadFolder(Path.Combine(directory, name)).Tracks.Single();
+        var alac = ReadFixture("alac-24-96.m4a");
+        var renamed = ReadFixture("alac-24-96.alac");
+        var flac = ReadFixture("flac-24-96.flac");
+        var aac = ReadFixture("aac-48.m4a");
+        var wav = ReadFixture("wav-16-48.wav");
+        var mp3 = ReadFixture("mp3-48.mp3");
+        int expected = (int)Math.Round(new FileInfo(Path.Combine(directory, "alac-payload.bin")).Length * 8 / 3000d);
+        if (alac.Codec != "ALAC" || alac.SampleRate != 96000 || alac.BitDepth != 24 || alac.Channels != 2 ||
+            alac.BitrateKbps != expected || renamed.FormatLabel != alac.FormatLabel ||
+            ReadTrackDetails(alac).Audio.Single(entry => entry.Label == "Bitrate").Value != $"{expected:N0} kb/s")
+            throw new InvalidOperationException($"ALAC metadata mismatch. Expected {expected} kb/s, got {alac.FormatLabel}.");
+        if (flac.Codec != "FLAC" || flac.BitDepth != 24 || flac.BitrateKbps is not > 0 ||
+            wav.Codec != "PCM" || wav.BitrateKbps != 1536 || aac.Codec != "AAC" || aac.BitrateKbps is not (> 100 and < 160) ||
+            mp3.BitrateKbps != 192)
+            throw new InvalidOperationException($"Other audio formats mismatched: {flac.FormatLabel} / {wav.FormatLabel} / {aac.FormatLabel} / {mp3.FormatLabel}.");
+
+        foreach (var track in new[] { alac, renamed })
+        {
+            using var decoder = AudioEngine.Prepare(track.Path, strictDirect: false);
+            if (decoder.Read(new byte[32768], 0, 32768) == 0 || decoder.WaveFormat.SampleRate != track.SampleRate)
+                throw new InvalidOperationException($"ALAC decoder failed: {track.Path}");
+        }
+        Console.WriteLine($"ALAC reading and decoding passed ({alac.FormatLabel}); FLAC, AAC, MP3, and PCM bitrates passed.");
+    }
     private void VerifyAutomationPeers()
     {
         foreach (var control in new FrameworkElement[]

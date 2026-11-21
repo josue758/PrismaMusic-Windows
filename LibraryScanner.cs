@@ -11,7 +11,7 @@ internal sealed record LibraryScanProgress(string Path, int FilesProcessed, int 
 internal static class LibraryScanner
 {
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
-        { ".mp3", ".wav", ".flac", ".m4a", ".aac", ".wma", ".aiff", ".aif", ".ogg", ".opus" };
+        { ".mp3", ".wav", ".flac", ".m4a", ".alac", ".aac", ".wma", ".aiff", ".aif", ".ogg", ".opus" };
 
     internal static string AudioFilePattern { get; } = string.Join(";", System.Linq.Enumerable.Select(Extensions, ext => "*" + ext));
 
@@ -95,7 +95,8 @@ internal static class LibraryScanner
                 }
 
                 if (cache != null && cache.TryGetValue(path, out var previous) &&
-                    previous.FileLength == length && previous.LastWriteUtcTicks == stamp && stamp > 0)
+                    previous.FileLength == length && previous.LastWriteUtcTicks == stamp && stamp > 0 &&
+                    previous.BitrateKbps.HasValue)
                 {
                     Record(path, previous, null, cached: true);
                     continue;
@@ -168,24 +169,14 @@ internal static class LibraryScanner
         if (Path.GetExtension(path).Equals(".flac", StringComparison.OrdinalIgnoreCase) &&
             FlacTagReader.Read(path, length, stamp) is { } flac) return flac;
 
-        using var file = TagLib.File.Create(path);
+        using var file = AudioMetadata.Open(path);
         var tag = file.Tag;
         var audio = file.Properties;
+        var metadata = AudioMetadata.Read(path, audio);
         string name = string.IsNullOrWhiteSpace(tag.Title) ? Path.GetFileNameWithoutExtension(path) : tag.Title;
         return new Track(path, name, tag.FirstPerformer ?? "Artista desconocido",
             tag.Album ?? "Sin álbum", tag.FirstAlbumArtist ?? "", tag.FirstGenre ?? "",
             tag.Year, tag.Disc, tag.Track, (int)audio.Duration.TotalSeconds,
-            ReadCodec(audio), audio.AudioSampleRate, audio.BitsPerSample, length, stamp);
-    }
-
-    private static string ReadCodec(TagLib.Properties audio)
-    {
-        foreach (var codec in audio.Codecs)
-        {
-            if (codec is TagLib.Flac.StreamHeader) return "FLAC";
-            if (codec is TagLib.Riff.WaveFormatEx wave && (int)wave.FormatTag is 1 or 3) return "PCM";
-            if (codec is TagLib.Mpeg4.IsoAudioSampleEntry mp4 && mp4.BoxType.ToString() == "alac") return "ALAC";
-        }
-        return null;
+            metadata.Codec, metadata.SampleRate, metadata.BitDepth, length, stamp, metadata.BitrateKbps, metadata.Channels);
     }
 }

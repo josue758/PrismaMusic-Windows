@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.60.1
+
+- Identifica ALAC dentro de archivos M4A y lee su resolución, frecuencia, canales y bitrate medio de audio.
+- Unifica los datos de formato entre la biblioteca, el reproductor y la información del archivo. La columna de formato muestra el códec y el bitrate.
+- Completa los datos técnicos de pistas antiguas al actualizar la biblioteca.
+
 ## 0.60.0
 
 - Lee rápidamente etiquetas FLAC y omite la transferencia de carátulas incrustadas durante el escaneo.

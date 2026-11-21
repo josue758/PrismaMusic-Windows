@@ -50,7 +50,7 @@ public sealed class LibraryScannerTests : IDisposable
             }
             WriteBlockHeader(writer, 128 | 4, (int)comments.Length);
             writer.Write(comments.ToArray());
-            writer.Write((byte)0xFF);
+            writer.BaseStream.SetLength(writer.BaseStream.Position + 185 * 25000);
         }
 
         var result = LibraryScanner.ReadFolder(directory);
@@ -65,6 +65,8 @@ public sealed class LibraryScannerTests : IDisposable
         Assert.Equal(96000, track.SampleRate);
         Assert.Equal(24, track.BitDepth);
         Assert.Equal(185, track.Seconds);
+        Assert.Equal(2, track.Channels);
+        Assert.Equal(200, track.BitrateKbps);
 
         static void WriteBlockHeader(BinaryWriter writer, byte type, int size)
         {
@@ -100,6 +102,7 @@ public sealed class LibraryScannerTests : IDisposable
         Assert.Equal("PCM", linear.Codec);
         Assert.Equal(44100, linear.SampleRate);
         Assert.Equal(16, linear.BitDepth);
+        Assert.Equal(1411, linear.BitrateKbps);
         Assert.Equal("compressed", Assert.Single(result.Tracks.Where(track => !track.IsLossless)).Name);
 
         void WriteWave(string name, WaveFormat format)
@@ -155,6 +158,10 @@ public sealed class LibraryScannerTests : IDisposable
         var cache = new System.Collections.Generic.Dictionary<string, Track>(StringComparer.OrdinalIgnoreCase) { [path] = first };
 
         Assert.Same(first, Assert.Single(LibraryScanner.ReadFolder(directory, cache: cache).Tracks));
+        cache[path] = first with { BitrateKbps = null };
+        var migrated = Assert.Single(LibraryScanner.ReadFolder(directory, cache: cache).Tracks);
+        Assert.Equal(first, migrated);
+        cache[path] = first;
 
         Write(2);
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow);

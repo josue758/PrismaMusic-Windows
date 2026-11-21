@@ -187,7 +187,7 @@ public partial class MainWindow
     {
         return ReadArtworkPayload(path, () =>
         {
-            using var file = TagLib.File.Create(path);
+            using var file = AudioMetadata.Open(path);
             return file.Tag.Pictures.FirstOrDefault()?.Data.Data;
         });
     }
