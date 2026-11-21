@@ -17,7 +17,7 @@ internal static class LibraryScanner
 
     public static (List<Track> Tracks, int Errors) ReadFolder(string folder, CancellationToken cancellationToken = default,
         IProgress<LibraryScanProgress> progress = null, IReadOnlyDictionary<string, Track> cache = null,
-        bool includeSubfolders = true, int parallelReads = 0, bool onlyNew = false)
+        bool includeSubfolders = true, int parallelReads = 0, bool onlyNew = false, Action<Track> onNewTrack = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var tracks = new List<Track>();
@@ -32,7 +32,8 @@ internal static class LibraryScanner
         {
             RecurseSubdirectories = false,
             IgnoreInaccessible = false,
-            AttributesToSkip = FileAttributes.ReparsePoint
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            BufferSize = 64 * 1024
         };
 
         // NAS file opens wait for network I/O. Cache hits stay in the directory enumerator
@@ -46,7 +47,12 @@ internal static class LibraryScanner
             MaxDegreeOfParallelism = workers
         }, entry =>
         {
-            try { Record(entry.Path, ReadTrack(entry.Path, entry.Length, entry.Stamp), null); }
+            try
+            {
+                var track = ReadTrack(entry.Path, entry.Length, entry.Stamp);
+                if (onNewTrack != null && cache?.ContainsKey(track.Path) != true) onNewTrack(track);
+                Record(entry.Path, track, null);
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
                 or TagLib.CorruptFileException or TagLib.UnsupportedFormatException)
             {

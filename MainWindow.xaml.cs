@@ -407,6 +407,16 @@ public partial class MainWindow : Window
 			}
 			else
 			{
+				string[] arguments = Environment.GetCommandLineArgs();
+				int scanOption = Array.IndexOf(arguments, "--scan-source");
+				if (scanOption >= 0 && scanOption + 1 < arguments.Length &&
+					library.Folders.FirstOrDefault(folder => string.Equals(folder, arguments[scanOption + 1], StringComparison.OrdinalIgnoreCase)) is string source)
+				{
+					RestoreLibraryFilters(new LibraryFilters("", null, null, null, 0));
+					ShowLibrarySource(source);
+					await Scan(new[] { source }, add: false, onlyNew: true, allSubfolders: true);
+					return;
+				}
 				bool rescanOnLaunch = scanOnLaunch && library.Folders.Count != 0;
 				ShowWelcomeOnFirstRun();
 				if (rescanOnLaunch) await Scan(library.Folders.ToArray(), add: false);
@@ -1486,7 +1496,10 @@ public partial class MainWindow : Window
 			remove.Click += (_, _) => RemoveLibrarySource(sourcePath);
 			sourceButton.ContextMenu = new ContextMenu();
 			var importNew = new MenuItem { Header = T("Importar solo pistas nuevas") };
-			importNew.Click += async (_, _) => await Scan(new[] { sourcePath }, add: false, onlyNew: true);
+			importNew.Click += async (_, _) => await Scan(new[] { sourcePath }, add: false, onlyNew: true, allSubfolders: true);
+			var scanAll = new MenuItem { Header = T("Escanear todas las subcarpetas") };
+			scanAll.Click += async (_, _) => await Scan(new[] { sourcePath }, add: false, allSubfolders: true);
+			sourceButton.ContextMenu.Items.Add(scanAll);
 			sourceButton.ContextMenu.Items.Add(importNew);
 			sourceButton.ContextMenu.Items.Add(reveal);
 			sourceButton.ContextMenu.Items.Add(remove);
@@ -1619,7 +1632,7 @@ public partial class MainWindow : Window
 		scanCancellation?.Cancel();
 	}
 
-	private async Task<(int TracksFound, bool Complete)?> Scan(string[] folders, bool add, bool onlyNew = false)
+	private async Task<(int TracksFound, bool Complete)?> Scan(string[] folders, bool add, bool onlyNew = false, bool allSubfolders = false)
 	{
 		if (scanning || folders.Length == 0)
 		{
@@ -1632,7 +1645,7 @@ public partial class MainWindow : Window
 		ScanProgressPanel.Visibility = Visibility.Visible;
 		ScanProgressText.Text = LocalTextExtension.Translate("Preparando el escaneo…");
 		Status.Text = "";
-		bool recurse = scanSubfolders;
+		bool recurse = allSubfolders || scanSubfolders;
 		int readers = parallelTagReads;
 		Track[] tracksBeforeScan = library.Tracks.ToArray();
 		List<string> errors = new List<string>();
@@ -1641,6 +1654,34 @@ public partial class MainWindow : Window
 		int errorsProcessed = 0;
 		int reusedTracks = 0;
 		int tracksFound = 0;
+		var pendingTracks = new System.Collections.Concurrent.ConcurrentQueue<(string Folder, Track Track)>();
+		var visiblePaths = tracksBeforeScan.Select(track => track.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+		int savedDuringScan = 0;
+		long lastSave = Environment.TickCount64;
+
+		void PublishDiscovered()
+		{
+			int count = 0;
+			bool sourcesChanged = false;
+			while (pendingTracks.TryDequeue(out var entry))
+			{
+				if (!visiblePaths.Add(entry.Track.Path)) continue;
+				library.Tracks.Add(ApplyLibraryTags(entry.Track));
+				count++;
+				if (add && !library.Folders.Contains(entry.Folder, StringComparer.OrdinalIgnoreCase))
+				{
+					library.Folders.Add(entry.Folder);
+					sourcesChanged = true;
+				}
+			}
+			if (count == 0) return;
+			Save(tracksChanged: true);
+			savedDuringScan += count;
+			lastSave = Environment.TickCount64;
+			if (sourcesChanged) RefreshLibrarySources();
+			RefreshFilters();
+			RefreshRows(refreshQueue: false);
+		}
 		try
 		{
 			var (originalTracks, indexed) = await Task.Run(() =>
@@ -1669,11 +1710,14 @@ public partial class MainWindow : Window
 						string item = value.CurrentTrack != null
 							? value.CurrentTrack.Name + " · " + value.CurrentTrack.Artist
 							: Path.GetFileName(value.Path) + " · " + value.Error;
-						ScanProgressText.Text = LocalTextExtension.Format("{0:N0} revisados · {1:N0} ya indexados · {2:N0} errores\n{3}",
-							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item);
+						if (pendingTracks.Count >= 128 || (Environment.TickCount64 - lastSave >= 5000 && !pendingTracks.IsEmpty))
+							PublishDiscovered();
+						ScanProgressText.Text = LocalTextExtension.Format("{0:N0} revisados · {1:N0} ya indexados · {2:N0} errores · {3:N0} nuevas\n{4}",
+							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, savedDuringScan, item);
 					});
 					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
-						includeSubfolders: recurse, parallelReads: readers, onlyNew: onlyNew), token);
+						includeSubfolders: recurse, parallelReads: readers, onlyNew: onlyNew,
+						onNewTrack: track => pendingTracks.Enqueue((folder, track))), token);
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
 					tracksFound += tuple.Item1.Count;
 					errorsProcessed += tuple.Item2;
@@ -1714,6 +1758,7 @@ public partial class MainWindow : Window
 				}
 			}
 			token.ThrowIfCancellationRequested();
+			PublishDiscovered();
 			int newTracks = 0;
 			int updatedTracks = 0;
 			foreach (Track track in indexed.Values)
@@ -1735,7 +1780,7 @@ public partial class MainWindow : Window
 				: LocalTextExtension.Format("Escaneo parcial: {0:N0} pistas nuevas, {1:N0} etiquetas actualizadas. {2}", newTracks, updatedTracks, errors[0]);
 			if (tracksChanged || addedFolders.Count != 0)
 			{
-				library.Folders.AddRange(addedFolders);
+				library.Folders.AddRange(addedFolders.Where(folder => !library.Folders.Contains(folder, StringComparer.OrdinalIgnoreCase)));
 				Save(tracksChanged);
 				RefreshLibrarySources();
 			}
@@ -1749,7 +1794,9 @@ public partial class MainWindow : Window
 		}
 		catch (OperationCanceledException) when (token.IsCancellationRequested)
 		{
-			Status.Text = LocalTextExtension.Translate("Escaneo cancelado. La biblioteca anterior se conservó.");
+			if (IsLoaded) PublishDiscovered();
+			Status.Text = savedDuringScan == 0 ? T("Escaneo cancelado. La biblioteca anterior se conservó.")
+				: LocalTextExtension.Format("Escaneo cancelado · {0:N0} pistas incorporadas.", savedDuringScan);
 			return null;
 		}
 		finally

@@ -641,6 +641,11 @@ public sealed class LocalTextExtension : MarkupExtension
         ["Nombre de la lista"] = ("Playlist name", "Nome da lista"),
         ["Ir atrás"] = ("Go back", "Voltar"),
         ["Importar solo pistas nuevas"] = ("Import new tracks only", "Importar apenas faixas novas"),
+        ["Escanear todas las subcarpetas"] = ("Scan all subfolders", "Verificar todas as subpastas"),
+        ["Escaneo cancelado · {0:N0} pistas incorporadas."] = ("Scan canceled · {0:N0} tracks added.", "Verificação cancelada · {0:N0} faixas adicionadas."),
+        ["{0:N0} revisados · {1:N0} ya indexados · {2:N0} errores · {3:N0} nuevas\n{4}"] =
+            ("{0:N0} checked · {1:N0} already indexed · {2:N0} errors · {3:N0} new\n{4}",
+             "{0:N0} verificados · {1:N0} já indexados · {2:N0} erros · {3:N0} novas\n{4}"),
         ["{0:N0} resultados"] = ("{0:N0} results", "{0:N0} resultados"),
         ["Música desde tu NAS"] = ("Music from your NAS", "Música do seu NAS"),
         ["Escribe el nombre o la IP del NAS para ver sus carpetas, o pega una ruta SMB completa."] = ("Enter a NAS name or IP to see its shares, or paste a full SMB path.", "Digite o nome ou IP do NAS para ver os compartilhamentos ou cole um caminho SMB completo."),

@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.59.1
+
+- Guarda las pistas nuevas durante el escaneo y conserva el progreso cuando se cancela.
+- Añade «Escanear todas las subcarpetas» al menú de cada fuente.
+
 ## 0.59.0
 
 - Permite introducir el nombre o la IP de un NAS, ver sus carpetas SMB y abrir el inicio de sesión de Windows si el recurso lo requiere.
