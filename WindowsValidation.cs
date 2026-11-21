@@ -43,9 +43,22 @@ public partial class MainWindow
         try
         {
             library = new Library();
-            await Scan(new[] { source }, add: true);
-            if (library.Tracks.Count != 3 || library.Folders.Single() != source)
+            string path = Environment.GetEnvironmentVariable("PRISMA_NAS_DIALOG_PROBE") == null ? source : AskNasSource(this);
+            if (path != source) throw new InvalidOperationException("The NAS dialog did not verify and accept the share.");
+            bool testOwnNas = Environment.GetEnvironmentVariable("PRISMA_SMB_LIVE_SOURCE") == "1";
+            if (testOwnNas)
+            {
+                string[] components = source[2..].Split('\\');
+                var listed = await Task.Run(() => NetworkMusicSource.ListShares(components[0]));
+                if (!listed.Contains($@"\\{components[0]}\{components[1]}", StringComparer.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("The NAS did not list the selected SMB share.");
+            }
+            await ImportNasSource(path);
+            int expected = testOwnNas ? library.Tracks.Count : 3;
+            if (expected < 2 || library.Tracks.Count != expected || library.Folders.Single() != source)
                 throw new InvalidOperationException($"SMB scan did not index the demo source. {Status.Text}");
+            if (selectedLibrarySource != source)
+                throw new InvalidOperationException("The NAS import did not open the source and report its indexed tracks.");
 
             var directoryForDatabase = Environment.GetEnvironmentVariable("PRISMA_SMB_TEST_DATABASE");
             if (!string.IsNullOrEmpty(directoryForDatabase))
@@ -53,13 +66,13 @@ public partial class MainWindow
                 var probeDatabase = new LibraryDatabase(directoryForDatabase);
                 probeDatabase.Save(library, tracksChanged: true);
                 library = probeDatabase.Load();
-                if (library.Tracks.Count != 3 || library.Folders.Single() != source)
+                if (library.Tracks.Count != expected || library.Folders.Single() != source)
                     throw new InvalidOperationException("Reloading the SMB library from SQLite lost the source or tracks.");
             }
 
             ShowLibrarySource(source);
             var rows = Rows.Items.OfType<LibraryRow>().ToArray();
-            if (rows.Length != 3 || !rows.All(row => IsTrackInSource(row.Tracks.Single().Path, source)))
+            if (rows.Length != expected || !rows.All(row => IsTrackInSource(row.Tracks.Single().Path, source)))
                 throw new InvalidOperationException("The NAS source did not display its tracks.");
             Volume.Value = 0;
             Track first = rows[0].Tracks.Single();
@@ -72,17 +85,17 @@ public partial class MainWindow
             if (!opened || current != second) throw new InvalidOperationException("Changing tracks over SMB failed.");
             player.Pause();
             SetPlaying(false);
-            Console.WriteLine("SMB: indexed, persisted and displayed three tracks, played one and switched tracks.");
+            Console.WriteLine($"SMB: indexed, persisted and displayed {expected} tracks, played one and switched tracks.");
 
             var before = library.Tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
             await Scan(new[] { source }, add: false);
-            if (library.Tracks.Count != 3 || !library.Tracks.All(track => ReferenceEquals(before[track.Path], track)))
+            if (library.Tracks.Count != expected || !library.Tracks.All(track => ReferenceEquals(before[track.Path], track)))
                 throw new InvalidOperationException("SMB rescan reread unchanged tracks.");
             string unavailable = Path.Combine(source, "unavailable-" + Guid.NewGuid().ToString("N"));
             var retained = first with { Path = Path.Combine(unavailable, "retained.m4a") };
             library.Tracks.Add(retained);
             await Scan(new[] { unavailable }, false);
-            if (!library.Tracks.Contains(retained) || library.Tracks.Count != 4)
+            if (!library.Tracks.Contains(retained) || library.Tracks.Count != expected + 1)
                 throw new InvalidOperationException("An unavailable SMB folder pruned the library.");
             Console.WriteLine("SMB: incremental rescan reused unchanged tracks and retained unavailable files.");
         }

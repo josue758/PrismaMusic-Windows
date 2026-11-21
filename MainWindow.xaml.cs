@@ -1409,146 +1409,19 @@ public partial class MainWindow : Window
 	private async void ConnectNas(object sender, RoutedEventArgs args)
 	{
 		if (scanning || AskNasSource(this) is not string source) return;
-		await Scan(new[] { source }, add: true);
-		if (library.Folders.Contains(source, StringComparer.OrdinalIgnoreCase))
-		{
-			RestoreLibraryFilters(new LibraryFilters("", null, null, null, 0));
-			ShowLibrarySource(source);
-		}
+		await ImportNasSource(source);
 	}
 
-	private string AskNasSource(Window owner)
+	private async Task ImportNasSource(string source)
 	{
-		Window dialog = new Window
-		{
-			Title = LocalTextExtension.Translate("Conectar NAS"),
-			Owner = owner,
-			WindowStartupLocation = WindowStartupLocation.CenterOwner,
-			Width = 500,
-			SizeToContent = SizeToContent.Height,
-			ResizeMode = ResizeMode.NoResize,
-			Background = new SolidColorBrush(Color.FromRgb(26, 29, 37)),
-			Foreground = Brushes.White,
-			ShowInTaskbar = false
-		};
-		Grid content = new Grid { Margin = new Thickness(24) };
-		content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-		content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-		content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-		content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-		content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-		TextBlock title = new TextBlock
-		{
-			Text = LocalTextExtension.Translate("Conecta una carpeta compartida"),
-			FontSize = 21,
-			FontWeight = FontWeights.SemiBold,
-			Margin = new Thickness(0, 0, 0, 8)
-		};
-		content.Children.Add(title);
-
-		TextBlock instructions = new TextBlock
-		{
-			Text = LocalTextExtension.Translate("Escribe la ruta del NAS o selecciona una unidad de red. Prisma usa el acceso a la red de Windows."),
-			TextWrapping = TextWrapping.Wrap,
-			Foreground = (Brush)FindResource("Muted"),
-			Margin = new Thickness(0, 0, 0, 16)
-		};
-		Grid.SetRow(instructions, 1);
-		content.Children.Add(instructions);
-
-		System.Windows.Controls.TextBox pathInput = new System.Windows.Controls.TextBox
-		{
-			Height = 38,
-			FontSize = 14,
-			Padding = new Thickness(9, 7, 9, 7),
-			VerticalContentAlignment = VerticalAlignment.Center,
-			ToolTip = @"\\servidor\compartida\Musica"
-		};
-		Grid.SetRow(pathInput, 2);
-		content.Children.Add(pathInput);
-
-		TextBlock error = new TextBlock
-		{
-			TextWrapping = TextWrapping.Wrap,
-			Foreground = new SolidColorBrush(Color.FromRgb(255, 150, 150)),
-			Margin = new Thickness(0, 8, 0, 0)
-		};
-		Grid.SetRow(error, 3);
-		content.Children.Add(error);
-
-		StackPanel actions = new StackPanel
-		{
-			Orientation = System.Windows.Controls.Orientation.Horizontal,
-			HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-			Margin = new Thickness(0, 18, 0, 0)
-		};
-		System.Windows.Controls.Button browse = new System.Windows.Controls.Button
-		{
-			Content = LocalTextExtension.Translate("Buscar carpeta…"),
-			Margin = new Thickness(0, 0, 8, 0),
-			Padding = new Thickness(12, 7, 12, 7)
-		};
-		browse.Click += (_, _) =>
-		{
-			using FolderBrowserDialog picker = new FolderBrowserDialog
-			{
-				Description = LocalTextExtension.Translate("Elige la carpeta compartida de tu NAS"),
-				ShowNewFolderButton = false,
-				UseDescriptionForTitle = true
-			};
-			if (picker.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-			{
-				pathInput.Text = picker.SelectedPath;
-			}
-		};
-		System.Windows.Controls.Button connect = new System.Windows.Controls.Button
-		{
-			Content = LocalTextExtension.Translate("Conectar"),
-			IsDefault = true,
-			Padding = new Thickness(16, 7, 16, 7)
-		};
-		connect.Click += async (_, _) =>
-		{
-			string input = pathInput.Text;
-			connect.IsEnabled = browse.IsEnabled = pathInput.IsEnabled = false;
-			error.Text = T("Comprobando el acceso al NAS…");
-			try
-			{
-				string path = await Task.Run(() =>
-				{
-					string resolved = NetworkMusicSource.Normalize(input);
-					if (resolved == null) return null;
-					using var entries = Directory.EnumerateFileSystemEntries(resolved).GetEnumerator();
-					entries.MoveNext();
-					return resolved;
-				}).WaitAsync(TimeSpan.FromSeconds(12));
-				if (!dialog.IsVisible) return;
-				if (path == null)
-				{
-					error.Text = T("Indica una carpeta compartida, por ejemplo \\\\servidor\\Música, o una unidad de red conectada.");
-					return;
-				}
-				pathInput.Text = path;
-				dialog.DialogResult = true;
-			}
-			catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or TimeoutException)
-			{
-				error.Text = T("Abre la carpeta en el Explorador de archivos para comprobar el acceso y vuelve a intentarlo.") + " " + ex.Message;
-			}
-			finally
-			{
-				connect.IsEnabled = browse.IsEnabled = pathInput.IsEnabled = true;
-			}
-		};
-		actions.Children.Add(browse);
-		actions.Children.Add(connect);
-		Grid.SetRow(actions, 4);
-		content.Children.Add(actions);
-				dialog.SetResourceReference(BackgroundProperty, "SettingsBackground");
-		dialog.Content = content;
-
-		return dialog.ShowDialog() == true ? pathInput.Text : null;
+		var result = await Scan(new[] { source }, add: true);
+		if (result is not { } scan || !library.Folders.Contains(source, StringComparer.OrdinalIgnoreCase)) return;
+		RestoreLibraryFilters(new LibraryFilters("", null, null, null, 0));
+		ShowLibrarySource(source);
+		if (!scan.Complete || unsavedTracks) return;
+		Status.Text = scan.TracksFound > 0
+			? LocalTextExtension.Format("NAS conectado · {0:N0} pistas disponibles en la biblioteca.", scan.TracksFound)
+			: T("El NAS está conectado, pero no se encontraron archivos de audio compatibles en esta carpeta.");
 	}
 
 	private void RefreshLibrarySources()
@@ -1597,14 +1470,14 @@ public partial class MainWindow : Window
 				Tag = sourcePath,
 				ToolTip = sourcePath,
 				HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
-				Background = string.Equals(selectedLibrarySource, sourcePath, StringComparison.OrdinalIgnoreCase)
-					? new SolidColorBrush(Color.FromArgb(34, 255, 255, 255))
-					: Brushes.Transparent,
-				Foreground = Brushes.White,
+				Background = Brushes.Transparent,
 				BorderThickness = new Thickness(0),
 				Padding = new Thickness(8, 5, 6, 5),
 				Margin = new Thickness(0, 1, 0, 1)
 			};
+			sourceButton.SetResourceReference(ForegroundProperty, "Ink");
+			if (string.Equals(selectedLibrarySource, sourcePath, StringComparison.OrdinalIgnoreCase))
+				sourceButton.SetResourceReference(BackgroundProperty, "ControlHover");
 			AutomationProperties.SetName(sourceButton, LocalTextExtension.Format("Abrir fuente {0}", name));
 			sourceButton.Click += SelectLibrarySource;
 			MenuItem reveal = new MenuItem { Header = LocalTextExtension.Translate("Abrir en el Explorador de archivos") };
@@ -1612,6 +1485,9 @@ public partial class MainWindow : Window
 			MenuItem remove = new MenuItem { Header = LocalTextExtension.Translate("Quitar fuente"), StaysOpenOnClick = false };
 			remove.Click += (_, _) => RemoveLibrarySource(sourcePath);
 			sourceButton.ContextMenu = new ContextMenu();
+			var importNew = new MenuItem { Header = T("Importar solo pistas nuevas") };
+			importNew.Click += async (_, _) => await Scan(new[] { sourcePath }, add: false, onlyNew: true);
+			sourceButton.ContextMenu.Items.Add(importNew);
 			sourceButton.ContextMenu.Items.Add(reveal);
 			sourceButton.ContextMenu.Items.Add(remove);
 			LibrarySources.Items.Add(sourceButton);
@@ -1743,11 +1619,11 @@ public partial class MainWindow : Window
 		scanCancellation?.Cancel();
 	}
 
-	private async Task Scan(string[] folders, bool add)
+	private async Task<(int TracksFound, bool Complete)?> Scan(string[] folders, bool add, bool onlyNew = false)
 	{
 		if (scanning || folders.Length == 0)
 		{
-			return;
+			return null;
 		}
 		CancellationTokenSource cancellation = (scanCancellation = new CancellationTokenSource());
 		CancellationToken token = cancellation.Token;
@@ -1764,6 +1640,7 @@ public partial class MainWindow : Window
 		int filesProcessed = 0;
 		int errorsProcessed = 0;
 		int reusedTracks = 0;
+		int tracksFound = 0;
 		try
 		{
 			var (originalTracks, indexed) = await Task.Run(() =>
@@ -1796,15 +1673,16 @@ public partial class MainWindow : Window
 							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, item);
 					});
 					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
-						includeSubfolders: recurse, parallelReads: readers), token);
+						includeSubfolders: recurse, parallelReads: readers, onlyNew: onlyNew), token);
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
+					tracksFound += tuple.Item1.Count;
 					errorsProcessed += tuple.Item2;
 					foreach (Track item in tuple.Item1)
 					{
 						if (originalTracks.TryGetValue(item.Path, out var previous) && ReferenceEquals(previous, item)) reusedTracks++;
 						indexed[item.Path] = item;
 					}
-					if (tuple.Item2 == 0)
+					if (tuple.Item2 == 0 && !onlyNew)
 					{
 						HashSet<string> seen = tuple.Item1.Select((Track t) => t.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
 						string prefix = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
@@ -1816,7 +1694,7 @@ public partial class MainWindow : Window
 							indexed.Remove(key);
 						}
 					}
-					else
+					else if (tuple.Item2 != 0)
 					{
 						errors.Add($"{tuple.Item2} errores en {folder}");
 					}
@@ -1867,10 +1745,12 @@ public partial class MainWindow : Window
 				RefreshFilters();
 				RefreshRows();
 			}
+			return (tracksFound, errors.Count == 0);
 		}
 		catch (OperationCanceledException) when (token.IsCancellationRequested)
 		{
 			Status.Text = LocalTextExtension.Translate("Escaneo cancelado. La biblioteca anterior se conservó.");
+			return null;
 		}
 		finally
 		{
@@ -2072,7 +1952,8 @@ public partial class MainWindow : Window
 					_ => source.OrderBy((Track t) => t.Name), 
 				};
 			}
-			Rows.ItemsSource = source.Select((Track t) => new LibraryRow(t.Name, t.Detail, new Track[1] { t })).ToArray();
+			Rows.ItemsSource = source.Select(t => cachedSongRows.GetValue(t, static track =>
+				new LibraryRow(track.Name, track.Detail, new[] { track }))).ToArray();
 			if (losslessView)
 			{
 				CollectionCount.Text = Rows.Items.Count == 1
@@ -2085,13 +1966,16 @@ public partial class MainWindow : Window
 				}
 			}
 		}
+		if (query.Length != 0 && !losslessView)
+			CollectionCount.Text = LocalTextExtension.Format("{0:N0} resultados", Rows.Items.Count);
 		UpdateEmptyLibrary();
 	}
 
 	private static bool MatchesLibraryQuery(Track track, string[] query)
 	{
 		if (query.Length == 0) return true;
-		string searchable = $"{track.Name} {track.Detail} {track.AlbumArtist} {track.Genre} {track.FormatLabel}";
+		string searchable = cachedSearchText.GetValue(track, static item =>
+			$"{item.Name} {item.Detail} {item.AlbumArtist} {item.Genre} {item.FormatLabel}");
 		return query.All(word => CultureInfo.CurrentCulture.CompareInfo.IndexOf(searchable, word,
 			CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0);
 	}
@@ -2121,6 +2005,7 @@ public partial class MainWindow : Window
 		}
 		Heading.Text = collection?.Name ?? (sourceName == null ? section : sourceName + " · " + section);
 		RefreshRows();
+		AnimateLibraryNavigation();
 	}
 
 	private void OpenCollection(LibraryRow row, bool album)

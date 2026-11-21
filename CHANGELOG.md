@@ -2,6 +2,13 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.59.0
+
+- Permite introducir el nombre o la IP de un NAS, ver sus carpetas SMB y abrir el inicio de sesión de Windows si el recurso lo requiere.
+- Rediseña el diálogo de conexión y distingue los errores de acceso, las carpetas no disponibles y las fuentes conectadas sin archivos de audio compatibles.
+- Omite los archivos auxiliares de macOS en bibliotecas SMB para que no se cuenten como pistas dañadas.
+- Añade «Importar solo pistas nuevas» a las fuentes, reutiliza los datos de búsqueda y suaviza las transiciones de biblioteca.
+
 ## 0.58.0
 
 - Rediseña la bienvenida en cuatro pasos con selección de idioma, archivos y NAS, vista previa de apariencia y preferencias de inicio.

@@ -17,7 +17,7 @@ internal static class LibraryScanner
 
     public static (List<Track> Tracks, int Errors) ReadFolder(string folder, CancellationToken cancellationToken = default,
         IProgress<LibraryScanProgress> progress = null, IReadOnlyDictionary<string, Track> cache = null,
-        bool includeSubfolders = true, int parallelReads = 0)
+        bool includeSubfolders = true, int parallelReads = 0, bool onlyNew = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var tracks = new List<Track>();
@@ -66,7 +66,15 @@ internal static class LibraryScanner
                     (path, error) => Record(path, null, error), includeSubfolders);
             foreach (var info in files)
             {
-                if (!Extensions.Contains(info.Extension)) continue;
+                // SMB libraries written by macOS can contain AppleDouble copies that share
+                // the music extension but contain only filesystem metadata.
+                if (info.Name.StartsWith("._", StringComparison.Ordinal) || !Extensions.Contains(info.Extension)) continue;
+                string path = info.FullName;
+                if (onlyNew && cache?.ContainsKey(path) == true)
+                {
+                    Record(path, cache[path], null, cached: true);
+                    continue;
+                }
                 long length;
                 long stamp;
                 try
@@ -80,7 +88,6 @@ internal static class LibraryScanner
                     continue;
                 }
 
-                string path = info.FullName;
                 if (cache != null && cache.TryGetValue(path, out var previous) &&
                     previous.FileLength == length && previous.LastWriteUtcTicks == stamp && stamp > 0)
                 {
@@ -141,7 +148,9 @@ internal static class LibraryScanner
                         reportUnavailableFolder(folder.FullName, error.Message);
                         break;
                     }
-                    if (entries.Current is DirectoryInfo child && includeSubfolders) folders.Push(child);
+                    if (entries.Current is DirectoryInfo child && includeSubfolders &&
+                        !child.Name.Equals(".AppleDouble", StringComparison.OrdinalIgnoreCase))
+                        folders.Push(child);
                     else if (entries.Current is FileInfo file) yield return file;
                 }
             }

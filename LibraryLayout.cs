@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Controls;
@@ -12,6 +13,17 @@ namespace PrismaMusic;
 public partial class MainWindow
 {
     private DispatcherTimer searchDebounce;
+    private readonly ConditionalWeakTable<Track, LibraryRow> cachedSongRows = new();
+    private static readonly ConditionalWeakTable<Track, string> cachedSearchText = new();
+
+    private void AnimateLibraryNavigation()
+    {
+        FrameworkElement view = HomeView.IsVisible ? HomeView : Rows;
+        view.BeginAnimation(OpacityProperty, MotionEnabled
+            ? new System.Windows.Media.Animation.DoubleAnimation(.80, 1, TimeSpan.FromMilliseconds(145))
+                { FillBehavior = System.Windows.Media.Animation.FillBehavior.Stop, EasingFunction = new System.Windows.Media.Animation.CubicEase() }
+            : null);
+    }
 
     private void SearchTextChanged(object sender, TextChangedEventArgs args)
     {

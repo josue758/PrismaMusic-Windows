@@ -76,6 +76,9 @@ public sealed class LibraryScannerTests : IDisposable
     {
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "notes.txt"), "not music");
+        File.WriteAllText(Path.Combine(directory, "._mac-tagged.flac"), "AppleDouble metadata");
+        var metadata = Directory.CreateDirectory(Path.Combine(directory, ".AppleDouble"));
+        File.WriteAllText(Path.Combine(metadata.FullName, "mac-tagged.flac"), "AppleDouble metadata");
 
         var result = LibraryScanner.ReadFolder(directory);
 
@@ -97,6 +100,7 @@ public sealed class LibraryScannerTests : IDisposable
 
         Write(2);
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+        Assert.Same(first, Assert.Single(LibraryScanner.ReadFolder(directory, cache: cache, onlyNew: true).Tracks));
         var second = Assert.Single(LibraryScanner.ReadFolder(directory, cache: cache).Tracks);
         Assert.NotSame(first, second);
         Assert.Equal(2, second.Seconds);
@@ -117,4 +121,14 @@ public sealed class LibraryScannerTests : IDisposable
     [InlineData(@"\\?\UNC\fiberhome\Musica", null)]
     public void NasNormalizesSupportedPaths(string input, string expected) =>
         Assert.Equal(expected, NetworkMusicSource.Normalize(input));
+
+    [Theory]
+    [InlineData("fiberhome", "fiberhome")]
+    [InlineData(@"\\fiberhome\", "fiberhome")]
+    [InlineData("smb://192.168.0.1/", "192.168.0.1")]
+    [InlineData("smb://fiberhome/Musica", null)]
+    [InlineData(@"Z:\", null)]
+    [InlineData("smb://user:password@fiberhome", null)]
+    public void NasRecognizesServersSeparatelyFromSharePaths(string input, string expected) =>
+        Assert.Equal(expected, NetworkMusicSource.ServerOnly(input));
 }
