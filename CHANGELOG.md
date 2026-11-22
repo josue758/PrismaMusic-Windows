@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.62.5
+
+- La ventana puede aparecer mientras SQLite carga la biblioteca. La comprobación de integridad y la copia de seguridad también se ejecutan fuera del hilo de la interfaz.
+- La búsqueda en colecciones grandes reparte el trabajo y conserva el orden y la coincidencia sin tildes. Prisma reutiliza el orden de los álbumes consultados.
+
 ## 0.62.4
 
 - La ficha de artista ajusta las columnas al ancho de la ventana y al tamaño de portada elegido en Apariencia. Las portadas conservan su forma cuadrada y se cargan con mayor resolución.

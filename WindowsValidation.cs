@@ -83,9 +83,20 @@ public partial class MainWindow
                 throw new InvalidOperationException("Undo bulk edit did not restore the initial tracks.");
 
             watch.Restart();
-            int searchMatches = library.Tracks.Count(track => MatchesLibraryQuery(track, new[] { "cancion", "009" }));
+            var snapshot = library.Tracks.ToArray();
+            var query = new LibraryQuery("cancion 009");
+            var matches = query.Filter(snapshot).ToArray();
             long search = watch.ElapsedMilliseconds;
-            if (searchMatches == 0) throw new InvalidOperationException("Large-library search returned no matches.");
+            var culture = System.Globalization.CultureInfo.CurrentCulture.CompareInfo;
+            const System.Globalization.CompareOptions options = System.Globalization.CompareOptions.IgnoreCase |
+                System.Globalization.CompareOptions.IgnoreNonSpace;
+            var exact = snapshot.Where(item =>
+            {
+                string searchable = $"{item.Name} {item.Detail} {item.AlbumArtist} {item.Genre} {item.FormatLabel}";
+                return culture.IndexOf(searchable, "cancion", options) >= 0 && culture.IndexOf(searchable, "009", options) >= 0;
+            }).ToArray();
+            if (matches.Length == 0 || !matches.SequenceEqual(exact))
+                throw new InvalidOperationException("Large-library search changed the results or their order.");
             var keys = library.Tracks.Take(600).Select(track => (track.Album, Owner: AlbumOwner(track))).Distinct().ToArray();
             watch.Restart();
             int expected = keys.Sum(key => library.Tracks.Count(track =>
@@ -93,9 +104,13 @@ public partial class MainWindow
                 string.Equals(AlbumOwner(track), key.Owner, StringComparison.OrdinalIgnoreCase)));
             double linear = watch.Elapsed.TotalMilliseconds;
             watch.Restart();
-            int indexed = keys.Sum(key => IndexedAlbum(key.Album, key.Owner).Count());
+            int indexed = keys.Sum(key => IndexedAlbum(key.Album, key.Owner).Length);
             double indexedTime = watch.Elapsed.TotalMilliseconds;
             if (indexed != expected) throw new InvalidOperationException("Indexed album lookups disagreed with the baseline.");
+            watch.Restart();
+            for (int pass = 0; pass < 100; pass++)
+                foreach (var key in keys) _ = IndexedAlbum(key.Album, key.Owner);
+            double cachedAlbumTime = watch.Elapsed.TotalMilliseconds / 100;
 
             var scanTimes = await Task.Run(() =>
             {
@@ -149,7 +164,8 @@ public partial class MainWindow
             if (await cancelled != null || !lastScanReport.Cancelled || lastScanReport.Complete)
                 throw new InvalidOperationException("The report did not distinguish cancellation from a completed scan.");
             Console.WriteLine($"Scale check: {librarySize:N0} tracks, SQLite load {open} ms, search {search} ms, " +
-                $"{keys.Length} album lookups {linear:0.0} → {indexedTime:0.0} ms; {files} WAV scan {scanTimes.firstTime} ms, incremental {scanTimes.secondTime} ms.");
+                $"{keys.Length} album lookups {linear:0.0} → {indexedTime:0.0} ms, repeated {cachedAlbumTime:0.00} ms; " +
+                $"{files} WAV scan {scanTimes.firstTime} ms, incremental {scanTimes.secondTime} ms.");
             Console.WriteLine("Relocation, bulk numbering and undo, scan report and selective retries passed.");
         }
         finally

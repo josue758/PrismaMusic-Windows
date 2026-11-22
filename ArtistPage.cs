@@ -67,9 +67,9 @@ public partial class MainWindow
             .Select(group =>
             {
                 var first = group.First();
-                var tracks = IndexedAlbum(first.Album, AlbumOwner(first))
-                    .Where(track => selectedLibrarySource == null || IsTrackInSource(track.Path, selectedLibrarySource))
-                    .OrderBy(track => track.Disc).ThenBy(track => track.Number).ThenBy(track => track.Name).ToArray();
+                var tracks = IndexedAlbum(first.Album, AlbumOwner(first));
+                if (selectedLibrarySource != null)
+                    tracks = tracks.Where(track => IsTrackInSource(track.Path, selectedLibrarySource)).ToArray();
                 if (tracks.Length == 0) tracks = group.ToArray();
                 return new LibraryRow(first.Album, AlbumOwner(first), tracks);
             })

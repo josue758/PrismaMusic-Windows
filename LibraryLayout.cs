@@ -14,12 +14,12 @@ public partial class MainWindow
 {
     private DispatcherTimer searchDebounce;
     private readonly ConditionalWeakTable<Track, LibraryRow> cachedSongRows = new();
-    private static readonly ConditionalWeakTable<Track, string> cachedSearchText = new();
     private readonly Dictionary<int, Track[]> sortedLibraryTracks = new();
     private List<Track> indexedLibraryTracks;
     private int indexedLibraryCount;
     private Dictionary<string, Track> indexedTracksByPath;
     private ILookup<(string Album, string Owner), Track> indexedAlbums;
+    private readonly Dictionary<(string Album, string Owner), Track[]> orderedAlbums = new();
 
     private void RefreshLibraryIndex()
     {
@@ -30,17 +30,53 @@ public partial class MainWindow
             sortedLibraryTracks.Clear();
             indexedTracksByPath = null;
             indexedAlbums = null;
+            orderedAlbums.Clear();
         }
     }
 
     private static (string Album, string Owner) AlbumKey(string album, string owner) =>
         ((album ?? "").ToUpperInvariant(), (owner ?? "").ToUpperInvariant());
 
-    private IEnumerable<Track> IndexedAlbum(string album, string owner)
+    private Track[] IndexedAlbum(string album, string owner)
     {
         RefreshLibraryIndex();
+        var key = AlbumKey(album, owner);
+        if (orderedAlbums.TryGetValue(key, out var tracks)) return tracks;
         indexedAlbums ??= library.Tracks.ToLookup(track => AlbumKey(track.Album, AlbumOwner(track)));
-        return indexedAlbums[AlbumKey(album, owner)];
+        tracks = indexedAlbums[key].OrderBy(track => track.Disc).ThenBy(track => track.Number).ThenBy(track => track.Name).ToArray();
+        if (tracks.Length > 0) orderedAlbums.Add(key, tracks);
+        return tracks;
+    }
+
+    private sealed class LibraryQuery
+    {
+        private static readonly ConditionalWeakTable<Track, string> SearchText = new();
+        private readonly CompareInfo comparison = CultureInfo.CurrentCulture.CompareInfo;
+        private readonly string[] words;
+
+        internal LibraryQuery(string text)
+        {
+            words = text.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length > 1)
+                words = words.OrderByDescending(word => word.All(char.IsAsciiDigit)).ThenByDescending(word => word.Length).ToArray();
+        }
+
+        internal bool IsEmpty => words.Length == 0;
+
+        internal bool Matches(Track track)
+        {
+            string searchable = SearchText.GetValue(track, static item =>
+                $"{item.Name} {item.Detail} {item.AlbumArtist} {item.Genre} {item.FormatLabel}");
+            foreach (string word in words)
+                if (comparison.IndexOf(searchable, word, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) < 0)
+                    return false;
+            return true;
+        }
+
+        internal IEnumerable<Track> Filter(IEnumerable<Track> source) => source is IReadOnlyList<Track> { Count: >= 4096 } snapshot &&
+            Environment.ProcessorCount > 1
+            ? snapshot.AsParallel().AsOrdered().WithDegreeOfParallelism(Math.Min(6, Environment.ProcessorCount)).Where(Matches).ToArray()
+            : source.Where(Matches);
     }
 
     private Track[] OrderedLibraryTracks(int order)

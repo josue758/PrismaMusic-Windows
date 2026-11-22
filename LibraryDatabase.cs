@@ -4,14 +4,13 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 
 namespace PrismaMusic;
 
 internal sealed class LibraryDatabase(string directory)
 {
-    private static readonly JsonSerializerOptions TrackJson = new() { IgnoreReadOnlyProperties = true };
-
     private Dictionary<string, Track> savedTracks = new(StringComparer.OrdinalIgnoreCase);
 
     private string DatabasePath => Path.Combine(directory, "library.sqlite3");
@@ -20,8 +19,9 @@ internal sealed class LibraryDatabase(string directory)
     public Library Load()
     {
         RecoverIfCorrupt();
-        var library = ReadLibrary();
-        CreateBackup();
+        using var db = Open();
+        var library = ReadLibrary(db);
+        CreateBackup(db);
         return library;
     }
 
@@ -53,7 +53,7 @@ internal sealed class LibraryDatabase(string directory)
     }
 
     // Una copia por día de uso, renovada en cada inicio sano; se conservan las cinco más recientes.
-    private void CreateBackup()
+    private void CreateBackup(SqliteConnection source)
     {
         try
         {
@@ -61,7 +61,6 @@ internal sealed class LibraryDatabase(string directory)
             string target = Path.Combine(BackupDirectory, $"library-{DateTime.Now:yyyyMMdd}.sqlite3");
             string temporary = target + ".tmp";
             if (File.Exists(temporary)) File.Delete(temporary);
-            using (var source = Open())
             using (var copy = new SqliteConnection(new SqliteConnectionStringBuilder
                    { DataSource = temporary, Pooling = false }.ToString()))
             {
@@ -75,9 +74,8 @@ internal sealed class LibraryDatabase(string directory)
         catch (Exception) { }
     }
 
-    private Library ReadLibrary()
+    private Library ReadLibrary(SqliteConnection db)
     {
-        using var db = Open();
         using var readState = db.CreateCommand();
         readState.CommandText = "SELECT payload FROM library_state WHERE id = 1";
         if (readState.ExecuteScalar() is not string payload)
@@ -98,12 +96,17 @@ internal sealed class LibraryDatabase(string directory)
         library.TagEdits = new Dictionary<string, LibraryTagEdit>(library.TagEdits, StringComparer.OrdinalIgnoreCase);
         library.PlayCounts = new Dictionary<string, int>(library.PlayCounts, StringComparer.OrdinalIgnoreCase);
         using var readTracks = db.CreateCommand();
-        readTracks.CommandText = "SELECT payload FROM tracks ORDER BY path";
+        readTracks.CommandText = "SELECT CAST(payload AS BLOB) FROM tracks ORDER BY path";
+        var index = new Dictionary<string, Track>(StringComparer.OrdinalIgnoreCase);
         using var rows = readTracks.ExecuteReader();
         while (rows.Read())
-            library.Tracks.Add(JsonSerializer.Deserialize<Track>(rows.GetString(0))
-                ?? throw new InvalidDataException("Pista inválida en la biblioteca."));
-        savedTracks = Index(library);
+        {
+            var track = JsonSerializer.Deserialize(rows.GetFieldValue<byte[]>(0), LibraryTrackJson.Default.Track)
+                ?? throw new InvalidDataException("Pista inválida en la biblioteca.");
+            library.Tracks.Add(track);
+            index.Add(track.Path, track);
+        }
+        savedTracks = index;
         return library;
     }
 
@@ -142,7 +145,7 @@ internal sealed class LibraryDatabase(string directory)
             {
                 if (savedTracks.TryGetValue(path, out var old) && track == old) continue;
                 upsertPath.Value = path.ToUpperInvariant();
-                upsertPayload.Value = JsonSerializer.Serialize(track, TrackJson);
+                upsertPayload.Value = JsonSerializer.Serialize(track, LibraryTrackJson.Default.Track);
                 upsert.ExecuteNonQuery();
                 if (old != null && (old.FileLength != track.FileLength || old.LastWriteUtcTicks != track.LastWriteUtcTicks))
                 {
@@ -270,3 +273,7 @@ internal sealed class LibraryDatabase(string directory)
         }
     }
 }
+
+[JsonSerializable(typeof(Track))]
+[JsonSourceGenerationOptions(IgnoreReadOnlyProperties = true)]
+internal partial class LibraryTrackJson : JsonSerializerContext;

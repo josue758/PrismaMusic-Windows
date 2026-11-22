@@ -616,6 +616,7 @@ public sealed class LocalTextExtension : MarkupExtension
         ["Ver informe del escaneo"] = ("View scan report", "Ver relatório da verificação"),
         ["Informe del escaneo"] = ("Scan report", "Relatório da verificação"),
         ["Escaneo completo"] = ("Scan complete", "Verificação concluída"),
+        ["Cargando biblioteca…"] = ("Loading library…", "Carregando biblioteca…"),
         ["Escaneo parcial"] = ("Partial scan", "Verificação parcial"),
         ["Escaneo cancelado"] = ("Scan cancelled", "Verificação cancelada"),
         ["Tipo de resultado"] = ("Result type", "Tipo de resultado"),

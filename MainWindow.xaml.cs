@@ -285,19 +285,12 @@ public partial class MainWindow : Window
 			spectrumBars[i] = border;
 			SpectrumView.Children.Add(border);
 		}
-		try
+		var pendingLibrary = smokeTest ? null : Task.Run(() =>
 		{
-			if (!smokeTest)
-			{
-				LibraryDatabase libraryDatabase = new LibraryDatabase(DataDirectory);
-				library = libraryDatabase.Load();
-				database = libraryDatabase;
-			}
-		}
-		catch (Exception ex)
-		{
-			Status.Text = LocalTextExtension.Translate("No se pudo leer la biblioteca. ") + ex.Message;
-		}
+			var storage = new LibraryDatabase(DataDirectory);
+			return (Storage: storage, Library: storage.Load());
+		});
+		bool sessionRestored = false;
 		player.Volume = Volume.Value;
 		if (!smokeTest)
 		{
@@ -337,7 +330,7 @@ public partial class MainWindow : Window
 			CancelPendingOpen();
 			if (!smokeTest)
 			{
-				SaveSession();
+				if (sessionRestored) SaveSession();
 				SaveAudioSettings();
 			}
 			player.Close();
@@ -380,7 +373,6 @@ public partial class MainWindow : Window
 				}
 			}
 		};
-		UpdatePlaylistPicker();
 		LibrarySectionIndex = startupSection == 1 ? 1 : 0;
 		if (startupSection == 3 && !smokeTest) Navigation.SelectedItem = HomeNavigation;
 		Sort.SelectedIndex = 0;
@@ -396,18 +388,34 @@ public partial class MainWindow : Window
 				await SmokeTest();
 			};
 		}
-		RefreshFilters();
-		RefreshLibrarySources();
-		RefreshRows();
-		UpdateFavoriteToolbarButton();
 		if (smokeTest)
 		{
+			RefreshInitialLibrary();
 			return;
 		}
+		Shell.IsEnabled = false;
+		Status.Text = T("Cargando biblioteca…");
 		InitializeUpdates();
 		Loaded += async (object _, RoutedEventArgs _) =>
 		{
+			try
+			{
+				var loaded = await pendingLibrary;
+				if (!IsLoaded) return;
+				library = loaded.Library;
+				database = loaded.Storage;
+				Status.Text = "";
+			}
+			catch (Exception error)
+			{
+				if (!IsLoaded) return;
+				Status.Text = T("No se pudo leer la biblioteca. ") + error.Message;
+			}
+			RefreshInitialLibrary();
+			Shell.IsEnabled = true;
 			await RestoreSession();
+			if (!IsLoaded) return;
+			sessionRestored = database != null;
 			if (SessionProbeDirectory() != null)
 			{
 				await RunSessionProbe();
@@ -429,6 +437,15 @@ public partial class MainWindow : Window
 				if (rescanOnLaunch) await Scan(library.Folders.ToArray(), add: false);
 			}
 		};
+
+		void RefreshInitialLibrary()
+		{
+			UpdatePlaylistPicker();
+			RefreshFilters();
+			RefreshLibrarySources();
+			RefreshRows();
+			UpdateFavoriteToolbarButton();
+		}
 	}
 
 	private void MinimizeMainWindow(object sender, RoutedEventArgs args)
@@ -2066,19 +2083,20 @@ public partial class MainWindow : Window
 			6 => ResolveSavedTracks(ActivePlaylist),
 			_ => orderedTracks ?? (IEnumerable<Track>)library.Tracks,
 		};
+		var query = new LibraryQuery(Search.Text);
 		if (losslessView) source = source.Where(track => track.IsLossless);
 		if (selectedLibrarySource != null)
 		{
 			source = source.Where(track => IsTrackInSource(track.Path, selectedLibrarySource));
 		}
-		string[] query = Search.Text.Split((char[])null, StringSplitOptions.RemoveEmptyEntries);
 		string genre = Genre.SelectedIndex > 0 ? Genre.SelectedItem as string : null;
 		string artist = ArtistFilter.SelectedIndex > 0 ? ArtistFilter.SelectedItem as string : null;
 		uint? year = Year.SelectedIndex > 0 && uint.TryParse(Year.SelectedItem as string, out uint selectedYear) ? selectedYear : null;
-		source = source.Where(t => (genre == null || string.Equals(t.Genre, genre, StringComparison.CurrentCultureIgnoreCase))
+		if (genre != null || year.HasValue || artist != null)
+			source = source.Where(t => (genre == null || string.Equals(t.Genre, genre, StringComparison.CurrentCultureIgnoreCase))
 			&& (!year.HasValue || t.Year == year.Value)
-			&& (artist == null || string.Equals(t.Artist, artist, StringComparison.CurrentCultureIgnoreCase))
-			&& MatchesLibraryQuery(t, query));
+			&& (artist == null || string.Equals(t.Artist, artist, StringComparison.CurrentCultureIgnoreCase)));
+		if (!query.IsEmpty) source = query.Filter(source);
 		if (LibrarySectionIndex == 1)
 		{
 			var source2 = from t in source
@@ -2127,18 +2145,9 @@ public partial class MainWindow : Window
 				}
 			}
 		}
-		if (query.Length != 0 && !losslessView)
+		if (!query.IsEmpty && !losslessView)
 			CollectionCount.Text = LocalTextExtension.Format("{0:N0} resultados", Rows.Items.Count);
 		UpdateEmptyLibrary();
-	}
-
-	private static bool MatchesLibraryQuery(Track track, string[] query)
-	{
-		if (query.Length == 0) return true;
-		string searchable = cachedSearchText.GetValue(track, static item =>
-			$"{item.Name} {item.Detail} {item.AlbumArtist} {item.Genre} {item.FormatLabel}");
-		return query.All(word => CultureInfo.CurrentCulture.CompareInfo.IndexOf(searchable, word,
-			CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0);
 	}
 
 	private void Activate(object sender, MouseButtonEventArgs args)
@@ -2203,9 +2212,7 @@ public partial class MainWindow : Window
 		if (Rows.SelectedItem is LibraryRow libraryRow)
 		{
 			Track track = libraryRow.Tracks[0];
-			Track[] array = (from item in IndexedAlbum(track.Album, AlbumOwner(track))
-				orderby item.Disc, item.Number, item.Name
-				select item).ToArray();
+			Track[] array = IndexedAlbum(track.Album, AlbumOwner(track));
 			if (array.Length != 0)
 			{
 				OpenCollection(new LibraryRow(track.Album, AlbumOwner(track), array), album: true);
@@ -3864,6 +3871,7 @@ public partial class MainWindow : Window
 		//IL_00ca: Invalid comparison between Unknown and I4
 		//IL_00f7: Unknown result type (might be due to invalid IL or missing references)
 		//IL_00fd: Invalid comparison between Unknown and I4
+		if (!Shell.IsEnabled) return;
 		if (!Search.IsKeyboardFocusWithin && TryArtistShortcut(args.Key, Keyboard.Modifiers))
 		{
 			args.Handled = true;
