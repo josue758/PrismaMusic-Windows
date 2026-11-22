@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -20,6 +21,13 @@ public partial class MainWindow
     private Button artistPagePlayButton;
     private Button firstArtistSong;
     private Button firstArtistAlbum;
+    private Button focusedArtistSong;
+    private Button focusedArtistAlbum;
+    private Action resizeArtistAlbums;
+    private Action<int> showArtistAlbums;
+    private int visibleArtistAlbums;
+    private readonly List<Button> artistAlbumButtons = new();
+    private sealed record ArtistPosition(double Offset, int VisibleAlbums, (string Album, string Owner)? AlbumKey);
     private sealed record ArtistBiography(string Text, string Article);
     private readonly Dictionary<string, ArtistBiography> artistBiographies = new(StringComparer.OrdinalIgnoreCase);
 
@@ -54,7 +62,7 @@ public partial class MainWindow
         renderedArtistPage = page;
         ArtistContent.Children.Clear();
         ArtistView.ScrollToTop();
-        firstArtistSong = firstArtistAlbum = null;
+        ResetArtistControls();
         var albums = page.Tracks.GroupBy(track => AlbumKey(track.Album, AlbumOwner(track)))
             .Select(group =>
             {
@@ -68,7 +76,19 @@ public partial class MainWindow
             .OrderByDescending(row => row.Tracks.Max(track => track.Year))
             .ThenBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
 
-        ArtistContent.Children.Add(ActionButton("Volver", CloseCollection));
+        var navigation = new WrapPanel();
+        navigation.Children.Add(ActionButton("Volver", CloseCollection));
+        AddSectionShortcut("Canciones", "Ctrl+↑", albums: false);
+        if (albums.Length > 0) AddSectionShortcut("Álbumes", "Ctrl+↓", albums: true);
+        ArtistContent.Children.Add(navigation);
+
+        void AddSectionShortcut(string label, string shortcut, bool albums)
+        {
+            var button = ActionButton(label, (_, _) => FocusArtistSection(albums));
+            AutomationProperties.SetAcceleratorKey(button, shortcut);
+            button.ToolTip = $"{T(label)} ({shortcut})";
+            navigation.Children.Add(button);
+        }
         var hero = new DockPanel { Margin = new Thickness(18) };
         var photo = new Image { Stretch = Stretch.UniformToFill };
         AutomationProperties.SetName(photo, LocalTextExtension.Format("Retrato de {0}", page.Name));
@@ -124,6 +144,12 @@ public partial class MainWindow
         var heading = ArtistPageHeading(ranked.Length > 0 ? "Más reproducidas en tu biblioteca" : "Canciones destacadas");
         heading.TextWrapping = TextWrapping.Wrap;
         songs.Children.Add(heading);
+        var highlights = new UniformGrid { Columns = 1 };
+        highlights.SizeChanged += (_, args) =>
+        {
+            if (args.WidthChanged) highlights.Columns = args.NewSize.Width >= 418 && highlights.Children.Count > 3 ? 2 : 1;
+        };
+        songs.Children.Add(highlights);
         var spotlight = ranked.Length > 0 ? ranked : page.Tracks.OrderByDescending(track => library.Favorites.Contains(track.Path))
             .ThenBy(track => track.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
         foreach (var track in spotlight.Take(6))
@@ -149,7 +175,8 @@ public partial class MainWindow
                 HorizontalContentAlignment = HorizontalAlignment.Stretch };
             AutomationProperties.SetName(play, LocalTextExtension.Format("Reproducir {0}", track.Name));
             play.Click += (_, _) => PlayFromHome(track, page.Tracks);
-            songs.Children.Add(play);
+            play.GotKeyboardFocus += (_, _) => focusedArtistSong = play;
+            highlights.Children.Add(play);
             firstArtistSong ??= play;
         }
         songs.Children.Add(ActionButton("Ver todas las canciones", (_, _) =>
@@ -173,6 +200,7 @@ public partial class MainWindow
         about.Children.Add(article);
         var songCard = HomeCard(songs);
         var bioCard = HomeCard(about);
+        bioCard.VerticalAlignment = VerticalAlignment.Top;
         var overview = new Grid();
         overview.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.15, GridUnitType.Star) });
         overview.ColumnDefinitions.Add(new ColumnDefinition());
@@ -201,16 +229,46 @@ public partial class MainWindow
 
     private void MoveBetweenArtistSections(object sender, KeyEventArgs args)
     {
-        if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
-        if (args.Key is Key.Down or Key.Up) args.Handled = FocusArtistSection(args.Key == Key.Down);
+        args.Handled = TryArtistShortcut(args.Key, Keyboard.Modifiers);
     }
+
+    private bool TryArtistShortcut(Key key, ModifierKeys modifiers) =>
+        ArtistView.IsVisible && modifiers == ModifierKeys.Control &&
+        key is Key.Down or Key.Up && FocusArtistSection(key == Key.Down);
 
     private bool FocusArtistSection(bool albums)
     {
-        var target = albums ? firstArtistAlbum : firstArtistSong;
-        if (target == null) return false;
+        var target = albums ? focusedArtistAlbum ?? firstArtistAlbum : focusedArtistSong ?? firstArtistSong;
+        if (target?.IsVisible != true || !target.Focus()) return false;
         target.BringIntoView();
-        return target.Focus();
+        return true;
+    }
+
+    private void ResetArtistControls()
+    {
+        firstArtistSong = firstArtistAlbum = focusedArtistSong = focusedArtistAlbum = null;
+        artistPagePlayButton = null;
+        visibleArtistAlbums = 0;
+        resizeArtistAlbums = null;
+        showArtistAlbums = null;
+        artistAlbumButtons.Clear();
+    }
+
+    private ArtistPosition RememberArtistPosition() => ArtistView.IsVisible
+        ? new(ArtistView.VerticalOffset, visibleArtistAlbums, focusedArtistAlbum?.Tag is ValueTuple<string, string> key ? key : null)
+        : null;
+
+    private void RestoreArtistPosition(ArtistPosition position)
+    {
+        if (position == null) return;
+        showArtistAlbums?.Invoke(position.VisibleAlbums);
+        ArtistView.UpdateLayout();
+        ArtistView.ScrollToVerticalOffset(position.Offset);
+        if (position.AlbumKey is { } key && artistAlbumButtons.FirstOrDefault(button => Equals(button.Tag, key)) is { } album)
+        {
+            focusedArtistAlbum = album;
+            FocusArtistSection(albums: true);
+        }
     }
 
     private TextBlock ArtistPageHeading(string title)
@@ -226,55 +284,74 @@ public partial class MainWindow
         var section = ArtistPageHeading("Álbumes en tu biblioteca");
         section.Margin = new Thickness(0, 22, 0, 8);
         ArtistContent.Children.Add(section);
-        var cards = new WrapPanel();
+        var host = new Grid();
+        var cards = new UniformGrid { HorizontalAlignment = HorizontalAlignment.Left, Columns = 1 };
+        host.Children.Add(cards);
         KeyboardNavigation.SetDirectionalNavigation(cards, KeyboardNavigationMode.Contained);
-        cards.SizeChanged += (_, _) => FitAlbumCards();
-        ArtistContent.Children.Add(cards);
-        int next = 0;
+        host.SizeChanged += (_, args) => { if (args.WidthChanged) FitAlbumCards(); };
+        resizeArtistAlbums = FitAlbumCards;
+        ArtistContent.Children.Add(host);
+        const int batchSize = 12;
         var more = new Button { Content = T("Mostrar más álbumes"), HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 6, 0, 0) };
-        more.Click += (_, _) => AddBatch();
-        ArtistContent.Children.Add(more);
-        AddBatch();
-
-        void AddBatch()
+        more.Click += (_, _) =>
         {
-            int limit = Math.Min(albums.Length, next + 12);
-            for (; next < limit; next++)
+            int firstNew = visibleArtistAlbums;
+            ShowAlbums(firstNew + batchSize);
+            if (firstNew >= artistAlbumButtons.Count) return;
+            focusedArtistAlbum = artistAlbumButtons[firstNew];
+            FocusArtistSection(albums: true);
+        };
+        ArtistContent.Children.Add(more);
+        showArtistAlbums = ShowAlbums;
+        ShowAlbums(batchSize);
+
+        void ShowAlbums(int count)
+        {
+            int limit = Math.Min(albums.Length, count);
+            for (; visibleArtistAlbums < limit; visibleArtistAlbums++)
             {
-                var album = albums[next];
-                var art = BuildHomeArtwork(album, 144);
+                var album = albums[visibleArtistAlbums];
+                var art = BuildHomeArtwork(album, 144, 320);
                 var contents = new StackPanel();
                 contents.Children.Add(art);
                 var title = HomeText(album.Name, 13, translate: false, heading: true);
                 title.Margin = new Thickness(0, 6, 0, 1);
+                title.ToolTip = album.Name;
                 contents.Children.Add(title);
                 uint year = album.Tracks.Max(track => track.Year);
                 contents.Children.Add(HomeText(year > 0 ? year.ToString() : album.Detail, 11, translate: false, muted: true));
                 var button = new Button { Content = contents, Style = (Style)FindResource("FluentNavigationButton"),
-                    Width = 160, Padding = new Thickness(7), Margin = new Thickness(0, 0, 8, 8),
-                    HorizontalContentAlignment = HorizontalAlignment.Stretch };
+                    Padding = new Thickness(8), Margin = new Thickness(0, 0, 10, 10),
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch, Tag = AlbumKey(album.Name, album.Detail) };
+                art.SizeChanged += (_, args) =>
+                {
+                    if (args.WidthChanged) art.Height = args.NewSize.Width;
+                };
                 button.SetResourceReference(BackgroundProperty, "SettingsCard");
                 AutomationProperties.SetName(button, LocalTextExtension.Format("Abrir álbum {0}", album.Name));
-                button.Click += (_, _) => OpenCollection(album, album: true);
+                button.GotKeyboardFocus += (_, _) => focusedArtistAlbum = button;
+                button.Click += (_, _) =>
+                {
+                    focusedArtistAlbum = button;
+                    OpenCollection(album, album: true);
+                };
                 cards.Children.Add(button);
+                artistAlbumButtons.Add(button);
                 firstArtistAlbum ??= button;
             }
             FitAlbumCards();
-            more.Visibility = next < albums.Length ? Visibility.Visible : Visibility.Collapsed;
+            more.Visibility = visibleArtistAlbums < albums.Length ? Visibility.Visible : Visibility.Collapsed;
         }
 
         void FitAlbumCards()
         {
-            double width = cards.ActualWidth;
-            if (width <= 0) return;
-            int columns = Math.Max(1, Math.Min(cards.Children.Count, (int)(width / 164)));
-            double cardWidth = Math.Clamp(width / columns - 8, 132, 228);
-            foreach (Button card in cards.Children)
-            {
-                card.Width = cardWidth;
-                ((Border)((StackPanel)card.Content).Children[0]).Height = cardWidth - 16;
-            }
+            double width = host.ActualWidth;
+            if (width <= 0 || visibleArtistAlbums == 0) return;
+            double preferredSlot = preferredAlbumSize + 26;
+            int columns = Math.Clamp((int)Math.Round(width / preferredSlot), 1, visibleArtistAlbums);
+            cards.Columns = columns;
+            cards.Width = Math.Min(width, columns * (preferredSlot + 50));
         }
     }
 

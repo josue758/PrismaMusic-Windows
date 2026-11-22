@@ -8,7 +8,7 @@ namespace PrismaMusic;
 public partial class MainWindow
 {
     private sealed record LibraryVisit(int Section, string Source, LibraryRow Collection, bool Album,
-        int GalleryPage, LibraryRow Selection, bool GallerySelection, bool AllArtistSongs, LibraryFilters Filters);
+        int GalleryPage, LibraryRow Selection, bool GallerySelection, bool AllArtistSongs, LibraryFilters Filters, ArtistPosition Artist);
 
     private readonly List<LibraryVisit> libraryHistory = new();
     private bool restoringLibraryVisit;
@@ -19,7 +19,7 @@ public partial class MainWindow
         if (libraryHistory.Count == 48) libraryHistory.RemoveAt(0);
         libraryHistory.Add(new LibraryVisit(section, selectedLibrarySource, collection, albumPage, galleryPage,
             Rows.SelectedItem as LibraryRow, Equals(Rows.Tag, "Gallery"), showAllArtistSongs, new LibraryFilters(Search.Text, ArtistFilter.SelectedItem as string,
-                Genre.SelectedItem as string, Year.SelectedItem as string, Sort.SelectedIndex)));
+                Genre.SelectedItem as string, Year.SelectedItem as string, Sort.SelectedIndex), RememberArtistPosition()));
         LibraryBackButton.IsEnabled = true;
     }
 
@@ -52,7 +52,11 @@ public partial class MainWindow
                 if (restored != null) Rows.ScrollIntoView(restored);
             }
             if (Rows.IsVisible) Rows.Focus();
-            else if (ArtistView.IsVisible) artistPagePlayButton?.Focus();
+            else if (ArtistView.IsVisible)
+            {
+                artistPagePlayButton?.Focus();
+                RestoreArtistPosition(visit.Artist);
+            }
             else Navigation.Focus();
         }
         finally { restoringLibraryVisit = false; }

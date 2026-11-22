@@ -1325,6 +1325,8 @@ public partial class MainWindow : Window
 				await VerifyTagEditing(tagFixture, demo.Tracks[0]);
 			if (Environment.GetEnvironmentVariable("PRISMA_LIBRARY_OPERATIONS_FIXTURE") is { Length: > 0 } operationsFixture)
 				await VerifyLibraryOperations(operationsFixture, demo.Tracks[0]);
+			if (Environment.GetEnvironmentVariable("PRISMA_ARTIST_LAYOUT_PREVIEW") != null)
+				await VerifyResponsiveArtistPage(demo.Tracks);
 			VerifyWindowPlacement();
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
@@ -2015,6 +2017,7 @@ public partial class MainWindow : Window
 		{
 			renderedArtistPage = null;
 			ArtistContent.Children.Clear();
+			ResetArtistControls();
 		}
 		ArtistView.Visibility = showArtist ? Visibility.Visible : Visibility.Collapsed;
 		LibraryHeader.Visibility = showArtist ? Visibility.Collapsed : Visibility.Visible;
@@ -3861,7 +3864,11 @@ public partial class MainWindow : Window
 		//IL_00ca: Invalid comparison between Unknown and I4
 		//IL_00f7: Unknown result type (might be due to invalid IL or missing references)
 		//IL_00fd: Invalid comparison between Unknown and I4
-		if ((args.Key == Key.System && args.SystemKey == Key.Left && Keyboard.Modifiers == ModifierKeys.Alt) ||
+		if (!Search.IsKeyboardFocusWithin && TryArtistShortcut(args.Key, Keyboard.Modifiers))
+		{
+			args.Handled = true;
+		}
+		else if ((args.Key == Key.System && args.SystemKey == Key.Left && Keyboard.Modifiers == ModifierKeys.Alt) ||
 			args.Key == Key.BrowserBack)
 		{
 			GoBackInLibrary(sender, args);

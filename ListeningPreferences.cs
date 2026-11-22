@@ -32,6 +32,7 @@ public partial class MainWindow
     {
         preferredAlbumSize = albumSize switch { 0 => 116, 2 => 188, _ => 150 };
         UpdateGallerySizing();
+        resizeArtistAlbums?.Invoke();
     }
 
     private void GalleryViewportChanged(object sender, SizeChangedEventArgs args)

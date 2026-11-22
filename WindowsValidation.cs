@@ -9,6 +9,7 @@ using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using NAudio.CoreAudioApi;
@@ -336,7 +337,7 @@ public partial class MainWindow
             await Task.Delay(250);
         }
         if (!ready) throw new InvalidOperationException("The profile did not contain the artist portrait and biography.");
-        if (firstArtistAlbum?.Width is not (>= 132 and <= 228) ||
+        if (firstArtistAlbum?.ActualWidth is not (> 0 and <= 260) ||
             !FocusArtistSection(albums: true) || !FocusArtistSection(albums: false))
             throw new InvalidOperationException("Artist album sizing or keyboard section focus failed.");
         ArtistView.ScrollToTop();
@@ -370,6 +371,86 @@ public partial class MainWindow
                 yield return child;
                 foreach (var descendant in Descendants(child)) yield return descendant;
             }
+        }
+    }
+
+    private async Task VerifyResponsiveArtistPage(IReadOnlyList<Track> demos)
+    {
+        const string artist = "Prisma Sessions";
+        var tracks = Enumerable.Range(0, 14).Select(index => demos[index % demos.Count] with
+        {
+            Artist = artist, AlbumArtist = artist, Album = $"Prisma Sessions · {index + 1:D2}", Year = (uint)(2026 - index)
+        }).ToList();
+        library.Tracks = tracks;
+        Search.Clear();
+        Width = MinWidth;
+        Height = 690;
+        LibrarySectionIndex = 2;
+        RefreshRows();
+        Rows.SelectedIndex = 0;
+        ActivateSelection();
+        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        int narrowColumns = VerifyCards();
+        CaptureDesignPreview(Shell, "PRISMA_ARTIST_COMPACT_PREVIEW");
+
+        Width = 1540;
+        Height = 970;
+        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        int wideColumns = VerifyCards();
+        if (wideColumns <= narrowColumns)
+            throw new InvalidOperationException($"The album gallery did not expand from {narrowColumns} columns.");
+        int previousSize = albumSize;
+        albumSize = 0;
+        ApplyAlbumSize();
+        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        int smallCoverColumns = VerifyCards();
+        albumSize = 2;
+        ApplyAlbumSize();
+        await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        if (VerifyCards() >= smallCoverColumns)
+            throw new InvalidOperationException("The artist gallery did not use the preferred cover size.");
+        albumSize = previousSize;
+        ApplyAlbumSize();
+
+        if (!TryArtistShortcut(Key.Down, ModifierKeys.Control) || !firstArtistAlbum.IsKeyboardFocused ||
+            !TryArtistShortcut(Key.Up, ModifierKeys.Control) || !firstArtistSong.IsKeyboardFocused ||
+            TryArtistShortcut(Key.Down, ModifierKeys.Control | ModifierKeys.Shift))
+            throw new InvalidOperationException("Artist keyboard shortcuts did not focus the requested sections.");
+        ArtistView.ScrollToTop();
+        await Task.Delay(250);
+        CaptureDesignPreview(Shell, "PRISMA_ARTIST_LAYOUT_PREVIEW");
+        TryArtistShortcut(Key.Down, ModifierKeys.Control);
+        await Task.Delay(250);
+        CaptureDesignPreview(Shell, "PRISMA_ARTIST_ALBUMS_PREVIEW");
+        var more = ArtistContent.Children.OfType<Button>().Single(button => Equals(button.Content, T("Mostrar más álbumes")));
+        more.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        if (artistAlbumButtons.Count != 14 || !artistAlbumButtons[12].IsKeyboardFocused)
+            throw new InvalidOperationException("Loading more albums did not focus the first newly shown card.");
+        var open = artistAlbumButtons[12];
+        var album = open.Tag;
+        open.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        CloseCollection(this, new RoutedEventArgs());
+        if (!ArtistView.IsVisible || artistAlbumButtons.Count != 14 || !Equals(Keyboard.FocusedElement, artistAlbumButtons[12]) ||
+            !Equals(artistAlbumButtons[12].Tag, album))
+            throw new InvalidOperationException("Back did not restore focus and pagination on the same album.");
+        Console.WriteLine($"Artist profile: {narrowColumns} compact and {wideColumns} wide columns, square covers, cover size, shortcuts, and album return passed.");
+
+        int VerifyCards()
+        {
+            UpdateLayout();
+            if (!ArtistView.IsVisible || artistAlbumButtons.Count != 12)
+                throw new InvalidOperationException("The artist gallery did not render its first album batch.");
+            var grid = (UniformGrid)VisualTreeHelper.GetParent(firstArtistAlbum);
+            var host = (Grid)VisualTreeHelper.GetParent(grid);
+            if (grid.ActualWidth > host.ActualWidth + 1)
+                throw new InvalidOperationException("The artist album grid overflowed its container.");
+            foreach (var card in artistAlbumButtons)
+            {
+                var artwork = (Border)((StackPanel)card.Content).Children[0];
+                if (artwork.ActualWidth < 30 || Math.Abs(artwork.ActualWidth - artwork.ActualHeight) > 1)
+                    throw new InvalidOperationException($"An album cover was not square: {artwork.ActualWidth} × {artwork.ActualHeight}.");
+            }
+            return grid.Columns;
         }
     }
     private static void VerifyAudioFormats(string directory)

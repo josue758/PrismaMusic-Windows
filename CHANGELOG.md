@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.62.4
+
+- La ficha de artista ajusta las columnas al ancho de la ventana y al tamaño de portada elegido en Apariencia. Las portadas conservan su forma cuadrada y se cargan con mayor resolución.
+- Las canciones destacadas pueden ocupar dos columnas para dejar espacio a los álbumes en ventanas amplias.
+- Los accesos Canciones y Álbumes muestran sus atajos de teclado. Volver desde un álbum recupera el foco de su tarjeta y conserva los álbumes que ya se mostraban.
+
 ## 0.62.3
 
 - El informe de escaneo muestra el estado final, permite buscar rutas por nombre o ubicación y muestra el detalle al seleccionar un error.

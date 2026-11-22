@@ -56,7 +56,7 @@ public partial class MainWindow
         if (sender is Image image) await LoadArtworkCard(image, artist: LibrarySectionIndex == 2);
     }
 
-    private async Task LoadArtworkCard(Image image, bool artist)
+    private async Task LoadArtworkCard(Image image, bool artist, int decodeWidth = 160)
     {
         if (image.DataContext is not LibraryRow row) return;
         var workers = artist ? artistArtworkWorkers : galleryArtworkWorkers;
@@ -64,7 +64,7 @@ public partial class MainWindow
         try
         {
             if (!image.IsLoaded || !ReferenceEquals(image.DataContext, row)) return;
-            var bitmap = await LoadCollectionArtwork(row, artist, 160);
+            var bitmap = await LoadCollectionArtwork(row, artist, decodeWidth);
             if (image.IsLoaded && ReferenceEquals(image.DataContext, row)) image.Source = bitmap;
         }
         finally { workers.Release(); }
