@@ -439,6 +439,7 @@ public sealed class LocalTextExtension : MarkupExtension
         ["Año"] = ("Year", "Ano"),
         ["Título"] = ("Title", "Título"),
         ["Etiquetas"] = ("Tags", "Etiquetas"),
+        ["Ajustes"] = ("Settings", "Ajustes"),
         ["Artista del álbum"] = ("Album artist", "Artista do álbum"),
         ["Pista"] = ("Track", "Faixa"),
         ["Disco"] = ("Disc", "Disco"),

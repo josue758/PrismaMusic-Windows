@@ -211,6 +211,7 @@ public partial class MainWindow
             Background = new SolidColorBrush(Color.FromRgb(10, 12, 19))
         };
         listeningRoom = room;
+        UpdateTransportViewport();
         room.FontFamily = FontFamily;
         room.FontSize = 13;
         room.UseLayoutRounding = true;
@@ -233,6 +234,7 @@ public partial class MainWindow
             TransportMetadataColumn.Width = trackColumn;
             ListeningPanelMenuItem.Visibility = Visibility.Visible;
             listeningRoom = null;
+            UpdateTransportViewport();
             roomLyrics = null;
             roomLyricsLiveDot = null;
             roomLyricsLiveLabel = null;
@@ -257,6 +259,7 @@ public partial class MainWindow
             TransportMetadataColumn.Width = trackColumn;
             ListeningPanelMenuItem.Visibility = Visibility.Visible;
             listeningRoom = null;
+            UpdateTransportViewport();
             roomLyrics = null;
             roomLyricsLiveDot = null;
             roomLyricsLiveLabel = null;

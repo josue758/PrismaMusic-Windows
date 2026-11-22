@@ -18,6 +18,64 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
+    private async Task VerifyCompactWorkspace()
+    {
+        double previousWidth = Width, previousHeight = Height;
+        Width = 1340;
+        Height = 780;
+        UpdateLayout();
+        SetListeningPanelHidden(false);
+        UpdateLayout();
+        if (listeningIsOverlay || ListeningColumn.Width.Value == 0 || ListeningScrim.IsVisible)
+            throw new InvalidOperationException("A wide window did not dock the playback panel.");
+        Width = MinWidth;
+        Height = MinHeight;
+        LibrarySectionIndex = 0;
+        UpdateLayout();
+        double libraryWidth = Rows.ActualWidth;
+        if (!listeningIsOverlay || Listening.IsVisible || ListeningColumn.Width.Value != 0 || libraryWidth < 550 ||
+            !QueueHeaderButton.IsVisible || !AudioOutputButton.IsVisible || !PipToolbarButton.IsVisible ||
+            CompactEqualizerMenuItem.Visibility != Visibility.Visible)
+            throw new InvalidOperationException("The compact workspace did not free space or retain its primary commands.");
+        await Task.Delay(220);
+        CaptureDesignPreview(Shell, "PRISMA_COMPACT_WORKSPACE_PREVIEW");
+        QueueHeaderButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        UpdateLayout();
+        if (!Listening.IsVisible || !ListeningScrim.IsVisible || ListeningTabs.SelectedIndex != 1 ||
+            ListeningTrackSummary.IsVisible || Math.Abs(libraryWidth - Rows.ActualWidth) > 1 ||
+            ListeningColumn.Width.Value != 0)
+            throw new InvalidOperationException("Opening the compact queue resized or obstructed the library layout incorrectly.");
+        await Task.Delay(220);
+        CaptureDesignPreview(Shell, "PRISMA_COMPACT_DRAWER_PREVIEW");
+        ListeningScrim.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        if (Listening.IsVisible || ListeningScrim.IsVisible)
+            throw new InvalidOperationException("The backdrop did not close the compact drawer.");
+        QueueHeaderButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        ListeningCloseButton.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(ListeningCloseButton),
+            Environment.TickCount, Key.Escape) { RoutedEvent = Keyboard.KeyDownEvent });
+        if (Listening.IsVisible || !QueueHeaderButton.IsKeyboardFocused)
+            throw new InvalidOperationException("Escape did not close the compact drawer and return focus.");
+        AudioOutputButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        for (int attempt = 0; attempt < 50 && audioDevicePicker == null; attempt++) await Task.Delay(50);
+        if (audioOutputPopup?.IsOpen != true || audioDevicePicker == null)
+            throw new InvalidOperationException("Compact audio output did not open.");
+        audioOutputPopup.IsOpen = false;
+        PipToolbarButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        if (mini?.IsVisible != true) throw new InvalidOperationException("Compact mini player did not open.");
+        mini.Close();
+        TransportArtworkButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        if (listeningRoom?.IsVisible != true || !EqualizerToolbarButton.IsVisible || !FullscreenToolbarButton.IsVisible)
+            throw new InvalidOperationException("The listening room inherited the compact toolbar.");
+        listeningRoom.Close();
+        Width = 1340;
+        UpdateLayout();
+        if (listeningIsOverlay || !Listening.IsVisible || ListeningColumn.Width.Value == 0 || ListeningScrim.IsVisible)
+            throw new InvalidOperationException("Expanding did not restore the docked layout.");
+        Width = previousWidth;
+        Height = previousHeight;
+        Console.WriteLine($"Compact workspace: {libraryWidth:0} DIP for music, overlay queue, audio output, PiP, and wide layout restored.");
+    }
+
     private async Task VerifyTagReview(Track fixture)
     {
         var originalLibrary = library;

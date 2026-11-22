@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.62.8
+
+- En ventanas estrechas, el panel de reproducción se abre sobre la biblioteca. Puedes cerrarlo desde su botón, con Esc o haciendo clic fuera.
+- La cola, la salida de audio y PiP mantienen sus accesos directos. El ecualizador, Miracast y la Sala de escucha están en **Más opciones** cuando falta espacio en la barra.
+
 ## 0.62.7
 
 - **Revisión de etiquetas** agrupa pistas sin artista o álbum, variantes que pueden dividir un álbum y posibles duplicados.

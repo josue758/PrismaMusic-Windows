@@ -349,7 +349,13 @@ public partial class MainWindow : Window
 		SizeChanged += (object _, SizeChangedEventArgs _) =>
 		{
 			bool flag = ActualWidth < 1120.0;
-			NavigationColumn.Width = new GridLength(flag ? 168 : Math.Clamp(ActualWidth * .155, 210, 258));
+			bool narrow = ActualWidth < 940;
+			NavigationColumn.Width = new GridLength(narrow ? 154 : flag ? 168 : Math.Clamp(ActualWidth * .155, 210, 258));
+			TitleBrandName.Visibility = TitleVisualizerLabel.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
+			TitleVisualizerGlyph.Margin = narrow ? new Thickness(0) : new Thickness(0, 0, 6, 0);
+			SidebarSettingsLabel.Text = T(flag ? "Ajustes" : "Configuración");
+			SidebarReviewLabel.Text = T(flag ? "Etiquetas" : "Revisión de etiquetas");
+			UpdateTransportViewport();
 			UpdateListeningPanelWidth();
 			Heading.FontSize = (flag ? 32 : 38);
 			System.Windows.Controls.ComboBox genre = Genre;
@@ -527,7 +533,8 @@ public partial class MainWindow : Window
 			Width = MinWidth;
 			Height = MinHeight;
 			UpdateLayout();
-			if (Rows.ActualWidth < 200.0 || ArtPanel.ActualHeight > 160.0 || Transport.ActualHeight < 45.0 || string.IsNullOrWhiteSpace(AutomationProperties.GetName((DependencyObject)(object)PlayButton)))
+			if (Rows.ActualWidth < 520 || Listening.Visibility != Visibility.Collapsed || Transport.ActualHeight < 45 ||
+				string.IsNullOrWhiteSpace(AutomationProperties.GetName(PlayButton)))
 			{
 				throw new InvalidOperationException("Compact layout or accessible playback label failed.");
 			}
@@ -1029,7 +1036,7 @@ public partial class MainWindow : Window
 				throw new InvalidOperationException("Playback toolbar actions are out of order.");
 			listeningMenu.StaysOpen = true;
 			ShowListeningMenu(ListeningMenuButton, new RoutedEventArgs());
-			if (!listeningMenu.IsOpen || listeningMenu.Items.OfType<MenuItem>().Count() != 12)
+			if (!listeningMenu.IsOpen || listeningMenu.Items.OfType<MenuItem>().Count() != 13)
 				throw new InvalidOperationException("Listening menu did not expose all commands.");
 			CaptureDesignPreview(listeningMenu, "PRISMA_LISTENING_MENU_PREVIEW");
 			listeningMenu.IsOpen = false;
@@ -1344,6 +1351,8 @@ public partial class MainWindow : Window
 				await VerifyTagReview(demo.Tracks[0]);
 			if (Environment.GetEnvironmentVariable("PRISMA_LIBRARY_OPERATIONS_FIXTURE") is { Length: > 0 } operationsFixture)
 				await VerifyLibraryOperations(operationsFixture, demo.Tracks[0]);
+			if (Environment.GetEnvironmentVariable("PRISMA_COMPACT_WORKSPACE_PREVIEW") != null)
+				await VerifyCompactWorkspace();
 			if (Environment.GetEnvironmentVariable("PRISMA_ARTIST_LAYOUT_PREVIEW") != null)
 				await VerifyResponsiveArtistPage(demo.Tracks);
 			VerifyWindowPlacement();
@@ -3935,7 +3944,12 @@ public partial class MainWindow : Window
 		//IL_00f7: Unknown result type (might be due to invalid IL or missing references)
 		//IL_00fd: Invalid comparison between Unknown and I4
 		if (!Shell.IsEnabled) return;
-		if (!Search.IsKeyboardFocusWithin && TryArtistShortcut(args.Key, Keyboard.Modifiers))
+		if (args.Key == Key.Escape && listeningIsOverlay && IsListeningPanelVisible)
+		{
+			SetListeningPanelHidden(true);
+			args.Handled = true;
+		}
+		else if (!Search.IsKeyboardFocusWithin && TryArtistShortcut(args.Key, Keyboard.Modifiers))
 		{
 			args.Handled = true;
 		}
