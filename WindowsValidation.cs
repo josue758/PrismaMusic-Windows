@@ -55,11 +55,10 @@ public partial class MainWindow
                 throw new InvalidOperationException("Relocation accepted a missing file.");
             }
             catch (IOException) { }
-            var mapping = LibraryRelocation.Verify(source, destination, library.Tracks.Select(track => track.Path), File.Exists);
-            library = LibraryRelocation.Apply(library, source, destination, mapping);
             database = new LibraryDatabase(root);
             database.Load();
             database.Save(library, true);
+            await VerifyRelocationDialog(source, destination);
             var watch = Stopwatch.StartNew();
             library = new LibraryDatabase(root).Load();
             long open = watch.ElapsedMilliseconds;
@@ -147,6 +146,47 @@ public partial class MainWindow
             library = originalLibrary;
             database = originalDatabase;
         }
+    }
+
+    private async Task VerifyRelocationDialog(string source, string destination)
+    {
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(async () =>
+        {
+            Window dialog = null;
+            try
+            {
+                dialog = OwnedWindows.OfType<Window>().Single(window => window.Title == T("Reubicar fuente") && window.IsVisible);
+                var surface = (Grid)dialog.Content;
+                var root = (StackPanel)((Border)surface.Children[0]).Child;
+                var path = root.Children.OfType<DockPanel>().Single().Children.OfType<TextBox>().Single();
+                var buttons = root.Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToArray();
+                Button Button(string label) => buttons.Single(button => Equals(button.Content, T(label)));
+                var apply = Button("Aplicar reubicación");
+                if (apply.IsEnabled) throw new InvalidOperationException("Relocation was available before verification.");
+                path.Text = destination;
+                Button("Verificar ubicación").RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                for (int attempt = 0; attempt < 80 && !apply.IsEnabled; attempt++) await Task.Delay(50);
+                if (!apply.IsEnabled || !library.Folders.Contains(source) || library.Folders.Contains(destination))
+                    throw new InvalidOperationException("Verification failed or relocated the source before confirmation.");
+                path.Text = source;
+                if (apply.IsEnabled) throw new InvalidOperationException("An edited path retained its previous verification.");
+                path.Text = destination;
+                Button("Verificar ubicación").RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                for (int attempt = 0; attempt < 80 && !apply.IsEnabled; attempt++) await Task.Delay(50);
+                if (!apply.IsEnabled) throw new InvalidOperationException("The destination could not be verified again.");
+                CaptureDesignPreview(surface, "PRISMA_RELOCATION_PREVIEW");
+                apply.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                if (!library.Folders.Contains(destination) || library.Folders.Contains(source))
+                    throw new InvalidOperationException("Applying the verified move did not relocate the source.");
+                completed.SetResult();
+                Console.WriteLine("Relocation dialog verified the destination, rejected an edited path, and saved only on Apply.");
+            }
+            catch (Exception error) { completed.SetException(error); }
+            finally { if (dialog?.IsVisible == true) dialog.Close(); }
+        }));
+        RelocateLibrarySource(source);
+        await completed.Task.WaitAsync(TimeSpan.FromSeconds(12));
     }
     private async Task VerifyTagEditing(string root, Track fixture)
     {
