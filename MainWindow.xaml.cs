@@ -1322,7 +1322,7 @@ public partial class MainWindow : Window
 			if (Environment.GetEnvironmentVariable("PRISMA_ARTIST_PAGE_FIXTURE") is { Length: > 0 } artistFixture)
 				await VerifyArtistPage(artistFixture);
 			if (Environment.GetEnvironmentVariable("PRISMA_TAG_RESTORE_FIXTURE") is { Length: > 0 } tagFixture)
-				VerifyTagEditing(tagFixture, demo.Tracks[0]);
+				await VerifyTagEditing(tagFixture, demo.Tracks[0]);
 			if (Environment.GetEnvironmentVariable("PRISMA_LIBRARY_OPERATIONS_FIXTURE") is { Length: > 0 } operationsFixture)
 				await VerifyLibraryOperations(operationsFixture, demo.Tracks[0]);
 			VerifyWindowPlacement();
@@ -1799,7 +1799,7 @@ public partial class MainWindow : Window
 					foreach (Track item in tuple.Item1)
 					{
 						if (originalTracks.TryGetValue(item.Path, out var previous) && ReferenceEquals(previous, item)) reusedTracks++;
-						indexed[item.Path] = item;
+						indexed[item.Path] = ApplyLibraryTags(item);
 					}
 					if (tuple.Item2 == 0 && !onlyNew && !retryFailures)
 					{
@@ -1855,7 +1855,11 @@ public partial class MainWindow : Window
 			bool tracksChanged = newTracks != 0 || updatedTracks != 0 || indexed.Count != originalTracks.Count;
 			if (tracksChanged)
 			{
-				library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
+				library.Tracks = indexed.Values.ToList();
+				var liveTracks = TrackIndex();
+				Track UpdatedTrack(Track track) => liveTracks.GetValueOrDefault(track.Path) ?? track;
+				RebindPlaybackTracks(UpdatedTrack);
+				RebindOpenCollections(UpdatedTrack, track => UpdatedTrack(track) != track);
 				trackThumbnails.Clear();
 				folderArtworkPaths.Clear();
 			}
@@ -1875,7 +1879,7 @@ public partial class MainWindow : Window
 			if (tracksChanged)
 			{
 				RefreshFilters();
-				RefreshRows();
+				UpdateCollectionHeading();
 			}
 			SetScanReport(addedPaths, updatedPaths, reusedTracks, scanFailures, complete: errors.Count == 0);
 			return (tracksFound, errors.Count == 0);

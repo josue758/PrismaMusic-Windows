@@ -571,6 +571,10 @@ public sealed class LocalTextExtension : MarkupExtension
         ["Escribe un número entre 1 y 9999 o deja el campo vacío."] =
             ("Enter a number from 1 to 9999 or leave the field blank.", "Digite um número de 1 a 9999 ou deixe o campo vazio."),
         ["1 álbum"] = ("1 album", "1 álbum"),
+        ["Prisma guarda solo los campos que cambies en esta edición."] =
+            ("Prisma saves only the fields you change in this edit.", "O Prisma salva apenas os campos alterados nesta edição."),
+        ["Correcciones en Prisma"] = ("Edits in Prisma", "Correções no Prisma"),
+        ["Vacío"] = ("Empty", "Vazio"),
         ["Reubicar fuente"] = ("Relocate source", "Realocar fonte"),
         ["Elige una ubicación distinta y fuera de la fuente anterior."] = ("Choose a separate location outside the old source.", "Escolha uma localização fora da fonte anterior."),
         ["No se encontró el archivo en la nueva fuente: {0}"] = ("File missing from the new source: {0}", "Arquivo ausente na nova fonte: {0}"),

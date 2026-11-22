@@ -109,7 +109,7 @@ public partial class MainWindow
             prepared = null; // The engine owns the decoder, including on output initialization failure.
             if (!opened) return;
 
-            track = ApplyLibraryTags(track);
+            track = TrackIndex().GetValueOrDefault(track.Path) ?? ApplyLibraryTags(track);
             if (remember && current != null && current != track) previous.Push(current);
             bool trackChanged = !ReferenceEquals(current, track);
             current = track;

@@ -113,10 +113,17 @@ public partial class MainWindow
                 return false;
             if (renumber && (!uint.TryParse(numbering.Text.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out start) ||
                 start == 0 || (long)start + tracks.Length - 1 > 9999)) return false;
-            edits = tracks.Take(count).Select((track, index) => new LibraryTagEdit(track.Name, track.Artist, track.Album,
-                genre.Check.IsChecked == true ? genre.Text.Text.Trim() : track.Genre, editYear ? newYear : track.Year,
-                owner.Check.IsChecked == true ? owner.Text.Text.Trim() : track.AlbumArtist, track.Disc,
-                renumber ? start + (uint)index : track.Number)).ToArray();
+            edits = tracks.Take(count).Select((track, index) =>
+            {
+                var existing = library.TagEdits.GetValueOrDefault(track.Path) ?? new LibraryTagEdit();
+                return existing with
+                {
+                    Genre = genre.Check.IsChecked == true ? genre.Text.Text.Trim() : existing.Genre,
+                    Year = editYear ? newYear : existing.Year,
+                    AlbumArtist = owner.Check.IsChecked == true ? owner.Text.Text.Trim() : existing.AlbumArtist,
+                    Number = renumber ? start + (uint)index : existing.Number
+                };
+            }).ToArray();
             return true;
         }
 
@@ -126,10 +133,10 @@ public partial class MainWindow
             foreach (var field in fields) field.Text.IsEnabled = field.Check.IsChecked == true;
             bool valid = TryPlan(out var edits, Math.Min(10, tracks.Length));
             apply.IsEnabled = valid && fields.Any(field => field.Check.IsChecked == true);
-            preview.ItemsSource = valid ? edits.Select(edit => string.Join(" · ", new[]
+            preview.ItemsSource = valid ? edits.Select((edit, index) => edit.ApplyTo(tracks[index])).Select(track => string.Join(" · ", new[]
             {
-                edit.Number is > 0 ? edit.Number.ToString() : null, edit.Title, edit.AlbumArtist, edit.Genre,
-                edit.Year > 0 ? edit.Year.ToString() : null
+                track.Number > 0 ? track.Number.ToString() : null, track.Name, track.AlbumArtist, track.Genre,
+                track.Year > 0 ? track.Year.ToString() : null
             }.Where(value => !string.IsNullOrWhiteSpace(value)))).ToArray() : Array.Empty<string>();
             feedback.Text = valid ? LocalTextExtension.Format("Vista previa de {0:N0} de {1:N0} pistas.", edits.Length, tracks.Length)
                 : T("Revisa el año y la numeración. Los valores admitidos van de 1 a 9999.");

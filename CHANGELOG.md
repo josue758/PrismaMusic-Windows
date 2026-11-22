@@ -2,6 +2,12 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.62.1
+
+- Las ediciones nuevas guardan solo los campos corregidos. Al volver a escanear, Prisma puede incorporar otros cambios hechos en el archivo.
+- El escaneo actualiza las referencias de la cola y el reproductor. La ficha de información muestra las correcciones guardadas en Prisma.
+- Reubicar una fuente conserva las carátulas guardadas y la opción de deshacer la última edición por lotes.
+
 ## 0.62.0
 
 - **Reubicar fuente** verifica la nueva ruta de una fuente y conserva favoritos, listas, etiquetas y reproducciones.

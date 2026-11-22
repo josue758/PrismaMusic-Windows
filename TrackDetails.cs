@@ -63,6 +63,17 @@ public partial class MainWindow
         panel.Children.Add(new TextBlock { Text = track.Name, FontSize = 28, FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 17) });
         AddSection("Etiquetas", tags);
+        if (library.TagEdits.TryGetValue(track.Path, out var edit))
+        {
+            string Value(string text) => text == "" ? LocalTextExtension.Translate("Vacío") : text;
+            string Number(uint? number) => number == 0 ? LocalTextExtension.Translate("Vacío") : number?.ToString();
+            AddSection("Correcciones en Prisma", new[]
+            {
+                ("Título", Value(edit.Title)), ("Artista", Value(edit.Artist)), ("Álbum", Value(edit.Album)),
+                ("Artista del álbum", Value(edit.AlbumArtist)), ("Género", Value(edit.Genre)), ("Año", Number(edit.Year)),
+                ("Disco", Number(edit.Disc)), ("Pista", Number(edit.Number))
+            });
+        }
         AddSection("Formato de audio", audio);
         var path = new TextBox { Text = track.Path, IsReadOnly = true, TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 12, 0, 0), Padding = new Thickness(9),

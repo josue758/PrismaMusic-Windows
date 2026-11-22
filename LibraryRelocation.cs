@@ -103,24 +103,12 @@ public partial class MainWindow
                 });
                 if (dialog?.IsVisible != true) return;
                 var next = LibraryRelocation.Apply(library, source, target, mapping);
-                database.Save(next, true);
+                database.Save(next, true, mapping);
                 library = next;
                 if (pendingTrack != null && mapping.ContainsKey(pendingTrack.Path)) CancelPendingOpen();
-                for (int index = 0; index < queue.Count; index++) queue[index] = Remap(queue[index]);
-                context = context.Select(Remap).ToArray();
-                originalContext = originalContext.Select(Remap).ToArray();
-                var earlier = previous.Reverse().Select(Remap).ToArray();
-                previous.Clear();
-                foreach (var track in earlier) previous.Push(track);
-                var relocatedCurrent = Remap(current);
-                if (relocatedCurrent != current)
-                {
-                    current = relocatedCurrent;
-                    CurrentTrackPath = current.Path;
-                    UpdateFavoriteToolbarButton();
-                }
-                removedQueueTrack = Remap(removedQueueTrack);
-                undoBatchTags = null;
+                RebindPlaybackTracks(Remap);
+                if (undoBatchTags != null)
+                    undoBatchTags = undoBatchTags.Select(item => item with { Before = Remap(item.Before), After = Remap(item.After) }).ToArray();
                 RefreshFilters();
                 ShowLibrarySource(target);
                 libraryHistory.Clear();

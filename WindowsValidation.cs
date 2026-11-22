@@ -148,7 +148,7 @@ public partial class MainWindow
             database = originalDatabase;
         }
     }
-    private void VerifyTagEditing(string root, Track fixture)
+    private async Task VerifyTagEditing(string root, Track fixture)
     {
         Directory.CreateDirectory(root);
         string path = Path.Combine(root, Path.GetFileName(fixture.Path));
@@ -167,6 +167,7 @@ public partial class MainWindow
 
         var oldDatabase = database;
         var oldLibrary = library;
+        var oldQueue = queue.ToArray();
         try
         {
             var original = LibraryScanner.ReadFile(path);
@@ -185,12 +186,28 @@ public partial class MainWindow
             var restored = new LibraryDatabase(root).Load();
             if (restored.TagEdits.Count != 0 || restored.Tracks.Single() != original || !File.ReadAllBytes(path).SequenceEqual(before))
                 throw new InvalidOperationException("Restoring tags did not preserve the original audio file and metadata.");
-            Console.WriteLine("Editing and restoring album artist, disc and track passed; original audio bytes and local cover verified.");
+            SaveLibraryTagEdit(original, new LibraryTagEdit(Genre: "Jazz"));
+            queue.Clear();
+            queue.Add(library.Tracks.Single());
+            using (var media = AudioMetadata.Open(path))
+            {
+                media.Tag.Title = "Title changed on disk";
+                media.Save();
+            }
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-3));
+            var result = await Scan(new[] { path }, add: false);
+            var imported = library.Tracks.Single();
+            if (result?.Complete != true || imported.Name != "Title changed on disk" || imported.Genre != "Jazz" ||
+                queue.Single() != imported || lastScanReport.Updated != 1)
+                throw new InvalidOperationException("Rescan did not merge external and local tags or refresh the queue.");
+            Console.WriteLine("Tag restoration, partial tag merges, refreshed queue, and local cover passed.");
         }
         finally
         {
             library = oldLibrary;
             database = oldDatabase;
+            queue.Clear();
+            queue.AddRange(oldQueue);
         }
     }
     private async Task VerifyArtistPage(string fixture)

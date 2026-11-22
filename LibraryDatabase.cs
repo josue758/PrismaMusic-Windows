@@ -107,7 +107,7 @@ internal sealed class LibraryDatabase(string directory)
         return library;
     }
 
-    public void Save(Library library, bool tracksChanged)
+    public void Save(Library library, bool tracksChanged, IReadOnlyDictionary<string, string> relocatedPaths = null)
     {
         using var db = Open();
         using var transaction = db.BeginTransaction();
@@ -151,6 +151,23 @@ internal sealed class LibraryDatabase(string directory)
                 }
             }
 
+            if (relocatedPaths != null)
+            {
+                using var relocateArtwork = db.CreateCommand();
+                relocateArtwork.Transaction = transaction;
+                relocateArtwork.CommandText = """
+                    INSERT OR IGNORE INTO track_artwork(path, hash)
+                    SELECT $target, hash FROM track_artwork WHERE path = $source
+                    """;
+                var oldPath = relocateArtwork.Parameters.Add("$source", SqliteType.Text);
+                var newPath = relocateArtwork.Parameters.Add("$target", SqliteType.Text);
+                foreach (var (source, target) in relocatedPaths)
+                {
+                    oldPath.Value = source.ToUpperInvariant();
+                    newPath.Value = target.ToUpperInvariant();
+                    relocateArtwork.ExecuteNonQuery();
+                }
+            }
             using var removeArtwork = db.CreateCommand();
             removeArtwork.Transaction = transaction;
             removeArtwork.CommandText = """

@@ -122,6 +122,44 @@ public sealed class LibraryDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void RelocationRelinksCachedArtworkToTheNewPath()
+    {
+        var database = new LibraryDatabase(directory);
+        var library = database.Load();
+        const string first = @"C:\Old\song.flac";
+        const string second = @"D:\New\song.flac";
+        library.Tracks.Add(Song(first));
+        database.Save(library, true);
+        byte[] cachedCover = { 1, 2, 3 };
+        database.SaveArtwork(first, cachedCover);
+        library.Tracks[0] = library.Tracks[0] with { Path = second };
+
+        database.Save(library, true, new System.Collections.Generic.Dictionary<string, string> { [first] = second });
+
+        Assert.Null(database.ReadArtwork(first));
+        Assert.Equal(cachedCover, database.ReadArtwork(second));
+    }
+
+    [Fact]
+    public void PartialTagEditPreservesOtherTagsAfterReload()
+    {
+        var database = new LibraryDatabase(directory);
+        var library = database.Load();
+        var track = Song(@"C:\M\song.flac");
+        library.Tracks.Add(track);
+        library.TagEdits[track.Path] = new LibraryTagEdit(Genre: "Jazz", Year: 0);
+        database.Save(library, true);
+
+        var saved = new LibraryDatabase(directory).Load();
+        var reread = track with { Name = "Nuevo título en disco", Disc = 2 };
+        var merged = saved.TagEdits[track.Path].ApplyTo(reread);
+        Assert.Equal(reread.Name, merged.Name);
+        Assert.Equal(2u, merged.Disc);
+        Assert.Equal("Jazz", merged.Genre);
+        Assert.Equal(0u, merged.Year);
+    }
+
+    [Fact]
     public void RemovingTrackPrunesItsArtworkReferenceAndUnusedImage()
     {
         var database = new LibraryDatabase(directory);

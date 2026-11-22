@@ -112,9 +112,15 @@ public partial class MainWindow
 
     private IEnumerable<Track> ResolveSavedTracks(IEnumerable<string> paths)
     {
+        var byPath = TrackIndex();
+        foreach (var path in paths)
+            if (byPath.TryGetValue(path, out var track)) yield return track;
+    }
+
+    private Dictionary<string, Track> TrackIndex()
+    {
         RefreshLibraryIndex();
-        var byPath = indexedTracksByPath ??= library.Tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
-        return paths.Where(byPath.ContainsKey).Select(path => byPath[path]);
+        return indexedTracksByPath ??= library.Tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
     }
 
     private int LibrarySectionIndex

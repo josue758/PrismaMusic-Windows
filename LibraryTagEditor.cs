@@ -1,6 +1,6 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -11,12 +11,13 @@ using System.Windows.Media;
 
 namespace PrismaMusic;
 
-public sealed record LibraryTagEdit(string Title, string Artist, string Album, string Genre, uint Year,
+public sealed record LibraryTagEdit(string Title = null, string Artist = null, string Album = null, string Genre = null, uint? Year = null,
     string AlbumArtist = null, uint? Disc = null, uint? Number = null)
 {
     internal Track ApplyTo(Track track)
     {
-        var edited = track with { Name = Title, Artist = Artist, Album = Album, Genre = Genre, Year = Year,
+        var edited = track with { Name = Title ?? track.Name, Artist = Artist ?? track.Artist, Album = Album ?? track.Album,
+            Genre = Genre ?? track.Genre, Year = Year ?? track.Year,
             AlbumArtist = AlbumArtist ?? track.AlbumArtist, Disc = Disc ?? track.Disc, Number = Number ?? track.Number };
         return edited == track ? track : edited;
     }
@@ -71,7 +72,7 @@ public partial class MainWindow
         var number = AddNumber("Pista", track.Number);
         body.Children.Add(new TextBlock
         {
-            Text = Translate("Los cambios se guardan en tu biblioteca de Prisma Music."),
+            Text = Translate("Prisma guarda solo los campos que cambies en esta edición."),
             Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 10)
         });
         var validation = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(255, 173, 171)),
@@ -112,8 +113,18 @@ public partial class MainWindow
             if (string.IsNullOrWhiteSpace(title.Text)) { ShowError("Escribe un título.", title); return; }
             if (!ValidateNumber(year, out uint parsedYear) || !ValidateNumber(disc, out uint parsedDisc) ||
                 !ValidateNumber(number, out uint parsedNumber)) return;
-            var edit = new LibraryTagEdit(title.Text.Trim(), artist.Text.Trim(), album.Text.Trim(), genre.Text.Trim(), parsedYear,
-                albumArtist.Text.Trim(), parsedDisc, parsedNumber);
+            var previous = library.TagEdits.GetValueOrDefault(track.Path) ?? new LibraryTagEdit();
+            var edit = previous with
+            {
+                Title = ChangedText(title, track.Name, previous.Title),
+                Artist = ChangedText(artist, track.Artist, previous.Artist),
+                Album = ChangedText(album, track.Album, previous.Album),
+                Genre = ChangedText(genre, track.Genre, previous.Genre),
+                Year = parsedYear != track.Year ? parsedYear : previous.Year,
+                AlbumArtist = ChangedText(albumArtist, track.AlbumArtist, previous.AlbumArtist),
+                Disc = parsedDisc != track.Disc ? parsedDisc : previous.Disc,
+                Number = parsedNumber != track.Number ? parsedNumber : previous.Number
+            };
             try { SaveLibraryTagEdit(track, edit); }
             catch (Exception error)
             {
@@ -147,6 +158,13 @@ public partial class MainWindow
                 finally { dialog.Close(); }
             };
         dialog.ShowDialog();
+
+        static string ChangedText(TextBox field, string original, string previous)
+        {
+            string initial = original ?? "";
+            string value = field.Text.Trim();
+            return field.Text == initial || value == initial ? previous : value;
+        }
 
         TextBox AddNumber(string caption, uint value)
         {
@@ -205,8 +223,8 @@ public partial class MainWindow
         foreach (var (path, edit, restored) in changes)
         {
             if (!originals.TryGetValue(path, out var original)) throw new InvalidOperationException(T("La pista ya no está en la biblioteca."));
-            updated.Add(path, restored ?? edit.ApplyTo(original));
-            if (edit == null) nextEdits.Remove(path);
+            updated.Add(path, restored ?? edit?.ApplyTo(original) ?? original);
+            if (edit == null || edit == new LibraryTagEdit()) nextEdits.Remove(path);
             else nextEdits[path] = edit;
         }
         bool Matches(Track candidate) => candidate != null && updated.ContainsKey(candidate.Path);
@@ -221,43 +239,12 @@ public partial class MainWindow
             throw;
         }
         unsavedTracks = false;
-        context = context.Select(Replace).ToArray();
-        originalContext = originalContext.Select(Replace).ToArray();
-        for (int index = 0; index < queue.Count; index++) queue[index] = Replace(queue[index]);
-        if (previous.Any(Matches))
-        {
-            var earlier = previous.Reverse().Select(Replace).ToArray();
-            previous.Clear();
-            foreach (var item in earlier) previous.Push(item);
-        }
-        collection = RefreshEditedCollection(collection, albumPage);
-        for (int index = 0; index < libraryHistory.Count; index++)
-        {
-            var visit = libraryHistory[index];
-            libraryHistory[index] = visit with { Collection = RefreshEditedCollection(visit.Collection, visit.Album) };
-        }
+        RebindPlaybackTracks(Replace);
+        RebindOpenCollections(Replace, Matches);
         RefreshFilters();
         UpdateCollectionHeading();
         var selected = Rows.Items.OfType<LibraryRow>().FirstOrDefault(row => row.Tracks.Length == 1 && Matches(row.Tracks[0]));
         if (selected != null && !Equals(Rows.Tag, "Gallery")) Rows.SelectedItem = selected;
-        if (Matches(current))
-        {
-            current = Replace(current);
-            Now.Text = current.Name;
-            Artist.Text = current.Detail;
-            UpdateMini();
-        }
 
-        LibraryRow RefreshEditedCollection(LibraryRow page, bool isAlbum)
-        {
-            if (page?.Tracks.Any(Matches) != true) return page;
-            var members = page.Tracks.Select(Replace).Where(candidate => isAlbum
-                ? string.Equals(candidate.Album, page.Name, StringComparison.OrdinalIgnoreCase) &&
-                  string.Equals(AlbumOwner(candidate), AlbumOwner(page.Tracks[0]), StringComparison.OrdinalIgnoreCase)
-                : string.Equals(candidate.Artist, page.Name, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(candidate => candidate.Album).ThenBy(candidate => candidate.Disc)
-                .ThenBy(candidate => candidate.Number).ThenBy(candidate => candidate.Name).ToArray();
-            return members.Length == 0 ? null : page with { Tracks = members };
-        }
     }
 }
