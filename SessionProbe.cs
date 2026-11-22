@@ -41,12 +41,22 @@ public partial class MainWindow
             }
             else
             {
-                if (!opened || playing || current != tracks[1] || Math.Abs(player.Position.TotalSeconds - 1.5) > .15 ||
-                    !queue.SequenceEqual(new[] { tracks[2] }) || !originalContext.SequenceEqual(tracks) ||
-                    !context.SequenceEqual(new[] { tracks[1], tracks[2], tracks[0] }) || !shuffle || repeat != RepeatMode.Track ||
+                var pathComparer = StringComparer.OrdinalIgnoreCase;
+                bool songRestored = pathComparer.Equals(current?.Path, tracks[1].Path);
+                bool queueRestored = SameOrder(queue, new[] { tracks[2] });
+                bool originalOrderRestored = SameOrder(originalContext, tracks);
+                bool playbackOrderRestored = SameOrder(context, new[] { tracks[1], tracks[2], tracks[0] });
+                double position = player.Position.TotalSeconds;
+                if (!opened || playing || !songRestored || Math.Abs(position - 1.5) > .15 ||
+                    !queueRestored || !originalOrderRestored || !playbackOrderRestored || !shuffle || repeat != RepeatMode.Track ||
                     startupSection != 2 || LibrarySectionIndex != 1)
-                    throw new InvalidOperationException("Session did not survive a process restart.");
+                    throw new InvalidOperationException($"Session mismatch: opened={opened}, playing={playing}, track={songRestored}, " +
+                        $"position={position:0.00}, queue={queueRestored}, original order={originalOrderRestored}, playback order={playbackOrderRestored}, " +
+                        $"shuffle={shuffle}, repeat={repeat}, start={startupSection}, section={LibrarySectionIndex}.");
                 Console.WriteLine("Reopened: paused track, position, queue, both playback orders, shuffle and repeat verified.");
+
+                bool SameOrder(System.Collections.Generic.IEnumerable<Track> stored, System.Collections.Generic.IEnumerable<Track> expected) =>
+                    stored.Select(track => track.Path).SequenceEqual(expected.Select(track => track.Path), pathComparer);
             }
             System.Windows.Application.Current.Shutdown(0);
         }
