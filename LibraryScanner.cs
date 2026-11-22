@@ -18,7 +18,7 @@ internal static class LibraryScanner
     public static (List<Track> Tracks, int Errors) ReadFolder(string folder, CancellationToken cancellationToken = default,
         IProgress<LibraryScanProgress> progress = null, IReadOnlyDictionary<string, Track> cache = null,
         bool includeSubfolders = true, int parallelReads = 0, bool onlyNew = false, Action<Track> onNewTrack = null,
-        Action<string, string> onFailure = null, bool forceRead = false)
+        Action<string, string> onFailure = null, bool forceRead = false, Action<string> onChildDirectory = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var tracks = new List<Track>();
@@ -70,7 +70,7 @@ internal static class LibraryScanner
             IEnumerable<FileInfo> files = Extensions.Contains(Path.GetExtension(folder)) && File.Exists(folder)
                 ? new[] { new FileInfo(folder) }
                 : EnumerateFiles(new DirectoryInfo(folder), options, cancellationToken,
-                    (path, error) => Record(path, null, error), includeSubfolders);
+                    (path, error) => Record(path, null, error), includeSubfolders, onChildDirectory);
             foreach (var info in files)
             {
                 // SMB libraries written by macOS can contain AppleDouble copies that share
@@ -135,7 +135,8 @@ internal static class LibraryScanner
     }
 
     private static IEnumerable<FileInfo> EnumerateFiles(DirectoryInfo root, EnumerationOptions options,
-        CancellationToken cancellationToken, Action<string, string> reportUnavailableFolder, bool includeSubfolders)
+        CancellationToken cancellationToken, Action<string, string> reportUnavailableFolder, bool includeSubfolders,
+        Action<string> onChildDirectory)
     {
         var folders = new Stack<DirectoryInfo>();
         folders.Push(root);
@@ -160,9 +161,11 @@ internal static class LibraryScanner
                         reportUnavailableFolder(folder.FullName, error.Message);
                         break;
                     }
-                    if (entries.Current is DirectoryInfo child && includeSubfolders &&
-                        !child.Name.Equals(".AppleDouble", StringComparison.OrdinalIgnoreCase))
-                        folders.Push(child);
+                    if (entries.Current is DirectoryInfo child && !child.Name.Equals(".AppleDouble", StringComparison.OrdinalIgnoreCase))
+                    {
+                        onChildDirectory?.Invoke(child.FullName);
+                        if (includeSubfolders) folders.Push(child);
+                    }
                     else if (entries.Current is FileInfo file) yield return file;
                 }
             }

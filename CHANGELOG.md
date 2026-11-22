@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.62.6
+
+- Si se interrumpe o cancela un escaneo del NAS, Prisma conserva las pistas guardadas y permite continuar por las carpetas pendientes.
+- Si se corta la reproducción en el NAS, **Reanudar pista** vuelve al punto de interrupción y conserva la cola.
+
 ## 0.62.5
 
 - La ventana puede aparecer mientras SQLite carga la biblioteca. La comprobación de integridad y la copia de seguridad también se ejecutan fuera del hilo de la interfaz.

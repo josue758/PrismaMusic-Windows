@@ -1,6 +1,6 @@
 # Prisma Music para Windows
 
-**Versión Windows 0.62.5** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
+**Versión Windows 0.62.6** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
 
 En **Configuración → Biblioteca** o en el menú **…** junto a los filtros, puedes exportar la colección a JSON o las pistas de la vista actual a M3U8. La exportación guarda metadatos y rutas. Los archivos de audio y las carátulas se conservan en sus ubicaciones.
 
@@ -14,7 +14,7 @@ Compatible con Windows 10 22H2 y Windows 11, x64. El ejecutable distribuido llev
 
 Esta versión mejora la experiencia de escaneo y la identificación de pistas, muestra los metadatos de etiquetas sin modificar archivos, busca carátulas y perfiles de artistas en línea cuando hace falta, y reorganiza la sala de escucha a pantalla completa y Configuración. El panel de fuentes permite gestionar carpetas locales y recursos NAS/SMB accesibles desde Windows.
 
-Descarga y ejecuta **Prisma-Music-Windows-0.62.5-Setup-x64.exe**. Se instala para tu usuario, incluye .NET y crea un acceso directo en Inicio. Puedes desinstalar Prisma desde Configuración de Windows y conservar la biblioteca en LocalAppData. [Descargas para Windows](https://github.com/josue758/PrismaMusic-Windows/releases)
+Descarga y ejecuta **Prisma-Music-Windows-0.62.6-Setup-x64.exe**. Se instala para tu usuario, incluye .NET y crea un acceso directo en Inicio. Puedes desinstalar Prisma desde Configuración de Windows y conservar la biblioteca en LocalAppData. [Descargas para Windows](https://github.com/josue758/PrismaMusic-Windows/releases)
 
 El asistente de **Primeros pasos** guía en cuatro etapas: idioma, colección, apariencia y preferencias de inicio. Para un NAS, conecta el recurso en el Explorador de archivos y selecciónalo en el asistente. La apariencia inicial incluye tres perfiles de material, tema, color de acento y una vista previa de la transparencia. Pulsa Enter o haz doble clic en una pista para reproducirla, Ctrl+F para buscar y Ctrl+I para ver información.
 
@@ -25,6 +25,8 @@ Para añadir música de un NAS, abre **Fuentes → Conectar NAS**. Escribe el no
 En **Letras → Traducir**, elige los idiomas de origen y destino. Prisma descarga los modelos compatibles cuando se usan por primera vez. La traducción se ejecuta en el equipo y aparece debajo del verso original también en la Sala de escucha.
 
 En **Artistas**, selecciona una tarjeta para abrir su ficha. Allí puedes reproducir sus canciones, abrir sus álbumes y ver un retrato y una biografía de Wikipedia o Wikimedia cuando Prisma encuentra una coincidencia fiable. **Más reproducidas en tu biblioteca** usa el contador local que Prisma registra desde la versión 0.61.0.
+
+Si un escaneo del NAS se interrumpe o lo cancelas, usa **Continuar escaneo del NAS** en el menú de la fuente. Prisma conserva las pistas guardadas y retoma las carpetas pendientes. Si el corte ocurre durante una canción, usa **Reanudar pista** cuando vuelva la conexión.
 
 Desde el menú de una canción, **Editar etiquetas de biblioteca** permite corregir el título, el artista, el álbum, el artista del álbum, el género, el año, el disco y la pista. Los cambios se guardan en Prisma. **Recuperar etiquetas del archivo** vuelve a leer la información original y elimina la corrección local.
 
@@ -45,7 +47,7 @@ Para compilar con el SDK .NET 8 en Windows:
 
 Para generar el instalador, indica al compilador de Inno Setup 7 la versión del proyecto, la ruta absoluta de `publish` y una carpeta de salida. Incluye los avisos de licencia del proyecto y sus dependencias en `publish` antes de compilar.
 
-    ISCC.exe /DAppVersion=0.62.5 "/DPayloadRoot=C:\ruta\publish" "/DSetupOutput=C:\ruta\dist" installer\PrismaMusic.iss
+    ISCC.exe /DAppVersion=0.62.6 "/DPayloadRoot=C:\ruta\publish" "/DSetupOutput=C:\ruta\dist" installer\PrismaMusic.iss
 
 El ejecutable admite --smoke-test para leer las tres demos y comprobar que avanza la reproducción.
 

@@ -230,6 +230,8 @@
                   HorizontalAlignment="Left" Visibility="Collapsed" Margin="0,4,0,0"/>
           <Button x:Name="ScanReportButton" Content="{local:LocalText Text=Ver informe del escaneo}" Click="ShowScanReport"
                   HorizontalAlignment="Left" Visibility="Collapsed" Margin="0,4,0,0"/>
+          <Button x:Name="ResumeNasScanButton" Content="{local:LocalText Text=Continuar escaneo del NAS}" Click="ResumeLastNasScan"
+                  HorizontalAlignment="Left" Visibility="Collapsed" Margin="0,4,0,0"/>
         </StackPanel>
         <Border x:Name="ScanProgressPanel" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,8,0,2"
                 Padding="12,10" Background="{DynamicResource SettingsCard}" BorderBrush="{DynamicResource WorkspaceStroke}"

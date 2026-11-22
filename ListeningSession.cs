@@ -39,7 +39,9 @@ public partial class MainWindow
         try
         {
             Directory.CreateDirectory(DataDirectory);
-            var session = new ListeningSession(current?.Path, player.Position.TotalSeconds, queue.Select(t => t.Path).ToArray(), originalContext.Select(t => t.Path).ToArray(), context.Select(t => t.Path).ToArray(), Math.Max(0, LibrarySectionIndex));
+            double position = playbackRetry is { Interrupted: true } retry && retry.Track.Path == current?.Path
+                ? retry.Position : player.Position.TotalSeconds;
+            var session = new ListeningSession(current?.Path, position, queue.Select(t => t.Path).ToArray(), originalContext.Select(t => t.Path).ToArray(), context.Select(t => t.Path).ToArray(), Math.Max(0, LibrarySectionIndex));
             File.WriteAllText(SessionFile + ".tmp", JsonSerializer.Serialize(session));
             File.Move(SessionFile + ".tmp", SessionFile, true);
         }

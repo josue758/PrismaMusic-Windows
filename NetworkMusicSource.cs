@@ -102,6 +102,12 @@ internal static class NetworkMusicSource
 
     internal static int ErrorCode(Exception error) => error is Win32Exception native ? native.NativeErrorCode : error.HResult & 0xffff;
 
+    internal static bool IsSharePath(string path) => path.StartsWith(@"\\", StringComparison.Ordinal) &&
+        !path.StartsWith(@"\\?\", StringComparison.Ordinal) && !path.StartsWith(@"\\.\", StringComparison.Ordinal);
+
+    internal static bool IsDisconnected(Exception error) =>
+        ErrorCode(error.GetBaseException()) is 53 or 59 or 64 or 67 or 121 or 1222 or 1231 or 1232 or 1236;
+
     internal static bool RequiresSignIn(int errorCode) => errorCode is 5 or 65 or 86 or 1244 or 1326 or 1385 or 1909 or 2202;
 
     internal static string Normalize(string input)

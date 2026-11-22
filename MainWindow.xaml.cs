@@ -1582,6 +1582,15 @@ public partial class MainWindow : Window
 			importNew.Click += async (_, _) => await Scan(new[] { sourcePath }, add: false, onlyNew: true, allSubfolders: true);
 			var scanAll = new MenuItem { Header = T("Escanear todas las subcarpetas") };
 			scanAll.Click += async (_, _) => await Scan(new[] { sourcePath }, add: false, allSubfolders: true);
+			if (NetworkMusicSource.IsSharePath(sourcePath))
+			{
+				var resume = new MenuItem { Header = T("Continuar escaneo del NAS") };
+				resume.Click += async (_, _) => await ResumeNasScan(sourcePath);
+				sourceButton.ContextMenu.Opened += (_, _) =>
+					resume.IsEnabled = !scanning && ScanCheckpointDirectory != null &&
+						NasScanCheckpoint.Read(ScanCheckpointDirectory, sourcePath) != null;
+				sourceButton.ContextMenu.Items.Add(resume);
+			}
 			var relocate = new MenuItem { Header = T("Reubicar fuente") };
 			relocate.Click += (_, _) => RelocateLibrarySource(sourcePath);
 			sourceButton.ContextMenu.Items.Add(scanAll);
@@ -1720,7 +1729,7 @@ public partial class MainWindow : Window
 	}
 
 	private async Task<(int TracksFound, bool Complete)?> Scan(string[] folders, bool add, bool onlyNew = false, bool allSubfolders = false,
-		bool retryFailures = false)
+		bool retryFailures = false, NasScanCheckpoint nasCheckpoint = null)
 	{
 		if (scanning || relocatingSource || folders.Length == 0)
 		{
@@ -1733,7 +1742,8 @@ public partial class MainWindow : Window
 		ScanProgressPanel.Visibility = Visibility.Visible;
 		ScanProgressText.Text = LocalTextExtension.Translate("Preparando el escaneo…");
 		Status.Text = "";
-		bool recurse = allSubfolders || scanSubfolders;
+		bool recurse = nasCheckpoint?.Subfolders ?? (allSubfolders || scanSubfolders);
+		onlyNew = nasCheckpoint?.OnlyNew ?? onlyNew;
 		int readers = parallelTagReads;
 		var previousReport = retryFailures ? lastScanReport : null;
 		Track[] tracksBeforeScan = library.Tracks.ToArray();
@@ -1747,6 +1757,7 @@ public partial class MainWindow : Window
 		var scanFailures = new System.Collections.Concurrent.ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		var visiblePaths = tracksBeforeScan.Select(track => track.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
 		var publishedPaths = new List<string>();
+		var nasRuns = new Dictionary<string, NasScanRun>(StringComparer.OrdinalIgnoreCase);
 		int savedDuringScan = 0;
 		long lastSave = Environment.TickCount64;
 
@@ -1773,6 +1784,16 @@ public partial class MainWindow : Window
 			if (sourcesChanged) RefreshLibrarySources();
 			RefreshFilters();
 			RefreshRows(refreshQueue: false);
+		}
+		void ReplaceScannedTracks(IEnumerable<Track> tracks)
+		{
+			library.Tracks = tracks.ToList();
+			var liveTracks = TrackIndex();
+			Track UpdatedTrack(Track track) => liveTracks.GetValueOrDefault(track.Path) ?? track;
+			RebindPlaybackTracks(UpdatedTrack);
+			RebindOpenCollections(UpdatedTrack, track => UpdatedTrack(track) != track);
+			trackThumbnails.Clear();
+			folderArtworkPaths.Clear();
 		}
 		try
 		{
@@ -1808,10 +1829,17 @@ public partial class MainWindow : Window
 						ScanProgressText.Text = LocalTextExtension.Format("{0:N0} revisados · {1:N0} ya indexados · {2:N0} errores · {3:N0} nuevas\n{4}",
 							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, savedDuringScan, item);
 					});
-					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
+					NasScanRun nasRun = null;
+					if (!retryFailures && NetworkMusicSource.IsSharePath(folder))
+						nasRuns[folder] = nasRun = new NasScanRun(folder, recurse, onlyNew, nasCheckpoint);
+					void NewTrack(Track track) => pendingTracks.Enqueue((folder, track));
+					void RecordFailure(string path, string error) => scanFailures[path] = error ?? "";
+					(List<Track>, int) tuple = await Task.Run(() => nasRun != null
+						? nasRun.Read(token, progress, originalTracks, readers, NewTrack, RecordFailure)
+						: LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
 						includeSubfolders: recurse, parallelReads: readers, onlyNew: onlyNew,
-						onNewTrack: track => pendingTracks.Enqueue((folder, track)),
-						onFailure: (path, error) => scanFailures[path] = error ?? "",
+						onNewTrack: NewTrack,
+						onFailure: RecordFailure,
 						forceRead: retryFailures && System.IO.File.Exists(folder)), token);
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
 					tracksFound += tuple.Item1.Count;
@@ -1821,7 +1849,7 @@ public partial class MainWindow : Window
 						if (originalTracks.TryGetValue(item.Path, out var previous) && ReferenceEquals(previous, item)) reusedTracks++;
 						indexed[item.Path] = ApplyLibraryTags(item);
 					}
-					if (tuple.Item2 == 0 && !onlyNew && !retryFailures)
+					if (tuple.Item2 == 0 && !onlyNew && !retryFailures && nasRun?.Resumed != true)
 					{
 						HashSet<string> seen = tuple.Item1.Select((Track t) => t.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
 						string prefix = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
@@ -1855,6 +1883,10 @@ public partial class MainWindow : Window
 			}
 			token.ThrowIfCancellationRequested();
 			PublishDiscovered();
+			// Enumeration can fail after publishing files. Keep those discoveries even if that directory had no final result.
+			if (scanFailures.Count > 0 && publishedPaths.Count > 0)
+				foreach (Track track in library.Tracks)
+					if (!originalTracks.ContainsKey(track.Path)) indexed.TryAdd(track.Path, track);
 			int newTracks = 0;
 			int updatedTracks = 0;
 			var addedPaths = new List<string>();
@@ -1874,15 +1906,7 @@ public partial class MainWindow : Window
 			}
 			bool tracksChanged = newTracks != 0 || updatedTracks != 0 || indexed.Count != originalTracks.Count;
 			if (tracksChanged)
-			{
-				library.Tracks = indexed.Values.ToList();
-				var liveTracks = TrackIndex();
-				Track UpdatedTrack(Track track) => liveTracks.GetValueOrDefault(track.Path) ?? track;
-				RebindPlaybackTracks(UpdatedTrack);
-				RebindOpenCollections(UpdatedTrack, track => UpdatedTrack(track) != track);
-				trackThumbnails.Clear();
-				folderArtworkPaths.Clear();
-			}
+				ReplaceScannedTracks(indexed.Values);
 
 			Status.Text = errors.Count == 0
 				? !tracksChanged && addedFolders.Count == 0
@@ -1902,12 +1926,48 @@ public partial class MainWindow : Window
 				UpdateCollectionHeading();
 			}
 			SetScanReport(addedPaths, updatedPaths, reusedTracks, scanFailures, cancelled: false, previousReport, folders);
+			SaveNasProgress(nasRuns);
 			return (tracksFound, errors.Count == 0);
 		}
 		catch (OperationCanceledException) when (token.IsCancellationRequested)
 		{
-			if (IsLoaded) PublishDiscovered();
-			SetScanReport(publishedPaths, Array.Empty<string>(), reusedTracks, scanFailures, cancelled: true, previousReport, folders);
+			var updated = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			if (IsLoaded)
+			{
+				PublishDiscovered();
+				if (nasRuns.Count > 0)
+				{
+					bool addedNasSource = false;
+					if (add)
+						foreach (string source in nasRuns.Keys)
+							if (!library.Folders.Contains(source, StringComparer.OrdinalIgnoreCase))
+							{
+								library.Folders.Add(source);
+								addedNasSource = true;
+							}
+					var partial = library.Tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
+					foreach (Track track in nasRuns.Values.SelectMany(run => run.Tracks).Select(ApplyLibraryTags))
+						if (partial.TryGetValue(track.Path, out var prior) && track != prior)
+						{
+							partial[track.Path] = track;
+							updated.Add(track.Path);
+						}
+					if (updated.Count > 0)
+					{
+						ReplaceScannedTracks(partial.Values);
+						Save(tracksChanged: true);
+						RefreshFilters();
+						UpdateCollectionHeading();
+					}
+					if (addedNasSource)
+					{
+						if (updated.Count == 0) Save();
+						RefreshLibrarySources();
+					}
+					SaveNasProgress(nasRuns);
+				}
+			}
+			SetScanReport(publishedPaths, updated, reusedTracks, scanFailures, cancelled: true, previousReport, folders);
 			Status.Text = savedDuringScan == 0 ? T("Escaneo cancelado. La biblioteca anterior se conservó.")
 				: LocalTextExtension.Format("Escaneo cancelado · {0:N0} pistas incorporadas.", savedDuringScan);
 			return null;
@@ -2394,6 +2454,7 @@ public partial class MainWindow : Window
 		if (opened)
 		{
 			double totalSeconds = player.Position.TotalSeconds;
+			lastPlaybackPosition = totalSeconds;
 			double num2 = (player.NaturalDuration.HasTimeSpan ? player.NaturalDuration.TimeSpan.TotalSeconds : 0.0);
 			updatingSeek = true;
 			Seek.Maximum = num2;

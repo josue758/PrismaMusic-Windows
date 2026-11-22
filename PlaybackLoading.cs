@@ -15,37 +15,61 @@ public partial class MainWindow
     private Track pendingTrack;
     private Func<string, bool, WaveStream> prepareAudioFile = AudioEngine.Prepare;
     private bool recoveringAudioOutput;
-    private sealed record PlaybackRetry(Track Track, bool Remember, double Position, bool Autoplay, bool RecordHistory);
+    private Exception openingAudioError;
+    private double lastPlaybackPosition;
+    private sealed record PlaybackRetry(Track Track, bool Remember, double Position, bool Autoplay, bool RecordHistory, bool Interrupted = false);
     private PlaybackRetry playbackRetry;
 
     private void UpdatePlaybackRetry(Exception error, PlaybackRetry retry)
     {
-        bool networkFile = retry.Track.Path.StartsWith(@"\\", StringComparison.Ordinal);
-        if (networkFile && (error is IOException or UnauthorizedAccessException ||
-            (uint)error.HResult is 0x80070035 or 0x80070040 or 0x80070043 or 0x800704CF))
+        if (IsNetworkPlaybackFailure(retry.Track, error))
         {
             playbackRetry = retry;
+            RetryTrackButton.Content = T(retry.Interrupted ? "Reanudar pista" : "Reintentar pista");
             RetryTrackButton.ToolTip = retry.Track.Name;
             RetryTrackButton.Visibility = Visibility.Visible;
-            Status.Text = LocalTextExtension.Format("No se pudo abrir «{0}» en el NAS. Comprueba la conexión y vuelve a intentarlo.", retry.Track.Name);
+            Status.Text = retry.Interrupted
+                ? LocalTextExtension.Format("Se interrumpió «{0}» en el NAS. Al recuperar la conexión puedes reanudar desde {1}.",
+                    retry.Track.Name, FormatClock(retry.Position))
+                : LocalTextExtension.Format("No se pudo abrir «{0}» en el NAS. Comprueba la conexión y vuelve a intentarlo.", retry.Track.Name);
         }
         else Status.Text = LocalTextExtension.Translate("Windows no pudo reproducir el archivo. ") + error.Message;
+    }
+
+    private static bool IsNetworkPlaybackFailure(Track track, Exception error)
+    {
+        if (!NetworkMusicSource.IsSharePath(track.Path)) return false;
+        for (Exception cause = error; cause != null; cause = cause.InnerException)
+            if (cause is IOException or UnauthorizedAccessException || NetworkMusicSource.IsDisconnected(cause))
+                return true;
+        return false;
     }
 
     private async void RetryNetworkTrack(object sender, RoutedEventArgs args) => await ResumeNetworkTrack();
 
     private Task ResumeNetworkTrack() => playbackRetry is { } retry
-        ? OpenTrack(retry.Track, retry.Remember, retry.Position, retry.Autoplay, retry.RecordHistory)
+        ? OpenTrack(retry.Track, retry.Remember, retry.Position, retry.Autoplay, retry.RecordHistory, retry.Interrupted)
         : Task.CompletedTask;
 
     private async Task HandleAudioFailure(Exception error)
     {
+        if (pendingOpen != null && !opened)
+        {
+            openingAudioError = error;
+            return;
+        }
         bool resume = playing;
-        double position = player.Position.TotalSeconds;
+        double position = lastPlaybackPosition;
+        try { if (opened) position = player.Position.TotalSeconds; }
+        catch (Exception failure) when (current != null && IsNetworkPlaybackFailure(current, failure)) { }
         opened = false;
         SetPlaying(false);
-        if (current != null && pendingOpen == null)
-            UpdatePlaybackRetry(error, new(current, false, position, resume, false));
+        if (current != null && pendingOpen == null && IsNetworkPlaybackFailure(current, error))
+        {
+            player.Close();
+            UpdatePlaybackRetry(error, new(current, false, position, resume, false, Interrupted: true));
+            return;
+        }
         else Status.Text = LocalTextExtension.Translate("Windows no pudo reproducir el archivo. ") + error.Message;
         const int deviceInvalidated = unchecked((int)0x88890004);
         const int resourcesInvalidated = unchecked((int)0x88890026);
@@ -72,7 +96,7 @@ public partial class MainWindow
         return OpenTrack(current ?? pendingTrack, false, player.Position.TotalSeconds, playing, false);
     }
 
-    private async Task OpenTrack(Track track, bool remember, double position, bool autoplay, bool recordHistory)
+    private async Task OpenTrack(Track track, bool remember, double position, bool autoplay, bool recordHistory, bool interrupted = false)
     {
         CancelPendingOpen();
         playbackRetry = null;
@@ -105,8 +129,14 @@ public partial class MainWindow
             if (!ReferenceEquals(pendingOpen, request)) return;
             if (Status.Text == loading) Status.Text = "";
             opened = false;
+            openingAudioError = null;
             player.OpenPrepared(prepared, strict);
             prepared = null; // The engine owns the decoder, including on output initialization failure.
+            if (!opened && openingAudioError is { } failure)
+            {
+                openingAudioError = null;
+                UpdatePlaybackRetry(failure, new(track, remember, position, autoplay, recordHistory, interrupted));
+            }
             if (!opened) return;
 
             track = TrackIndex().GetValueOrDefault(track.Path) ?? ApplyLibraryTags(track);
@@ -118,6 +148,7 @@ public partial class MainWindow
             player.Volume = Volume.Value;
             if (player.NaturalDuration.HasTimeSpan)
                 player.Position = TimeSpan.FromSeconds(Math.Clamp(position, 0, player.NaturalDuration.TimeSpan.TotalSeconds));
+            lastPlaybackPosition = player.Position.TotalSeconds;
             if (autoplay) player.Play();
             SetPlaying(autoplay);
             Now.Text = track.Name;
@@ -140,7 +171,7 @@ public partial class MainWindow
         catch (Exception error)
         {
             if (ReferenceEquals(pendingOpen, request))
-                UpdatePlaybackRetry(error, new(track, remember, position, autoplay, recordHistory));
+                UpdatePlaybackRetry(error, new(track, remember, position, autoplay, recordHistory, interrupted));
         }
         finally
         {

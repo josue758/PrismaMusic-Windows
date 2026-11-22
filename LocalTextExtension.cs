@@ -379,6 +379,12 @@ public sealed class LocalTextExtension : MarkupExtension
         ["Expandido"] = ("Expanded", "Expandido"),
         ["Añadir a la cola"] = ("Add to queue", "Adicionar à fila"),
         ["Reintentar pista"] = ("Retry track", "Tentar novamente"),
+        ["Reanudar pista"] = ("Resume track", "Retomar faixa"),
+        ["Se interrumpió «{0}» en el NAS. Al recuperar la conexión puedes reanudar desde {1}."] =
+            ("“{0}” was interrupted on the NAS. Reconnect to resume at {1}.",
+             "“{0}” foi interrompida no NAS. Reconecte para retomar em {1}."),
+        ["Continuar escaneo del NAS"] = ("Resume NAS scan", "Retomar verificação do NAS"),
+        ["No se pudo guardar el progreso del NAS. "] = ("Could not save NAS scan progress. ", "Não foi possível salvar o andamento da verificação do NAS. "),
         ["No se pudo abrir «{0}» en el NAS. Comprueba la conexión y vuelve a intentarlo."] =
             ("Could not open “{0}” on the NAS. Check the connection and try again.",
              "Não foi possível abrir “{0}” no NAS. Confira a conexão e tente novamente."),

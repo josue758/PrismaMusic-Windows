@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -23,8 +24,24 @@ public partial class MainWindow
             await ResumeNetworkTrack();
             if (current != networkTrack || playbackRetry != null || playing || Math.Abs(player.Position.TotalSeconds - 1.25) > .15)
                 throw new InvalidOperationException("NAS retry did not restore the requested position and pause state.");
+            var queued = queue.ToArray();
+            await OpenTrack(networkTrack, remember: false, position: 4, autoplay: true, recordHistory: false);
+            await HandleAudioFailure(new InvalidOperationException("Audio read interrupted.",
+                new IOException("Simulated disconnected share.", unchecked((int)0x80070040))));
+            if (playbackRetry is not { Interrupted: true, Autoplay: true } interrupted ||
+                interrupted.Position < 3.9 || opened || playing || !queue.SequenceEqual(queued))
+                throw new InvalidOperationException("An interrupted NAS track lost the playback cursor or queue.");
+            prepareAudioFile = (_, _) => throw new IOException("Still disconnected.");
+            await ResumeNetworkTrack();
+            if (playbackRetry is not { Interrupted: true } waiting || waiting.Position != interrupted.Position)
+                throw new InvalidOperationException("Retrying while offline lost the resume position.");
+            prepareAudioFile = (_, strict) => prepare(localTrack.Path, strict);
+            await ResumeNetworkTrack();
+            if (current != networkTrack || !opened || !playing || playbackRetry != null ||
+                Math.Abs(player.Position.TotalSeconds - interrupted.Position) > .45 || !queue.SequenceEqual(queued))
+                throw new InvalidOperationException("NAS reconnection did not resume the interrupted track and queue.");
             await Play(localTrack, false, 0);
-            Console.WriteLine("NAS retry restored the pending song, position, and pause state.");
+            Console.WriteLine("NAS retry restored pending and interrupted tracks, position, pause and playback state, and queue.");
         }
         finally { prepareAudioFile = prepare; }
     }
