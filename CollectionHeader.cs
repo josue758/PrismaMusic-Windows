@@ -70,7 +70,7 @@ public partial class MainWindow
     private async void LoadCollectionArtwork(LibraryRow page)
     {
         bool artist = !albumPage;
-        var workers = artist ? artistArtworkWorkers : artworkWorkers;
+        var workers = artist ? artistArtworkWorkers : galleryArtworkWorkers;
         await workers.WaitAsync();
         try
         {

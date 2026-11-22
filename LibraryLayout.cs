@@ -18,15 +18,22 @@ public partial class MainWindow
     private readonly Dictionary<int, Track[]> sortedLibraryTracks = new();
     private List<Track> indexedLibraryTracks;
     private int indexedLibraryCount;
+    private Dictionary<string, Track> indexedTracksByPath;
 
-    private Track[] OrderedLibraryTracks(int order)
+    private void RefreshLibraryIndex()
     {
         if (!ReferenceEquals(indexedLibraryTracks, library.Tracks) || indexedLibraryCount != library.Tracks.Count)
         {
             indexedLibraryTracks = library.Tracks;
             indexedLibraryCount = indexedLibraryTracks.Count;
             sortedLibraryTracks.Clear();
+            indexedTracksByPath = null;
         }
+    }
+
+    private Track[] OrderedLibraryTracks(int order)
+    {
+        RefreshLibraryIndex();
         if (sortedLibraryTracks.TryGetValue(order, out var existing)) return existing;
         var comparer = StringComparer.CurrentCultureIgnoreCase;
         var ordered = order switch
@@ -93,7 +100,8 @@ public partial class MainWindow
 
     private IEnumerable<Track> ResolveSavedTracks(IEnumerable<string> paths)
     {
-        var byPath = library.Tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
+        RefreshLibraryIndex();
+        var byPath = indexedTracksByPath ??= library.Tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
         return paths.Where(byPath.ContainsKey).Select(path => byPath[path]);
     }
 

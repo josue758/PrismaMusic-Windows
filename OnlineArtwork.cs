@@ -15,6 +15,7 @@ internal static class OnlineArtwork
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
     private static readonly ConcurrentDictionary<string, Lazy<Task<byte[]>>> AlbumCovers =
         new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, long> MissingCovers = new(StringComparer.OrdinalIgnoreCase);
     private static readonly SemaphoreSlim MusicBrainzGate = new(1, 1);
     private static DateTime nextMusicBrainzRequest;
 
@@ -22,15 +23,20 @@ internal static class OnlineArtwork
     {
         if (string.IsNullOrWhiteSpace(album) || string.IsNullOrWhiteSpace(artist)) return null;
         string key = album.Trim() + "\n" + artist.Trim();
+        if (MissingCovers.TryGetValue(key, out long expires) && expires > Environment.TickCount64) return null;
         Lazy<Task<byte[]>> request = AlbumCovers.GetOrAdd(key,
             _ => new Lazy<Task<byte[]>>(() => FetchAlbumCover(album, artist)));
-        try { return await request.Value; }
-        catch
+        try
         {
-            if (AlbumCovers.TryGetValue(key, out Lazy<Task<byte[]>> current) && ReferenceEquals(current, request))
-                AlbumCovers.TryRemove(key, out _);
-            throw;
+            byte[] result = await request.Value;
+            if (result == null)
+            {
+                if (MissingCovers.Count >= 256) MissingCovers.Clear();
+                MissingCovers[key] = Environment.TickCount64 + 15 * 60_000;
+            }
+            return result;
         }
+        finally { AlbumCovers.TryRemove(new(key, request)); }
     }
 
     private static async Task<byte[]> FetchAlbumCover(string album, string artist)
@@ -47,7 +53,7 @@ internal static class OnlineArtwork
                 "https://musicbrainz.org/ws/2/release/?fmt=json&limit=5&query=" + Uri.EscapeDataString(query));
             request.Headers.UserAgent.ParseAdd("PrismaMusicWindows/0.34 (https://github.com/josue758/PrismaMusic)");
             using var response = await Http.SendAsync(request);
-            if (!response.IsSuccessStatusCode) return null;
+            response.EnsureSuccessStatusCode();
             using JsonDocument document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
             if (!document.RootElement.TryGetProperty("releases", out JsonElement releases)) return null;
             foreach (JsonElement release in releases.EnumerateArray())
@@ -69,18 +75,19 @@ internal static class OnlineArtwork
         if (!Guid.TryParse(releaseId, out _)) return null;
         using var coverRequest = new HttpRequestMessage(HttpMethod.Get, $"https://coverartarchive.org/release/{releaseId}/front-500");
         coverRequest.Headers.UserAgent.ParseAdd("PrismaMusicWindows/0.34 (https://github.com/josue758/PrismaMusic)");
-        using var coverResponse = await Http.SendAsync(coverRequest, HttpCompletionOption.ResponseHeadersRead);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var coverResponse = await Http.SendAsync(coverRequest, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         if (coverResponse.StatusCode == HttpStatusCode.NotFound) return null;
-        if (!coverResponse.IsSuccessStatusCode) return null;
+        coverResponse.EnsureSuccessStatusCode();
         if (coverResponse.Content.Headers.ContentType?.MediaType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) != true)
             return null;
         const int maximumArtworkBytes = 6 * 1024 * 1024;
         if (coverResponse.Content.Headers.ContentLength > maximumArtworkBytes) return null;
-        await using Stream input = await coverResponse.Content.ReadAsStreamAsync();
+        await using Stream input = await coverResponse.Content.ReadAsStreamAsync(timeout.Token);
         using var output = new MemoryStream();
         byte[] buffer = new byte[16 * 1024];
         int read;
-        while ((read = await input.ReadAsync(buffer.AsMemory())) > 0)
+        while ((read = await input.ReadAsync(buffer.AsMemory(), timeout.Token)) > 0)
         {
             if (output.Length + read > maximumArtworkBytes) return null;
             await output.WriteAsync(buffer.AsMemory(0, read));

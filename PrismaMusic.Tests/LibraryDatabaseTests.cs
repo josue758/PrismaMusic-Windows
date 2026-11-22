@@ -45,7 +45,7 @@ public sealed class LibraryDatabaseTests : IDisposable
         var database = new LibraryDatabase(directory);
         var library = database.Load();
         var scanned = Song(@"C:\M\a.flac");
-        var edit = new LibraryTagEdit("Nuevo título", "Nuevo artista", "Nuevo álbum", "Jazz", 2025);
+        var edit = new LibraryTagEdit("Nuevo título", "Nuevo artista", "Nuevo álbum", "Jazz", 2025, "Recopilación", 3, 12);
         library.TagEdits[scanned.Path] = edit;
         library.Tracks.Add(edit.ApplyTo(scanned));
         database.Save(library, true);
@@ -55,6 +55,12 @@ public sealed class LibraryDatabaseTests : IDisposable
         Assert.Equal(edit.ApplyTo(scanned), reloaded.Tracks.Single());
         Assert.Equal(edit.Title, updated.Name);
         Assert.Equal(220, updated.Seconds);
+        Assert.Equal("Recopilación", updated.AlbumArtist);
+        Assert.Equal(3u, updated.Disc);
+        Assert.Equal(12u, updated.Number);
+        Assert.Same(updated, edit.ApplyTo(updated));
+        var legacyEdit = new LibraryTagEdit("Título antiguo", updated.Artist, updated.Album, updated.Genre, updated.Year);
+        Assert.Equal(12u, legacyEdit.ApplyTo(updated).Number);
     }
 
     [Fact]
@@ -108,6 +114,11 @@ public sealed class LibraryDatabaseTests : IDisposable
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM artwork";
         Assert.Equal(1L, command.ExecuteScalar());
+
+        library.Tracks[0] = library.Tracks[0] with { LastWriteUtcTicks = 42 };
+        database.Save(library, true);
+        Assert.Null(database.ReadArtwork(@"C:\M\a.flac"));
+        Assert.Equal(artwork, database.ReadArtwork(@"C:\M\b.flac"));
     }
 
     [Fact]

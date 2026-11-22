@@ -179,4 +179,10 @@ internal static class LibraryScanner
             tag.Year, tag.Disc, tag.Track, (int)audio.Duration.TotalSeconds,
             metadata.Codec, metadata.SampleRate, metadata.BitDepth, length, stamp, metadata.BitrateKbps, metadata.Channels);
     }
+
+    internal static Track ReadFile(string path)
+    {
+        var info = new FileInfo(path);
+        return ReadTrack(path, info.Length, info.LastWriteTimeUtc.Ticks);
+    }
 }

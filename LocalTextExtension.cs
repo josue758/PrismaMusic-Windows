@@ -563,6 +563,13 @@ public sealed class LocalTextExtension : MarkupExtension
         ["Créditos del retrato"] = ("Portrait credits", "Créditos do retrato"),
         ["Retrato de {0}"] = ("Portrait of {0}", "Retrato de {0}"),
         ["1 canción"] = ("1 song", "1 música"),
+        ["Espera a que termine el escaneo para editar etiquetas."] =
+            ("Wait for the scan to finish before editing tags.", "Aguarde o fim da verificação para editar as etiquetas."),
+        ["Recuperar etiquetas del archivo"] = ("Restore tags from file", "Recuperar etiquetas do arquivo"),
+        ["No se pudieron recuperar las etiquetas. "] = ("Could not restore the tags. ", "Não foi possível recuperar as etiquetas. "),
+        ["La pista ya no está en la biblioteca."] = ("The track is no longer in the library.", "A faixa não está mais na biblioteca."),
+        ["Escribe un número entre 1 y 9999 o deja el campo vacío."] =
+            ("Enter a number from 1 to 9999 or leave the field blank.", "Digite um número de 1 a 9999 ou deixe o campo vazio."),
         ["1 álbum"] = ("1 album", "1 álbum"),
         ["{0:N0} canciones"] = ("{0:N0} songs", "{0:N0} músicas"),
         ["{0:N0} álbumes"] = ("{0:N0} albums", "{0:N0} álbuns"),

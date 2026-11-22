@@ -9,12 +9,58 @@ using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using NAudio.CoreAudioApi;
 
 namespace PrismaMusic;
 
 public partial class MainWindow
 {
+    private void VerifyTagEditing(string root, Track fixture)
+    {
+        Directory.CreateDirectory(root);
+        string path = Path.Combine(root, Path.GetFileName(fixture.Path));
+        File.Copy(fixture.Path, path);
+        byte[] before = File.ReadAllBytes(path);
+        using (var cover = File.Create(Path.Combine(root, "folder.png")))
+        {
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(2, 2, 96, 96, PixelFormats.Bgra32, null, new byte[16], 8)));
+            encoder.Save(cover);
+        }
+        if (ReadArtworkPayload(path, () => null) is not { Length: > 0 } bytes)
+            throw new InvalidOperationException("The album cover beside the music was not loaded.");
+        using (var stream = new MemoryStream(bytes))
+            if (DecodeArtwork(stream, 32).PixelWidth == 0) throw new InvalidOperationException("The folder cover did not decode.");
+
+        var oldDatabase = database;
+        var oldLibrary = library;
+        try
+        {
+            var original = LibraryScanner.ReadFile(path);
+            database = new LibraryDatabase(root);
+            library = database.Load();
+            library.Tracks.Add(original);
+            database.Save(library, true);
+            var edit = new LibraryTagEdit(original.Name, original.Artist, original.Album, original.Genre, original.Year,
+                "Prisma Validation", 3, 9);
+            SaveLibraryTagEdit(original, edit);
+            var saved = new LibraryDatabase(root).Load();
+            var track = saved.Tracks.Single();
+            if (track.AlbumArtist != edit.AlbumArtist || track.Disc != 3 || track.Number != 9)
+                throw new InvalidOperationException("Album artist, disc or track number did not persist.");
+            SaveLibraryTagEdit(track, null, LibraryScanner.ReadFile(path));
+            var restored = new LibraryDatabase(root).Load();
+            if (restored.TagEdits.Count != 0 || restored.Tracks.Single() != original || !File.ReadAllBytes(path).SequenceEqual(before))
+                throw new InvalidOperationException("Restoring tags did not preserve the original audio file and metadata.");
+            Console.WriteLine("Editing and restoring album artist, disc and track passed; original audio bytes and local cover verified.");
+        }
+        finally
+        {
+            library = oldLibrary;
+            database = oldDatabase;
+        }
+    }
     private async Task VerifyArtistPage(string fixture)
     {
         var result = await Task.Run(() => LibraryScanner.ReadFolder(fixture));

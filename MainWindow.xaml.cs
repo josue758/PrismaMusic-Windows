@@ -1321,6 +1321,8 @@ public partial class MainWindow : Window
 			}
 			if (Environment.GetEnvironmentVariable("PRISMA_ARTIST_PAGE_FIXTURE") is { Length: > 0 } artistFixture)
 				await VerifyArtistPage(artistFixture);
+			if (Environment.GetEnvironmentVariable("PRISMA_TAG_RESTORE_FIXTURE") is { Length: > 0 } tagFixture)
+				VerifyTagEditing(tagFixture, demo.Tracks[0]);
 			VerifyWindowPlacement();
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
@@ -1771,7 +1773,8 @@ public partial class MainWindow : Window
 						string item = value.CurrentTrack != null
 							? value.CurrentTrack.Name + " · " + value.CurrentTrack.Artist
 							: Path.GetFileName(value.Path) + " · " + value.Error;
-						if (pendingTracks.Count >= 128 || (Environment.TickCount64 - lastSave >= 5000 && !pendingTracks.IsEmpty))
+						long elapsed = Environment.TickCount64 - lastSave;
+						if ((elapsed >= 5000 && !pendingTracks.IsEmpty) || (elapsed >= 650 && pendingTracks.Count >= 128))
 							PublishDiscovered();
 						ScanProgressText.Text = LocalTextExtension.Format("{0:N0} revisados · {1:N0} ya indexados · {2:N0} errores · {3:N0} nuevas\n{4}",
 							folderFileOffset + value.FilesProcessed, folderReusedOffset + value.Reused, folderErrorOffset + value.Errors, savedDuringScan, item);
@@ -1832,6 +1835,7 @@ public partial class MainWindow : Window
 			{
 				library.Tracks = indexed.Values.Select(ApplyLibraryTags).ToList();
 				trackThumbnails.Clear();
+				folderArtworkPaths.Clear();
 			}
 
 			Status.Text = errors.Count == 0

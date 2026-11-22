@@ -134,12 +134,21 @@ internal sealed class LibraryDatabase(string directory)
                 """;
             var upsertPath = upsert.Parameters.Add("$path", SqliteType.Text);
             var upsertPayload = upsert.Parameters.Add("$payload", SqliteType.Text);
+            using var unlinkArtwork = db.CreateCommand();
+            unlinkArtwork.Transaction = transaction;
+            unlinkArtwork.CommandText = "DELETE FROM track_artwork WHERE path = $path";
+            var clearPath = unlinkArtwork.Parameters.Add("$path", SqliteType.Text);
             foreach (var (path, track) in next)
             {
                 if (savedTracks.TryGetValue(path, out var old) && track == old) continue;
                 upsertPath.Value = path.ToUpperInvariant();
                 upsertPayload.Value = JsonSerializer.Serialize(track, TrackJson);
                 upsert.ExecuteNonQuery();
+                if (old != null && (old.FileLength != track.FileLength || old.LastWriteUtcTicks != track.LastWriteUtcTicks))
+                {
+                    clearPath.Value = upsertPath.Value;
+                    unlinkArtwork.ExecuteNonQuery();
+                }
             }
 
             using var removeArtwork = db.CreateCommand();

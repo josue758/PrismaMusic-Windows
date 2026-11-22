@@ -2,6 +2,13 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.61.1
+
+- El editor de etiquetas permite editar artista del álbum, disco y pista, y recuperar la información del archivo.
+- Las miniaturas de las canciones tienen su propia cola de carga. Prisma también reconoce portadas cover o folder en la carpeta del álbum.
+- Las carátulas de archivos modificados se renuevan al escanear. La caché de búsquedas de carátulas en línea tiene límites y los fallos de red se pueden reintentar.
+- Historial y listas reutilizan el índice de rutas y el escaneo agrupa las actualizaciones de la vista.
+
 ## 0.61.0
 
 - La galería de Artistas abre una ficha con retrato, biografía, canciones destacadas y álbumes de la biblioteca.

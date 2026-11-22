@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
@@ -18,6 +19,7 @@ public partial class MainWindow
     private int galleryPage;
     private IEnumerable<Track> galleryExportTracks;
     private readonly SemaphoreSlim artworkWorkers = new(2);
+    private readonly SemaphoreSlim galleryArtworkWorkers = new(3);
     private readonly SemaphoreSlim artistArtworkWorkers = new(2);
     private readonly Dictionary<Track, BitmapImage> trackThumbnails = new();
 
@@ -57,7 +59,7 @@ public partial class MainWindow
     private async Task LoadArtworkCard(Image image, bool artist)
     {
         if (image.DataContext is not LibraryRow row) return;
-        var workers = artist ? artistArtworkWorkers : artworkWorkers;
+        var workers = artist ? artistArtworkWorkers : galleryArtworkWorkers;
         await workers.WaitAsync();
         try
         {
@@ -207,13 +209,36 @@ public partial class MainWindow
 
         try
         {
-            byte[] embedded = readEmbedded();
-            if (embedded == null) return null;
-            try { database?.SaveArtwork(path, embedded); }
+            byte[] payload = readEmbedded();
+            if (payload == null) return ReadFolderArtwork(path);
+            try { database?.SaveArtwork(path, payload); }
             catch (Exception error) { System.Diagnostics.Trace.WriteLine($"Artwork cache write failed: {error.Message}"); }
-            return embedded;
+            return payload;
         }
         catch (Exception error) { System.Diagnostics.Trace.WriteLine($"Artwork read failed: {error.Message}"); return null; }
+    }
+
+    private readonly ConcurrentDictionary<string, (string Path, long Expires)> folderArtworkPaths = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly string[] FolderArtworkNames = { "cover.jpg", "folder.jpg", "cover.png", "folder.png", "cover.jpeg", "folder.jpeg" };
+
+    private byte[] ReadFolderArtwork(string trackPath)
+    {
+        string directory = Path.GetDirectoryName(trackPath);
+        if (string.IsNullOrEmpty(directory)) return null;
+        if (!folderArtworkPaths.TryGetValue(directory, out var entry) || Environment.TickCount64 >= entry.Expires)
+        {
+            string path = FolderArtworkNames.Select(name => Path.Combine(directory, name)).FirstOrDefault(File.Exists);
+            entry = (path, Environment.TickCount64 + 60_000);
+            if (folderArtworkPaths.Count >= 512) folderArtworkPaths.Clear();
+            folderArtworkPaths[directory] = entry;
+        }
+        if (entry.Path == null) return null;
+        using var image = File.OpenRead(entry.Path);
+        const int maximumArtworkBytes = 12 * 1024 * 1024;
+        if (image.Length is <= 0 or > maximumArtworkBytes) return null;
+        var bytes = new byte[image.Length];
+        image.ReadExactly(bytes);
+        return bytes;
     }
 
     private static BitmapImage DecodeArtwork(Stream stream, int size)
