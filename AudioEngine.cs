@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Threading;
 using NAudio.CoreAudioApi;
 using NAudio.Dsp;
+using NAudio.Dmo;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
@@ -58,6 +59,15 @@ internal sealed class AudioEngine
     public string OutputId { get; set; }
     public string ActiveOutputId => output == null ? null : endpoint?.ID;
     public string ActiveOutputName => output == null ? null : endpoint?.FriendlyName;
+    internal bool ActiveOutputUnavailable
+    {
+        get
+        {
+            if (output == null || endpoint == null) return false;
+            try { return endpoint.State != DeviceState.Active; }
+            catch (System.Runtime.InteropServices.COMException) { return true; }
+        }
+    }
     public bool Exclusive { get; set; }
     public bool IsExclusive { get; private set; }
     public string OutputNotice { get; private set; }
@@ -187,7 +197,7 @@ internal sealed class AudioEngine
                 AttachPlaybackEvents();
                 return;
             }
-            volumeStage = new VolumeSampleProvider(reader as ISampleProvider ?? reader.ToSampleProvider()) { Volume = (float)volume };
+            volumeStage = new VolumeSampleProvider(ToPlaybackSamples(reader)) { Volume = (float)volume };
             if (!direct && Speed != 1) tempo = new TempoProvider(reader, volumeStage, Speed);
             meter = new Meter((ISampleProvider)tempo ?? volumeStage) { Balance = balance, Bypass = direct };
             meter.SetGains(gains, equalizerGainDb);
@@ -242,6 +252,32 @@ internal sealed class AudioEngine
             Close();
             MediaFailed?.Invoke(this, error);
         }
+    }
+
+    internal static ISampleProvider ToPlaybackSamples(WaveStream source)
+    {
+        var format = source.WaveFormat;
+        WaveFormat standard = null;
+        if (format is WaveFormatExtensible extended)
+            standard = extended.ToStandardWaveFormat();
+        else if (format is WaveFormatExtraData { Encoding: WaveFormatEncoding.Extensible, ExtraSize: >= 22 } extra)
+        {
+            // Media Foundation can return the extensible format as a serialized WAVEFORMATEX.
+            var subtype = new Guid(extra.ExtraData.AsSpan(6, 16));
+            if (subtype == AudioMediaSubtypes.MEDIASUBTYPE_PCM)
+                standard = new WaveFormat(format.SampleRate, format.BitsPerSample, format.Channels);
+            else if (subtype == AudioMediaSubtypes.MEDIASUBTYPE_IEEE_FLOAT && format.BitsPerSample == 32)
+                standard = WaveFormat.CreateIeeeFloatWaveFormat(format.SampleRate, format.Channels);
+        }
+        if (standard?.Encoding is WaveFormatEncoding.Pcm or WaveFormatEncoding.IeeeFloat)
+            return new WaveFormatView(source, standard).ToSampleProvider();
+        return source as ISampleProvider ?? source.ToSampleProvider();
+    }
+
+    private sealed class WaveFormatView(IWaveProvider source, WaveFormat format) : IWaveProvider
+    {
+        public WaveFormat WaveFormat => format;
+        public int Read(byte[] buffer, int offset, int count) => source.Read(buffer, offset, count);
     }
 
     private void OpenDirect()

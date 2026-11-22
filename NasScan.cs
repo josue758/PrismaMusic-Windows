@@ -67,13 +67,14 @@ internal sealed class NasScanRun(string source, bool subfolders, bool onlyNew, N
 
     internal (List<Track>, int) Read(CancellationToken token, IProgress<LibraryScanProgress> progress,
         IReadOnlyDictionary<string, Track> original, int readers, Action<Track> onNew, Action<string, string> onFailure,
-        Func<string, Action<string>, (List<Track> Tracks, int Errors)> readDirectory = null)
+        Func<string, Action<string>, (List<Track> Tracks, int Errors)> readDirectory = null, Action<string> directoryStarting = null)
     {
         int errors = 0, reused = 0, processed = 0;
         while (remaining.TryPeek(out string directory))
         {
             token.ThrowIfCancellationRequested();
             if (completed.Contains(directory)) { remaining.Dequeue(); continue; }
+            directoryStarting?.Invoke(directory);
             var children = new List<string>();
             try
             {
@@ -114,7 +115,9 @@ internal sealed class NasScanRun(string source, bool subfolders, bool onlyNew, N
 
 public partial class MainWindow
 {
-    private string ScanCheckpointDirectory => smokeTest ? null : DataDirectory;
+    private string ScanCheckpointDirectory => smokeTest ? nasValidationStorage : DataDirectory;
+    private string nasValidationStorage;
+    private Action<string> nasValidationBeforeDirectory;
 
     private async Task ResumeNasScan(string source)
     {

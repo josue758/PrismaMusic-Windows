@@ -731,6 +731,99 @@ public partial class MainWindow
         }
     }
 
+    private async Task VerifyNasPhysicalRecovery(string storage)
+    {
+        var first = Environment.GetEnvironmentVariable("PRISMA_NAS_FIRST_ALBUM")
+            ?? throw new InvalidOperationException("First NAS fixture missing.");
+        var second = Environment.GetEnvironmentVariable("PRISMA_NAS_SECOND_ALBUM")
+            ?? throw new InvalidOperationException("Second NAS fixture missing.");
+        string source = Path.GetDirectoryName(first);
+        if (!NetworkMusicSource.IsSharePath(source) || !IsTrackInSource(second, source))
+            throw new InvalidOperationException("The NAS test albums must be within the same source.");
+        string host = source[2..].Split('\\')[0];
+        nasValidationStorage = storage;
+        database = new LibraryDatabase(storage);
+        library = database.Load();
+        Volume.Value = 0;
+        try
+        {
+            if (Environment.GetEnvironmentVariable("PRISMA_NAS_PLAY_ONLY") != "1")
+            {
+                library.Folders.Add(source);
+                database.Save(library, true);
+                nasValidationBeforeDirectory = directory =>
+                {
+                    if (!string.Equals(directory, second, StringComparison.OrdinalIgnoreCase)) return;
+                    Console.WriteLine("NAS_SCAN_READY: Suspend only SMB service, keeping this computer online.");
+                    WaitForSmb(available: false).GetAwaiter().GetResult();
+                };
+                try
+                {
+                    await Scan(new[] { source }, add: false,
+                        nasCheckpoint: new NasScanCheckpoint(false, false, new[] { first, second }, Array.Empty<string>()));
+                }
+                finally { nasValidationBeforeDirectory = null; }
+                var checkpoint = NasScanCheckpoint.Read(storage, source);
+                int kept = library.Tracks.Count;
+                if (kept < 2 || checkpoint?.Pending.SingleOrDefault() != second ||
+                    !checkpoint.Completed.Contains(first, StringComparer.OrdinalIgnoreCase) ||
+                    new LibraryDatabase(storage).Load().Tracks.Count != kept)
+                    throw new InvalidOperationException("SMB interruption did not retain the completed album and pending directory.");
+                Console.WriteLine($"NAS_SCAN_OFFLINE: {kept} tracks retained. Resume SMB service.");
+                await WaitForSmb(available: true);
+                await ResumeNasScan(source);
+                if (NasScanCheckpoint.Read(storage, source) != null || library.Tracks.Count <= kept)
+                    throw new InvalidOperationException("SMB reconnection did not finish the remaining album.");
+                Console.WriteLine($"NAS_SCAN_PASS: resumed the pending directory; {library.Tracks.Count} tracks indexed.");
+            }
+
+            Track track = library.Tracks.Where(item => IsTrackInSource(item.Path, first))
+                .OrderByDescending(item => item.Seconds).First();
+            queue.Clear();
+            queue.Add(library.Tracks.First(item => item.Path != track.Path));
+            var expectedQueue = queue.ToArray();
+            originalContext = context = new[] { track };
+            await OpenTrack(track, remember: false, position: 0, autoplay: true, recordHistory: false);
+            for (int attempt = 0; attempt < 35 && player.Position.TotalSeconds < 1; attempt++) await Task.Delay(100);
+            if (!opened || !playing || player.Position.TotalSeconds < 1)
+                throw new InvalidOperationException($"The NAS track did not start (opened={opened}, playing={playing}): {Status.Text}");
+            Console.WriteLine("NAS_PLAY_READY: Suspend only SMB service again.");
+            await WaitForSmb(available: false);
+            var deadline = DateTime.UtcNow.AddSeconds(90);
+            while (playbackRetry == null && DateTime.UtcNow < deadline) await Task.Delay(200);
+            if (playbackRetry is not { Interrupted: true, Autoplay: true } retry || retry.Position < 1 ||
+                !queue.SequenceEqual(expectedQueue))
+                throw new InvalidOperationException("The interrupted stream did not expose its resume position and queue.");
+            Console.WriteLine($"NAS_PLAY_OFFLINE: position {retry.Position:0.00} s retained. Resume SMB service.");
+            await WaitForSmb(available: true);
+            await ResumeNetworkTrack();
+            if (!opened || !playing || current?.Path != track.Path || Math.Abs(player.Position.TotalSeconds - retry.Position) > 1 ||
+                !queue.SequenceEqual(expectedQueue))
+                throw new InvalidOperationException("SMB reconnection did not restore the song at its saved position with the same queue.");
+            Console.WriteLine("NAS_PLAY_PASS: sound recovered at the saved position with the queue intact.");
+        }
+        finally { player.Close(); }
+
+        async Task WaitForSmb(bool available)
+        {
+            var timeout = DateTime.UtcNow.AddMinutes(3);
+            while (DateTime.UtcNow < timeout)
+            {
+                using var connection = new System.Net.Sockets.TcpClient();
+                bool connected = false;
+                try
+                {
+                    await connection.ConnectAsync(host, 445).WaitAsync(TimeSpan.FromSeconds(2));
+                    connected = connection.Connected;
+                }
+                catch (Exception error) when (error is System.Net.Sockets.SocketException or TimeoutException) { }
+                if (connected == available) return;
+                await Task.Delay(350);
+            }
+            throw new TimeoutException(available ? "SMB did not reconnect" : "SMB did not go offline");
+        }
+    }
+
     private async Task VerifyUsbPcm(string deviceName, string path)
     {
         using var devices = new MMDeviceEnumerator();
@@ -792,10 +885,40 @@ public partial class MainWindow
                 player.ActiveOutputId == fallback.ID && player.DevicePositionBytes > 0)
             {
                 Console.WriteLine($"PASS: playback recovered on {fallback.FriendlyName} at {player.Position.TotalSeconds:0.00} s; requested DAC was retained.");
+                if (Environment.GetEnvironmentVariable("PRISMA_USB_REQUIRE_RECONNECT") == "1")
+                    await VerifyReconnectedDac(track, id);
                 return;
             }
             await Task.Delay(250);
         }
         throw new InvalidOperationException("USB playback did not recover before the deadline: " + Status.Text);
+
+        async Task VerifyReconnectedDac(Track playingTrack, string requestedId)
+        {
+            Console.WriteLine("DAC_RECONNECT_READY: Reconnect the DAC.");
+            var timeout = DateTime.UtcNow.AddMinutes(3);
+            while (DateTime.UtcNow < timeout)
+            {
+                bool available = false;
+                try
+                {
+                    using var requested = devices.GetDevice(requestedId);
+                    available = requested.State == DeviceState.Active;
+                }
+                catch (System.Runtime.InteropServices.COMException) { }
+                if (available)
+                {
+                    double position = player.Position.TotalSeconds;
+                    await ReopenOutput();
+                    if (!opened || !playing || current?.Path != playingTrack.Path || player.ActiveOutputId != requestedId ||
+                        !player.IsExclusive || Math.Abs(player.Position.TotalSeconds - position) > .75)
+                        throw new InvalidOperationException("The reconnected DAC did not reopen at the current song position.");
+                    Console.WriteLine($"DAC_RECONNECT_PASS: exclusive playback reopened at {player.Position.TotalSeconds:0.00} s.");
+                    return;
+                }
+                await Task.Delay(250);
+            }
+            throw new TimeoutException("The DAC did not reconnect.");
+        }
     }
 }

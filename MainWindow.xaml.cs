@@ -1353,6 +1353,8 @@ public partial class MainWindow : Window
 				await VerifyLibraryOperations(operationsFixture, demo.Tracks[0]);
 			if (Environment.GetEnvironmentVariable("PRISMA_COMPACT_WORKSPACE_PREVIEW") != null)
 				await VerifyCompactWorkspace();
+			if (Environment.GetEnvironmentVariable("PRISMA_NAS_PHYSICAL_STORAGE") is { Length: > 0 } nasFixture)
+				await VerifyNasPhysicalRecovery(nasFixture);
 			if (Environment.GetEnvironmentVariable("PRISMA_ARTIST_LAYOUT_PREVIEW") != null)
 				await VerifyResponsiveArtistPage(demo.Tracks);
 			VerifyWindowPlacement();
@@ -1846,7 +1848,7 @@ public partial class MainWindow : Window
 					void NewTrack(Track track) => pendingTracks.Enqueue((folder, track));
 					void RecordFailure(string path, string error) => scanFailures[path] = error ?? "";
 					(List<Track>, int) tuple = await Task.Run(() => nasRun != null
-						? nasRun.Read(token, progress, originalTracks, readers, NewTrack, RecordFailure)
+						? nasRun.Read(token, progress, originalTracks, readers, NewTrack, RecordFailure, directoryStarting: nasValidationBeforeDirectory)
 						: LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
 						includeSubfolders: recurse, parallelReads: readers, onlyNew: onlyNew,
 						onNewTrack: NewTrack,

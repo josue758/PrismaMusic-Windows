@@ -22,6 +22,7 @@ public partial class MainWindow
 
     private void UpdatePlaybackRetry(Exception error, PlaybackRetry retry)
     {
+        if (smokeTest && nasValidationStorage != null) Console.WriteLine($"NAS_ERROR: {error}");
         if (IsNetworkPlaybackFailure(retry.Track, error))
         {
             playbackRetry = retry;
@@ -73,7 +74,10 @@ public partial class MainWindow
         else Status.Text = LocalTextExtension.Translate("Windows no pudo reproducir el archivo. ") + error.Message;
         const int deviceInvalidated = unchecked((int)0x88890004);
         const int resourcesInvalidated = unchecked((int)0x88890026);
-        if (error.HResult is not (deviceInvalidated or resourcesInvalidated) || player.StrictDirect ||
+        const int deviceNotReady = unchecked((int)0x80070015);
+        bool lostOutput = error.HResult is deviceInvalidated or resourcesInvalidated ||
+            (error.HResult == deviceNotReady && player.ActiveOutputUnavailable);
+        if (!lostOutput || player.StrictDirect ||
             !resume || current == null || pendingOpen != null || recoveringAudioOutput) return;
 
         recoveringAudioOutput = true;
