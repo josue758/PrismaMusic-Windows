@@ -206,6 +206,7 @@
                 <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Exportar biblioteca}" Click="ExportLibrary">
                   <MenuItem.Icon><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8B7;"/></MenuItem.Icon>
                 </MenuItem>
+                <MenuItem x:Name="UndoBatchTagsMenu" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Deshacer edición por lotes}" Click="UndoBatchTags"/>
               </ContextMenu>
             </Button.ContextMenu>
           </Button>
@@ -226,6 +227,8 @@
         <StackPanel DockPanel.Dock="Bottom">
           <TextBlock x:Name="Status" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,9,0,0"/>
           <Button x:Name="RetryTrackButton" Content="{local:LocalText Text=Reintentar pista}" Click="RetryNetworkTrack"
+                  HorizontalAlignment="Left" Visibility="Collapsed" Margin="0,4,0,0"/>
+          <Button x:Name="ScanReportButton" Content="{local:LocalText Text=Ver informe del escaneo}" Click="ShowScanReport"
                   HorizontalAlignment="Left" Visibility="Collapsed" Margin="0,4,0,0"/>
         </StackPanel>
         <Border x:Name="ScanProgressPanel" DockPanel.Dock="Bottom" Visibility="Collapsed" Margin="0,8,0,2"
@@ -297,7 +300,8 @@
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <StackPanel x:Name="HomeContent" Margin="2,0,6,8"/>
         </ScrollViewer>
-        <ScrollViewer x:Name="ArtistView" Style="{StaticResource LyricsScroll}" Visibility="Collapsed"
+        <ScrollViewer x:Name="ArtistView" Style="{StaticResource LyricsScroll}" Visibility="Collapsed" PreviewKeyDown="MoveBetweenArtistSections"
+                      AutomationProperties.HelpText="{local:LocalText Text=Ctrl+Arriba abre canciones. Ctrl+Abajo abre álbumes.}"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
           <StackPanel x:Name="ArtistContent" Margin="2,0,8,18"/>
         </ScrollViewer>

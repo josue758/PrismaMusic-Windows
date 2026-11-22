@@ -17,7 +17,8 @@ internal static class LibraryScanner
 
     public static (List<Track> Tracks, int Errors) ReadFolder(string folder, CancellationToken cancellationToken = default,
         IProgress<LibraryScanProgress> progress = null, IReadOnlyDictionary<string, Track> cache = null,
-        bool includeSubfolders = true, int parallelReads = 0, bool onlyNew = false, Action<Track> onNewTrack = null)
+        bool includeSubfolders = true, int parallelReads = 0, bool onlyNew = false, Action<Track> onNewTrack = null,
+        Action<string, string> onFailure = null, bool forceRead = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var tracks = new List<Track>();
@@ -76,9 +77,9 @@ internal static class LibraryScanner
                 // the music extension but contain only filesystem metadata.
                 if (info.Name.StartsWith("._", StringComparison.Ordinal) || !Extensions.Contains(info.Extension)) continue;
                 string path = info.FullName;
-                if (onlyNew && cache?.ContainsKey(path) == true)
+                if (onlyNew && cache != null && cache.TryGetValue(path, out var existing))
                 {
-                    Record(path, cache[path], null, cached: true);
+                    Record(path, existing, null, cached: true);
                     continue;
                 }
                 long length;
@@ -94,7 +95,7 @@ internal static class LibraryScanner
                     continue;
                 }
 
-                if (cache != null && cache.TryGetValue(path, out var previous) &&
+                if (!forceRead && cache != null && cache.TryGetValue(path, out var previous) &&
                     previous.FileLength == length && previous.LastWriteUtcTicks == stamp && stamp > 0 &&
                     previous.BitrateKbps.HasValue)
                 {
@@ -110,7 +111,11 @@ internal static class LibraryScanner
             lock (gate)
             {
                 if (track != null) tracks.Add(track);
-                else errors++;
+                else
+                {
+                    errors++;
+                    onFailure?.Invoke(path, error);
+                }
                 if (cached) reused++;
                 processed++;
                 if (progress == null) return;

@@ -19,6 +19,7 @@ public partial class MainWindow
     private List<Track> indexedLibraryTracks;
     private int indexedLibraryCount;
     private Dictionary<string, Track> indexedTracksByPath;
+    private ILookup<(string Album, string Owner), Track> indexedAlbums;
 
     private void RefreshLibraryIndex()
     {
@@ -28,7 +29,18 @@ public partial class MainWindow
             indexedLibraryCount = indexedLibraryTracks.Count;
             sortedLibraryTracks.Clear();
             indexedTracksByPath = null;
+            indexedAlbums = null;
         }
+    }
+
+    private static (string Album, string Owner) AlbumKey(string album, string owner) =>
+        ((album ?? "").ToUpperInvariant(), (owner ?? "").ToUpperInvariant());
+
+    private IEnumerable<Track> IndexedAlbum(string album, string owner)
+    {
+        RefreshLibraryIndex();
+        indexedAlbums ??= library.Tracks.ToLookup(track => AlbumKey(track.Album, AlbumOwner(track)));
+        return indexedAlbums[AlbumKey(album, owner)];
     }
 
     private Track[] OrderedLibraryTracks(int order)

@@ -2,6 +2,13 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.62.0
+
+- **Reubicar fuente** verifica la nueva ruta de una fuente y conserva favoritos, listas, etiquetas y reproducciones.
+- La selección múltiple permite editar etiquetas por lotes, previsualizar la numeración y deshacer el último lote.
+- El informe del escaneo muestra las rutas nuevas, actualizadas y fallidas. Las rutas con error se pueden reintentar por separado.
+- Las fichas de artista comparten un índice de álbumes, adaptan las carátulas al ancho y permiten saltar entre canciones y álbumes con el teclado.
+
 ## 0.61.1
 
 - El editor de etiquetas permite editar artista del álbum, disco y pista, y recuperar la información del archivo.

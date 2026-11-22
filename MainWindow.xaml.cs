@@ -1323,6 +1323,8 @@ public partial class MainWindow : Window
 				await VerifyArtistPage(artistFixture);
 			if (Environment.GetEnvironmentVariable("PRISMA_TAG_RESTORE_FIXTURE") is { Length: > 0 } tagFixture)
 				VerifyTagEditing(tagFixture, demo.Tracks[0]);
+			if (Environment.GetEnvironmentVariable("PRISMA_LIBRARY_OPERATIONS_FIXTURE") is { Length: > 0 } operationsFixture)
+				await VerifyLibraryOperations(operationsFixture, demo.Tracks[0]);
 			VerifyWindowPlacement();
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
@@ -1561,9 +1563,12 @@ public partial class MainWindow : Window
 			importNew.Click += async (_, _) => await Scan(new[] { sourcePath }, add: false, onlyNew: true, allSubfolders: true);
 			var scanAll = new MenuItem { Header = T("Escanear todas las subcarpetas") };
 			scanAll.Click += async (_, _) => await Scan(new[] { sourcePath }, add: false, allSubfolders: true);
+			var relocate = new MenuItem { Header = T("Reubicar fuente") };
+			relocate.Click += (_, _) => RelocateLibrarySource(sourcePath);
 			sourceButton.ContextMenu.Items.Add(scanAll);
 			sourceButton.ContextMenu.Items.Add(importNew);
 			sourceButton.ContextMenu.Items.Add(reveal);
+			sourceButton.ContextMenu.Items.Add(relocate);
 			sourceButton.ContextMenu.Items.Add(remove);
 			LibrarySources.Items.Add(sourceButton);
 		}
@@ -1695,9 +1700,10 @@ public partial class MainWindow : Window
 		scanCancellation?.Cancel();
 	}
 
-	private async Task<(int TracksFound, bool Complete)?> Scan(string[] folders, bool add, bool onlyNew = false, bool allSubfolders = false)
+	private async Task<(int TracksFound, bool Complete)?> Scan(string[] folders, bool add, bool onlyNew = false, bool allSubfolders = false,
+		bool retryFailures = false)
 	{
-		if (scanning || folders.Length == 0)
+		if (scanning || relocatingSource || folders.Length == 0)
 		{
 			return null;
 		}
@@ -1718,7 +1724,9 @@ public partial class MainWindow : Window
 		int reusedTracks = 0;
 		int tracksFound = 0;
 		var pendingTracks = new System.Collections.Concurrent.ConcurrentQueue<(string Folder, Track Track)>();
+		var scanFailures = new System.Collections.Concurrent.ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		var visiblePaths = tracksBeforeScan.Select(track => track.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+		var publishedPaths = new List<string>();
 		int savedDuringScan = 0;
 		long lastSave = Environment.TickCount64;
 
@@ -1730,6 +1738,7 @@ public partial class MainWindow : Window
 			{
 				if (!visiblePaths.Add(entry.Track.Path)) continue;
 				library.Tracks.Add(ApplyLibraryTags(entry.Track));
+				publishedPaths.Add(entry.Track.Path);
 				count++;
 				if (add && !library.Folders.Contains(entry.Folder, StringComparer.OrdinalIgnoreCase))
 				{
@@ -1781,7 +1790,9 @@ public partial class MainWindow : Window
 					});
 					(List<Track>, int) tuple = await Task.Run(() => LibraryScanner.ReadFolder(folder, token, progress, originalTracks,
 						includeSubfolders: recurse, parallelReads: readers, onlyNew: onlyNew,
-						onNewTrack: track => pendingTracks.Enqueue((folder, track))), token);
+						onNewTrack: track => pendingTracks.Enqueue((folder, track)),
+						onFailure: (path, error) => scanFailures[path] = error ?? "",
+						forceRead: retryFailures && System.IO.File.Exists(folder)), token);
 					filesProcessed += tuple.Item1.Count + tuple.Item2;
 					tracksFound += tuple.Item1.Count;
 					errorsProcessed += tuple.Item2;
@@ -1790,7 +1801,7 @@ public partial class MainWindow : Window
 						if (originalTracks.TryGetValue(item.Path, out var previous) && ReferenceEquals(previous, item)) reusedTracks++;
 						indexed[item.Path] = item;
 					}
-					if (tuple.Item2 == 0 && !onlyNew)
+					if (tuple.Item2 == 0 && !onlyNew && !retryFailures)
 					{
 						HashSet<string> seen = tuple.Item1.Select((Track t) => t.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
 						string prefix = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
@@ -1819,16 +1830,27 @@ public partial class MainWindow : Window
 				catch (Exception ex2)
 				{
 					errors.Add(ex2.GetBaseException().Message);
+					scanFailures[requestedFolder] = ex2.GetBaseException().Message;
 				}
 			}
 			token.ThrowIfCancellationRequested();
 			PublishDiscovered();
 			int newTracks = 0;
 			int updatedTracks = 0;
+			var addedPaths = new List<string>();
+			var updatedPaths = new List<string>();
 			foreach (Track track in indexed.Values)
 			{
-				if (!originalTracks.TryGetValue(track.Path, out var previous)) newTracks++;
-				else if (!Equals(previous, track)) updatedTracks++;
+				if (!originalTracks.TryGetValue(track.Path, out var previous))
+				{
+					newTracks++;
+					addedPaths.Add(track.Path);
+				}
+				else if (!Equals(previous, track))
+				{
+					updatedTracks++;
+					updatedPaths.Add(track.Path);
+				}
 			}
 			bool tracksChanged = newTracks != 0 || updatedTracks != 0 || indexed.Count != originalTracks.Count;
 			if (tracksChanged)
@@ -1855,11 +1877,13 @@ public partial class MainWindow : Window
 				RefreshFilters();
 				RefreshRows();
 			}
+			SetScanReport(addedPaths, updatedPaths, reusedTracks, scanFailures, complete: errors.Count == 0);
 			return (tracksFound, errors.Count == 0);
 		}
 		catch (OperationCanceledException) when (token.IsCancellationRequested)
 		{
 			if (IsLoaded) PublishDiscovered();
+			SetScanReport(publishedPaths, Array.Empty<string>(), reusedTracks, scanFailures, complete: false);
 			Status.Text = savedDuringScan == 0 ? T("Escaneo cancelado. La biblioteca anterior se conservó.")
 				: LocalTextExtension.Format("Escaneo cancelado · {0:N0} pistas incorporadas.", savedDuringScan);
 			return null;
@@ -1972,6 +1996,8 @@ public partial class MainWindow : Window
 			flag = flag2;
 		}
 		rows.Tag = (flag ? "Gallery" : null);
+		rows.SelectionMode = flag || LibrarySectionIndex == 4
+			? System.Windows.Controls.SelectionMode.Single : System.Windows.Controls.SelectionMode.Extended;
 		GalleryPager.Visibility = Visibility.Collapsed;
 		QueueTools.Visibility = ((LibrarySectionIndex != 4) ? Visibility.Collapsed : Visibility.Visible);
 		PlaylistPicker.Visibility = ((LibrarySectionIndex != 6) ? Visibility.Collapsed : Visibility.Visible);
@@ -2169,8 +2195,7 @@ public partial class MainWindow : Window
 		if (Rows.SelectedItem is LibraryRow libraryRow)
 		{
 			Track track = libraryRow.Tracks[0];
-			Track[] array = (from item in library.Tracks
-				where string.Equals(item.Album, track.Album, StringComparison.OrdinalIgnoreCase) && string.Equals(AlbumOwner(item), AlbumOwner(track), StringComparison.OrdinalIgnoreCase)
+			Track[] array = (from item in IndexedAlbum(track.Album, AlbumOwner(track))
 				orderby item.Disc, item.Number, item.Name
 				select item).ToArray();
 			if (array.Length != 0)

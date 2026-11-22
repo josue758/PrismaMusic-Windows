@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,6 +17,137 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
+    private async Task VerifyLibraryOperations(string root, Track fixture)
+    {
+        const int librarySize = 12000;
+        const int files = 1200;
+        string source = Path.Combine(root, "old"), destination = Path.Combine(root, "new");
+        Directory.CreateDirectory(source);
+        Directory.CreateDirectory(destination);
+        var originalLibrary = library;
+        var originalDatabase = database;
+        try
+        {
+            var sourceFile = Path.Combine(source, "one.m4a");
+            var destinationFile = Path.Combine(destination, "one.m4a");
+            File.Copy(fixture.Path, sourceFile);
+            File.Copy(fixture.Path, destinationFile);
+            var sourceTrack = LibraryScanner.ReadFile(sourceFile);
+            library = new Library
+            {
+                Folders = new() { source },
+                Tracks = Enumerable.Range(0, librarySize).Select(index => fixture with
+                {
+                    Path = Path.Combine(root, "synthetic", $"track-{index:D5}.flac"),
+                    Name = $"Canción {index:D5}", Album = $"Álbum {index / 12:D4}", Artist = $"Artista {index % 57:D2}", AlbumArtist = "Prisma"
+                }).Append(sourceTrack).ToList()
+            };
+            library.Favorites.Add(sourceFile);
+            library.Playlist.Add(sourceFile);
+            library.Playlists["Prueba"] = new() { sourceFile };
+            library.History.Add(sourceFile);
+            library.PlayCounts[sourceFile] = 6;
+            var originalEdit = new LibraryTagEdit(sourceTrack.Name, sourceTrack.Artist, sourceTrack.Album, sourceTrack.Genre, sourceTrack.Year);
+            library.TagEdits[sourceFile] = originalEdit;
+            try
+            {
+                LibraryRelocation.Verify(source, destination, library.Tracks.Select(track => track.Path), _ => false);
+                throw new InvalidOperationException("Relocation accepted a missing file.");
+            }
+            catch (IOException) { }
+            var mapping = LibraryRelocation.Verify(source, destination, library.Tracks.Select(track => track.Path), File.Exists);
+            library = LibraryRelocation.Apply(library, source, destination, mapping);
+            database = new LibraryDatabase(root);
+            database.Load();
+            database.Save(library, true);
+            var watch = Stopwatch.StartNew();
+            library = new LibraryDatabase(root).Load();
+            long open = watch.ElapsedMilliseconds;
+            if (library.Folders.Single() != destination || library.Favorites.Single() != destinationFile ||
+                library.Playlist.Single() != destinationFile || library.Playlists["Prueba"].Single() != destinationFile ||
+                library.History.Single() != destinationFile || library.PlayCounts[destinationFile] != 6 ||
+                library.TagEdits[destinationFile] != originalEdit)
+                throw new InvalidOperationException("Relocation did not preserve the library references.");
+
+            var batch = library.Tracks.Take(3).Select((track, index) =>
+            {
+                var edit = new LibraryTagEdit(track.Name, track.Artist, track.Album, "Jazz", 2020, "Prisma", track.Disc, (uint)(index + 4));
+                return new BatchUndo(track, library.TagEdits.GetValueOrDefault(track.Path), edit, edit.ApplyTo(track));
+            }).ToArray();
+            SaveLibraryTagChanges(batch.Select(item => (item.Before.Path, item.Applied, (Track)null)).ToArray());
+            if (!new LibraryDatabase(root).Load().Tracks.Take(3).Select(track => track.Number).SequenceEqual(new uint[] { 4, 5, 6 }))
+                throw new InvalidOperationException("Bulk numbering did not persist in its requested order.");
+            undoBatchTags = batch;
+            UndoBatchTags(this, new RoutedEventArgs());
+            if (undoBatchTags != null || !library.Tracks.Take(3).SequenceEqual(batch.Select(item => item.Before)))
+                throw new InvalidOperationException("Undo bulk edit did not restore the initial tracks.");
+
+            watch.Restart();
+            int searchMatches = library.Tracks.Count(track => MatchesLibraryQuery(track, new[] { "cancion", "009" }));
+            long search = watch.ElapsedMilliseconds;
+            if (searchMatches == 0) throw new InvalidOperationException("Large-library search returned no matches.");
+            var keys = library.Tracks.Take(600).Select(track => (track.Album, Owner: AlbumOwner(track))).Distinct().ToArray();
+            watch.Restart();
+            int expected = keys.Sum(key => library.Tracks.Count(track =>
+                string.Equals(track.Album, key.Album, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(AlbumOwner(track), key.Owner, StringComparison.OrdinalIgnoreCase)));
+            double linear = watch.Elapsed.TotalMilliseconds;
+            watch.Restart();
+            int indexed = keys.Sum(key => IndexedAlbum(key.Album, key.Owner).Count());
+            double indexedTime = watch.Elapsed.TotalMilliseconds;
+            if (indexed != expected) throw new InvalidOperationException("Indexed album lookups disagreed with the baseline.");
+
+            var scanTimes = await Task.Run(() =>
+            {
+                string scan = Path.Combine(root, "scan");
+                Directory.CreateDirectory(scan);
+                string seed = Path.Combine(scan, "seed.wav");
+                using (var writer = new NAudio.Wave.WaveFileWriter(seed, new NAudio.Wave.WaveFormat(8000, 16, 1)))
+                    writer.Write(new byte[1600], 0, 1600);
+                for (int i = 1; i < files; i++) File.Copy(seed, Path.Combine(scan, $"track-{i:D4}.wav"));
+                string corrupt = Path.Combine(scan, "bad.wav");
+                File.WriteAllText(corrupt, "bad audio");
+                var failures = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
+                var timer = Stopwatch.StartNew();
+                var first = LibraryScanner.ReadFolder(scan, onFailure: (path, error) => failures[path] = error);
+                long firstTime = timer.ElapsedMilliseconds;
+                if (first.Tracks.Count != files || !failures.ContainsKey(corrupt))
+                    throw new InvalidOperationException("Scan did not record the corrupt route.");
+                var cache = first.Tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
+                timer.Restart();
+                var second = LibraryScanner.ReadFolder(scan, cache: cache);
+                long secondTime = timer.ElapsedMilliseconds;
+                if (!second.Tracks.All(track => ReferenceEquals(track, cache[track.Path])))
+                    throw new InvalidOperationException("Incremental scan reread an unchanged track.");
+                return (firstTime, secondTime, corrupt, seed);
+            });
+            var reportProbe = await Scan(new[] { Path.GetDirectoryName(scanTimes.corrupt) }, add: false);
+            if (reportProbe?.Complete != false || lastScanReport.Added != files ||
+                !lastScanReport.Failures.Any(item => item.Path == scanTimes.corrupt))
+                throw new InvalidOperationException("The UI scan report missed a failed route or its import count.");
+            int beforeRetry = library.Tracks.Count;
+            var retry = await Scan(new[] { scanTimes.corrupt }, add: false, allSubfolders: true, retryFailures: true);
+            if (retry?.Complete != false || library.Tracks.Count != beforeRetry || lastScanReport.Failures.Single().Path != scanTimes.corrupt)
+                throw new InvalidOperationException("Retry did not stay within the failed route.");
+            File.Copy(scanTimes.seed, scanTimes.corrupt, overwrite: true);
+            retry = await Scan(new[] { scanTimes.corrupt }, add: false, allSubfolders: true, retryFailures: true);
+            if (retry?.Complete != true || lastScanReport.Added != 1 || lastScanReport.Failures.Length != 0 ||
+                library.Tracks.Count != beforeRetry + 1)
+                throw new InvalidOperationException("The repaired route did not import on retry.");
+            File.SetLastWriteTimeUtc(scanTimes.seed, DateTime.UtcNow.AddMinutes(-2));
+            await Scan(new[] { scanTimes.seed }, add: false);
+            if (lastScanReport.UpdatedPaths.Single() != scanTimes.seed)
+                throw new InvalidOperationException("The report did not list the path with refreshed tags.");
+            Console.WriteLine($"Scale check: {librarySize:N0} tracks, SQLite load {open} ms, search {search} ms, " +
+                $"{keys.Length} album lookups {linear:0.0} → {indexedTime:0.0} ms; {files} WAV scan {scanTimes.firstTime} ms, incremental {scanTimes.secondTime} ms.");
+            Console.WriteLine("Relocation, bulk numbering and undo, scan report and selective retries passed.");
+        }
+        finally
+        {
+            library = originalLibrary;
+            database = originalDatabase;
+        }
+    }
     private void VerifyTagEditing(string root, Track fixture)
     {
         Directory.CreateDirectory(root);
@@ -95,6 +227,11 @@ public partial class MainWindow
             await Task.Delay(250);
         }
         if (!ready) throw new InvalidOperationException("The profile did not contain the artist portrait and biography.");
+        if (firstArtistAlbum?.Width is not (>= 132 and <= 228) ||
+            !FocusArtistSection(albums: true) || !FocusArtistSection(albums: false))
+            throw new InvalidOperationException("Artist album sizing or keyboard section focus failed.");
+        ArtistView.ScrollToTop();
+        UpdateLayout();
         var firstSong = Descendants(ArtistContent).OfType<Button>()
             .FirstOrDefault(button => tracks.Any(track => AutomationProperties.GetName(button) ==
                 LocalTextExtension.Format("Reproducir {0}", track.Name)));

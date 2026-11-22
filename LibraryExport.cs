@@ -49,6 +49,7 @@ public partial class MainWindow
     private void ShowLibraryMenu(object sender, RoutedEventArgs args)
     {
         var menu = LibraryMenuButton.ContextMenu;
+        UndoBatchTagsMenu.IsEnabled = undoBatchTags != null && !scanning && !relocatingSource;
         menu.PlacementTarget = LibraryMenuButton;
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
         menu.IsOpen = true;

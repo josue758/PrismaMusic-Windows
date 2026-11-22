@@ -38,9 +38,10 @@ public partial class MainWindow
                 args.Handled = true;
                 return;
             }
-            Rows.SelectedItem = row.Content;
+            if (!row.IsSelected) Rows.SelectedItem = row.Content;
         }
         args.Handled = Equals(Rows.Tag, "Gallery") || Rows.SelectedItem is not LibraryRow { Tracks.Length: 1 };
+        if (!args.Handled) PrepareBatchTagMenu();
     }
 
     private void EditLibraryTags(object sender, RoutedEventArgs args) =>
@@ -190,22 +191,33 @@ public partial class MainWindow
 
     private void SaveLibraryTagEdit(Track track, LibraryTagEdit edit, Track restored = null)
     {
+        SaveLibraryTagChanges(new[] { (track.Path, edit, restored) });
+    }
+
+    private void SaveLibraryTagChanges((string Path, LibraryTagEdit Edit, Track Restored)[] changes)
+    {
         if (scanning) throw new InvalidOperationException(T("Espera a que termine el escaneo para editar etiquetas."));
-        bool Matches(Track candidate) => candidate != null && StringComparer.OrdinalIgnoreCase.Equals(candidate.Path, track.Path);
         var oldTracks = library.Tracks;
-        var original = oldTracks.FirstOrDefault(Matches) ?? throw new InvalidOperationException(T("La pista ya no está en la biblioteca."));
-        var updated = restored ?? edit.ApplyTo(original);
-        Track Replace(Track candidate) => Matches(candidate) ? updated : candidate;
-        var hadEdit = library.TagEdits.TryGetValue(track.Path, out var oldEdit);
-        if (edit == null) library.TagEdits.Remove(track.Path);
-        else library.TagEdits[track.Path] = edit;
+        var oldEdits = library.TagEdits;
+        var originals = oldTracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
+        var nextEdits = new System.Collections.Generic.Dictionary<string, LibraryTagEdit>(oldEdits, StringComparer.OrdinalIgnoreCase);
+        var updated = new System.Collections.Generic.Dictionary<string, Track>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, edit, restored) in changes)
+        {
+            if (!originals.TryGetValue(path, out var original)) throw new InvalidOperationException(T("La pista ya no está en la biblioteca."));
+            updated.Add(path, restored ?? edit.ApplyTo(original));
+            if (edit == null) nextEdits.Remove(path);
+            else nextEdits[path] = edit;
+        }
+        bool Matches(Track candidate) => candidate != null && updated.ContainsKey(candidate.Path);
+        Track Replace(Track candidate) => candidate != null && updated.TryGetValue(candidate.Path, out var value) ? value : candidate;
+        library.TagEdits = nextEdits;
         library.Tracks = oldTracks.Select(Replace).ToList();
         try { database.Save(library, tracksChanged: true); }
         catch
         {
             library.Tracks = oldTracks;
-            if (hadEdit) library.TagEdits[track.Path] = oldEdit;
-            else library.TagEdits.Remove(track.Path);
+            library.TagEdits = oldEdits;
             throw;
         }
         unsavedTracks = false;
