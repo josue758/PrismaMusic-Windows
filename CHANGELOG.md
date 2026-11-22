@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.62.3
+
+- El informe de escaneo muestra el estado final, permite buscar rutas por nombre o ubicación y muestra el detalle al seleccionar un error.
+- Puedes reintentar una ruta o todas las fallidas desde el informe. Prisma conserva los resultados anteriores y los errores que aún quedan por resolver.
+
 ## 0.62.2
 
 - **Reubicar fuente** permite elegir la carpeta o el archivo desde Windows, o pegar una ruta SMB.

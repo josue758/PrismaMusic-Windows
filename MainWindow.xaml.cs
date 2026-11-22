@@ -1716,6 +1716,7 @@ public partial class MainWindow : Window
 		Status.Text = "";
 		bool recurse = allSubfolders || scanSubfolders;
 		int readers = parallelTagReads;
+		var previousReport = retryFailures ? lastScanReport : null;
 		Track[] tracksBeforeScan = library.Tracks.ToArray();
 		List<string> errors = new List<string>();
 		List<string> addedFolders = new List<string>();
@@ -1881,13 +1882,13 @@ public partial class MainWindow : Window
 				RefreshFilters();
 				UpdateCollectionHeading();
 			}
-			SetScanReport(addedPaths, updatedPaths, reusedTracks, scanFailures, complete: errors.Count == 0);
+			SetScanReport(addedPaths, updatedPaths, reusedTracks, scanFailures, cancelled: false, previousReport, folders);
 			return (tracksFound, errors.Count == 0);
 		}
 		catch (OperationCanceledException) when (token.IsCancellationRequested)
 		{
 			if (IsLoaded) PublishDiscovered();
-			SetScanReport(publishedPaths, Array.Empty<string>(), reusedTracks, scanFailures, complete: false);
+			SetScanReport(publishedPaths, Array.Empty<string>(), reusedTracks, scanFailures, cancelled: true, previousReport, folders);
 			Status.Text = savedDuringScan == 0 ? T("Escaneo cancelado. La biblioteca anterior se conservó.")
 				: LocalTextExtension.Format("Escaneo cancelado · {0:N0} pistas incorporadas.", savedDuringScan);
 			return null;

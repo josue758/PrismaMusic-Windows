@@ -106,6 +106,8 @@ public partial class MainWindow
                 for (int i = 1; i < files; i++) File.Copy(seed, Path.Combine(scan, $"track-{i:D4}.wav"));
                 string corrupt = Path.Combine(scan, "bad.wav");
                 File.WriteAllText(corrupt, "bad audio");
+                string otherCorrupt = Path.Combine(scan, "other.wav");
+                File.WriteAllText(otherCorrupt, "bad audio");
                 var failures = new System.Collections.Concurrent.ConcurrentDictionary<string, string>();
                 var timer = Stopwatch.StartNew();
                 var first = LibraryScanner.ReadFolder(scan, onFailure: (path, error) => failures[path] = error);
@@ -118,25 +120,33 @@ public partial class MainWindow
                 long secondTime = timer.ElapsedMilliseconds;
                 if (!second.Tracks.All(track => ReferenceEquals(track, cache[track.Path])))
                     throw new InvalidOperationException("Incremental scan reread an unchanged track.");
-                return (firstTime, secondTime, corrupt, seed);
+                return (firstTime, secondTime, corrupt, otherCorrupt, seed);
             });
             var reportProbe = await Scan(new[] { Path.GetDirectoryName(scanTimes.corrupt) }, add: false);
-            if (reportProbe?.Complete != false || lastScanReport.Added != files ||
-                !lastScanReport.Failures.Any(item => item.Path == scanTimes.corrupt))
+            if (reportProbe?.Complete != false || lastScanReport.Added != files || lastScanReport.Failures.Length != 2)
                 throw new InvalidOperationException("The UI scan report missed a failed route or its import count.");
             int beforeRetry = library.Tracks.Count;
             var retry = await Scan(new[] { scanTimes.corrupt }, add: false, allSubfolders: true, retryFailures: true);
-            if (retry?.Complete != false || library.Tracks.Count != beforeRetry || lastScanReport.Failures.Single().Path != scanTimes.corrupt)
+            if (retry?.Complete != false || library.Tracks.Count != beforeRetry || lastScanReport.Failures.Length != 2)
                 throw new InvalidOperationException("Retry did not stay within the failed route.");
             File.Copy(scanTimes.seed, scanTimes.corrupt, overwrite: true);
-            retry = await Scan(new[] { scanTimes.corrupt }, add: false, allSubfolders: true, retryFailures: true);
-            if (retry?.Complete != true || lastScanReport.Added != 1 || lastScanReport.Failures.Length != 0 ||
+            // Repair both files so the remaining error proves that the report retried exactly one path.
+            File.Copy(scanTimes.seed, scanTimes.otherCorrupt, overwrite: true);
+            await VerifyScanReportDialog(scanTimes.corrupt);
+            if (lastScanReport.Added != files + 1 || lastScanReport.Failures.Single().Path != scanTimes.otherCorrupt ||
                 library.Tracks.Count != beforeRetry + 1)
                 throw new InvalidOperationException("The repaired route did not import on retry.");
+            retry = await Scan(new[] { scanTimes.otherCorrupt }, add: false, allSubfolders: true, retryFailures: true);
+            if (retry?.Complete != true || !lastScanReport.Complete || lastScanReport.Added != files + 2)
+                throw new InvalidOperationException("Resolving the remaining path did not complete the original report.");
             File.SetLastWriteTimeUtc(scanTimes.seed, DateTime.UtcNow.AddMinutes(-2));
             await Scan(new[] { scanTimes.seed }, add: false);
             if (lastScanReport.UpdatedPaths.Single() != scanTimes.seed)
                 throw new InvalidOperationException("The report did not list the path with refreshed tags.");
+            var cancelled = Scan(new[] { Path.GetDirectoryName(scanTimes.seed) }, add: false);
+            scanCancellation.Cancel();
+            if (await cancelled != null || !lastScanReport.Cancelled || lastScanReport.Complete)
+                throw new InvalidOperationException("The report did not distinguish cancellation from a completed scan.");
             Console.WriteLine($"Scale check: {librarySize:N0} tracks, SQLite load {open} ms, search {search} ms, " +
                 $"{keys.Length} album lookups {linear:0.0} → {indexedTime:0.0} ms; {files} WAV scan {scanTimes.firstTime} ms, incremental {scanTimes.secondTime} ms.");
             Console.WriteLine("Relocation, bulk numbering and undo, scan report and selective retries passed.");
@@ -146,6 +156,48 @@ public partial class MainWindow
             library = originalLibrary;
             database = originalDatabase;
         }
+    }
+
+    private async Task VerifyScanReportDialog(string path)
+    {
+        var clicked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(async () =>
+        {
+            Window dialog = null;
+            try
+            {
+                dialog = OwnedWindows.OfType<Window>().Single(window => window.Title == T("Informe del escaneo") && window.IsVisible);
+                var surface = (Grid)dialog.Content;
+                var root = (DockPanel)((Border)surface.Children[0]).Child;
+                var toolbar = root.Children.OfType<StackPanel>().First().Children.OfType<DockPanel>().Single();
+                var search = toolbar.Children.OfType<TextBox>().Single();
+                var paths = root.Children.OfType<ListBox>().Single();
+                var actions = root.Children.OfType<StackPanel>().Last().Children.OfType<WrapPanel>().Single();
+                var retry = actions.Children.OfType<Button>().Single(button => AutomationProperties.GetName(button) == T("Reintentar ruta"));
+                if (retry.IsEnabled || paths.Items.Count != 2)
+                    throw new InvalidOperationException($"Expected two unselected failures, got {paths.Items.Count} with retry enabled: {retry.IsEnabled}.");
+                paths.SelectedIndex = 0;
+                await Task.Delay(250);
+                CaptureDesignPreview(surface, "PRISMA_SCAN_REPORT_PREVIEW");
+                search.Text = "no-such-path";
+                if (paths.Items.Count != 0 || retry.IsEnabled)
+                    throw new InvalidOperationException("The scan report retained a hidden selection.");
+                search.Text = Path.GetFileName(path).ToUpperInvariant();
+                if (paths.Items.Count != 1 || paths.Items[0] is not ScanFailure item || item.Path != path)
+                    throw new InvalidOperationException("The scan report did not filter paths case-insensitively.");
+                paths.SelectedIndex = 0;
+                if (!retry.IsEnabled) throw new InvalidOperationException("The selected failure could not be retried.");
+                retry.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                if (dialog.IsVisible) throw new InvalidOperationException("Retry did not return to scan progress.");
+                clicked.SetResult();
+            }
+            catch (Exception error) { clicked.SetException(error); }
+            finally { if (dialog?.IsVisible == true) dialog.Close(); }
+        }));
+        ShowScanReport(this, new RoutedEventArgs());
+        await clicked.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        for (int attempt = 0; attempt < 120 && scanning; attempt++) await Task.Delay(50);
+        if (scanning) throw new InvalidOperationException("The scan report retry did not finish.");
     }
 
     private async Task VerifyRelocationDialog(string source, string destination)

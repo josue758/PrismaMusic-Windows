@@ -617,6 +617,14 @@ public sealed class LocalTextExtension : MarkupExtension
         ["Informe del escaneo"] = ("Scan report", "Relatório da verificação"),
         ["Escaneo completo"] = ("Scan complete", "Verificação concluída"),
         ["Escaneo parcial"] = ("Partial scan", "Verificação parcial"),
+        ["Escaneo cancelado"] = ("Scan cancelled", "Verificação cancelada"),
+        ["Tipo de resultado"] = ("Result type", "Tipo de resultado"),
+        ["Buscar ruta"] = ("Find path", "Buscar caminho"),
+        ["Rutas del escaneo"] = ("Scanned paths", "Caminhos da verificação"),
+        ["Reintentar ruta"] = ("Retry path", "Tentar caminho novamente"),
+        ["Ninguna ruta coincide con la búsqueda."] = ("No paths match your search.", "Nenhum caminho corresponde à busca."),
+        ["No hay rutas nuevas, actualizadas o con error."] =
+            ("There are no new, updated, or failed paths.", "Não há caminhos novos, atualizados ou com erro."),
         ["{0:N0} nuevas · {1:N0} actualizadas · {2:N0} reutilizadas · {3:N0} rutas con error"] =
             ("{0:N0} new · {1:N0} updated · {2:N0} reused · {3:N0} paths with errors",
              "{0:N0} novas · {1:N0} atualizadas · {2:N0} reutilizadas · {3:N0} caminhos com erro"),
