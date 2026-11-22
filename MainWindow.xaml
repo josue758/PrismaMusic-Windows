@@ -123,6 +123,13 @@
                 <TextBlock Text="{local:LocalText Text=Configuración}"/>
               </DockPanel>
             </Button>
+            <Button Click="ShowTagReview" Margin="0,2,0,0" AutomationProperties.Name="{local:LocalText Text=Revisión de etiquetas}"
+                    Style="{StaticResource FluentNavigationButton}" Background="Transparent">
+              <DockPanel>
+                <TextBlock Text="&#xE8EC;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Margin="0,0,9,0"/>
+                <TextBlock Text="{local:LocalText Text=Revisión de etiquetas}" TextTrimming="CharacterEllipsis"/>
+              </DockPanel>
+            </Button>
           </StackPanel>
           <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Style="{StaticResource LyricsScroll}">
             <StackPanel>

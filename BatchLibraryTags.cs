@@ -32,10 +32,16 @@ public partial class MainWindow
             .Select(row => row.Tracks[0].Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var tracks = Rows.Items.OfType<LibraryRow>().Where(row => row.Tracks.Length == 1 && selected.Remove(row.Tracks[0].Path))
             .Select(row => row.Tracks[0]).ToArray();
-        if (tracks.Length < 2) return;
+        if (tracks.Length >= 2) EditBatchTags(tracks, this);
+    }
 
+    private bool EditBatchTags(Track[] tracks, Window window)
+    {
+        if (tracks.Length == 0 || scanning || relocatingSource) return false;
         var root = new StackPanel { Margin = new Thickness(22) };
         root.Children.Add(SettingsHint("Activa los campos que quieres cambiar. Los números de pista siguen el orden visible de la selección."));
+        var artist = Field("Artista");
+        var album = Field("Álbum");
         var owner = Field("Artista del álbum");
         var genre = Field("Género");
         var year = Field("Año");
@@ -52,16 +58,19 @@ public partial class MainWindow
         actions.Children.Add(new Button { Content = T("Cancelar"), IsCancel = true });
         actions.Children.Add(apply);
         root.Children.Add(actions);
-        var dialog = new Window { Owner = this, Title = T("Editar etiquetas por lotes"), Width = 570,
+        var dialog = new Window { Owner = window, Title = T("Editar etiquetas por lotes"), Width = 660,
             MaxHeight = SystemParameters.WorkArea.Height, SizeToContent = SizeToContent.Height,
             ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.CenterOwner };
         var surface = new Grid();
-        surface.Children.Add(new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        var scroll = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        scroll.SetResourceReference(BackgroundProperty, "SettingsBackground");
+        surface.Children.Add(scroll);
         dialog.Content = surface;
         dialog.SetResourceReference(Window.BackgroundProperty, "SettingsBackground");
         dialog.SetResourceReference(Window.ForegroundProperty, "Ink");
         ApplyFluentDialog(dialog, surface);
-        foreach (var field in new[] { owner, genre, year, numbering })
+        var fields = new[] { artist, album, owner, genre, year, numbering };
+        foreach (var field in fields)
         {
             field.Check.Checked += (_, _) => RefreshPreview();
             field.Check.Unchecked += (_, _) => RefreshPreview();
@@ -70,19 +79,20 @@ public partial class MainWindow
         RefreshPreview();
         apply.Click += (_, _) =>
         {
-            if (!TryPlan(out var edits, tracks.Length)) return;
+            if (scanning || relocatingSource || !TryPlan(out var edits, tracks.Length)) return;
             try
             {
                 var before = tracks.Select((track, index) => new BatchUndo(track, library.TagEdits.GetValueOrDefault(track.Path),
-                    edits[index], edits[index].ApplyTo(track))).ToArray();
-                SaveLibraryTagChanges(tracks.Select((track, index) => (track.Path, edits[index], (Track)null)).ToArray());
+                    edits[index], edits[index].ApplyTo(track))).Where(item => item.Before != item.After).ToArray();
+                if (before.Length == 0) { feedback.Text = T("Sin cambios"); return; }
+                SaveLibraryTagChanges(before.Select(item => (item.Before.Path, item.Applied, (Track)null)).ToArray());
                 undoBatchTags = before;
-                Status.Text = LocalTextExtension.Format("Etiquetas guardadas en {0:N0} pistas.", tracks.Length);
+                Status.Text = LocalTextExtension.Format("Etiquetas guardadas en {0:N0} pistas.", before.Length);
                 dialog.DialogResult = true;
             }
             catch (Exception error) { feedback.Text = error.Message; }
         };
-        dialog.ShowDialog();
+        return dialog.ShowDialog() == true;
 
         (CheckBox Check, TextBox Text) Field(string label, string initial = "")
         {
@@ -116,30 +126,54 @@ public partial class MainWindow
             edits = tracks.Take(count).Select((track, index) =>
             {
                 var existing = library.TagEdits.GetValueOrDefault(track.Path) ?? new LibraryTagEdit();
+                uint newNumber = start + (uint)index;
                 return existing with
                 {
-                    Genre = genre.Check.IsChecked == true ? genre.Text.Text.Trim() : existing.Genre,
-                    Year = editYear ? newYear : existing.Year,
-                    AlbumArtist = owner.Check.IsChecked == true ? owner.Text.Text.Trim() : existing.AlbumArtist,
-                    Number = renumber ? start + (uint)index : existing.Number
+                    Artist = Changed(artist, track.Artist, existing.Artist),
+                    Album = Changed(album, track.Album, existing.Album),
+                    Genre = Changed(genre, track.Genre, existing.Genre),
+                    Year = editYear && newYear != track.Year ? newYear : existing.Year,
+                    AlbumArtist = Changed(owner, track.AlbumArtist, existing.AlbumArtist),
+                    Number = renumber && newNumber != track.Number ? newNumber : existing.Number
                 };
             }).ToArray();
             return true;
         }
 
+        static string Changed((CheckBox Check, TextBox Text) field, string current, string existing)
+        {
+            if (field.Check.IsChecked != true) return existing;
+            string value = field.Text.Text.Trim();
+            return value == (current ?? "") ? existing : value;
+        }
+
         void RefreshPreview()
         {
-            var fields = new[] { owner, genre, year, numbering };
             foreach (var field in fields) field.Text.IsEnabled = field.Check.IsChecked == true;
             bool valid = TryPlan(out var edits, Math.Min(10, tracks.Length));
             apply.IsEnabled = valid && fields.Any(field => field.Check.IsChecked == true);
-            preview.ItemsSource = valid ? edits.Select((edit, index) => edit.ApplyTo(tracks[index])).Select(track => string.Join(" · ", new[]
-            {
-                track.Number > 0 ? track.Number.ToString() : null, track.Name, track.AlbumArtist, track.Genre,
-                track.Year > 0 ? track.Year.ToString() : null
-            }.Where(value => !string.IsNullOrWhiteSpace(value)))).ToArray() : Array.Empty<string>();
+            preview.ItemsSource = valid ? edits.Select((edit, index) => PreviewChanges(tracks[index], edit.ApplyTo(tracks[index]))).ToArray()
+                : Array.Empty<string>();
             feedback.Text = valid ? LocalTextExtension.Format("Vista previa de {0:N0} de {1:N0} pistas.", edits.Length, tracks.Length)
                 : T("Revisa el año y la numeración. Los valores admitidos van de 1 a 9999.");
+        }
+
+        string PreviewChanges(Track before, Track after)
+        {
+            var changes = new List<string>();
+            Change("Artista", before.Artist, after.Artist);
+            Change("Álbum", before.Album, after.Album);
+            Change("Artista del álbum", before.AlbumArtist, after.AlbumArtist);
+            Change("Género", before.Genre, after.Genre);
+            Change("Año", before.Year == 0 ? "" : before.Year.ToString(), after.Year == 0 ? "" : after.Year.ToString());
+            Change("Pista", before.Number == 0 ? "" : before.Number.ToString(), after.Number == 0 ? "" : after.Number.ToString());
+            return before.Name + "\n" + (changes.Count == 0 ? T("Sin cambios") : string.Join("\n", changes));
+
+            void Change(string label, string from, string to)
+            {
+                if (from == to) return;
+                changes.Add($"{T(label)}  {(string.IsNullOrWhiteSpace(from) ? "—" : from)} → {(string.IsNullOrWhiteSpace(to) ? "—" : to)}");
+            }
         }
     }
 

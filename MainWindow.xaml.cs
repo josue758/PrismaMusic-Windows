@@ -1340,6 +1340,8 @@ public partial class MainWindow : Window
 				await VerifyArtistPage(artistFixture);
 			if (Environment.GetEnvironmentVariable("PRISMA_TAG_RESTORE_FIXTURE") is { Length: > 0 } tagFixture)
 				await VerifyTagEditing(tagFixture, demo.Tracks[0]);
+			if (Environment.GetEnvironmentVariable("PRISMA_TAG_REVIEW_PREVIEW") != null)
+				await VerifyTagReview(demo.Tracks[0]);
 			if (Environment.GetEnvironmentVariable("PRISMA_LIBRARY_OPERATIONS_FIXTURE") is { Length: > 0 } operationsFixture)
 				await VerifyLibraryOperations(operationsFixture, demo.Tracks[0]);
 			if (Environment.GetEnvironmentVariable("PRISMA_ARTIST_LAYOUT_PREVIEW") != null)

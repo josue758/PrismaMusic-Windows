@@ -18,6 +18,86 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
+    private async Task VerifyTagReview(Track fixture)
+    {
+        var originalLibrary = library;
+        var originalDatabase = database;
+        var originalUndo = undoBatchTags;
+        string folder = Path.Combine(Path.GetTempPath(), "prisma-review-" + Guid.NewGuid().ToString("N"));
+        var first = fixture with { Path = Path.Combine(folder, "one.flac"), Name = "Ola", Artist = "Prisma", Album = "Río" };
+        var second = first with { Path = Path.Combine(folder, "two.flac"), Name = "Marea", Album = " RÍO " };
+        try
+        {
+            library = new Library { Tracks = new() { first, second } };
+            database = new LibraryDatabase(folder);
+            database.Load();
+            database.Save(library, true);
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(async () =>
+            {
+                Window review = null;
+                try
+                {
+                    review = OwnedWindows.OfType<Window>().Single(window => window.Title == T("Revisión de etiquetas") && window.IsVisible);
+                    var surface = (Grid)review.Content;
+                    var root = (DockPanel)((Border)surface.Children[0]).Child;
+                    var lists = root.Children.OfType<Grid>().Single().Children.OfType<ListBox>().ToArray();
+                    for (int attempt = 0; attempt < 60 && lists[1].Items.Count != 2; attempt++) await Task.Delay(50);
+                    if (lists[0].Items.Count != 1 || lists[1].Items.Count != 2)
+                        throw new InvalidOperationException("The review did not show the album variants.");
+                    var buttons = root.Children.OfType<StackPanel>().Last().Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToArray();
+                    Button Action(string label) => buttons.Single(button => Equals(button.Content, T(label)));
+                    Action("Seleccionar grupo").RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                    await Task.Delay(180);
+                    CaptureDesignPreview(surface, "PRISMA_TAG_REVIEW_PREVIEW");
+                    var edited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _ = Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle, new Action(() =>
+                    {
+                        Window batch = null;
+                        try
+                        {
+                            batch = review.OwnedWindows.OfType<Window>().Single(window => window.IsVisible);
+                            var body = (StackPanel)((ScrollViewer)((Grid)batch.Content).Children[0]).Content;
+                            var field = body.Children.OfType<Grid>().Single(grid =>
+                                grid.Children.OfType<CheckBox>().Any(box => Equals(box.Content, T("Álbum"))));
+                            field.Children.OfType<CheckBox>().Single().IsChecked = true;
+                            field.Children.OfType<TextBox>().Single().Text = "Río";
+                            if (library.Tracks[1].Album != " RÍO " ||
+                                !body.Children.OfType<ListBox>().Single().Items.Cast<string>().Any(text => text.Contains("→ Río")))
+                                throw new InvalidOperationException("The review preview changed data early or omitted the album change.");
+                            body.Children.OfType<WrapPanel>().Single().Children.OfType<Button>()
+                                .Single(button => Equals(button.Content, T("Aplicar cambios"))).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                            edited.SetResult();
+                        }
+                        catch (Exception error) { edited.SetException(error); }
+                        finally { if (batch?.IsVisible == true) batch.Close(); }
+                    }));
+                    Action("Vista previa de edición").RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                    await edited.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                    for (int attempt = 0; attempt < 60 && !Action("Deshacer edición por lotes").IsEnabled; attempt++) await Task.Delay(50);
+                    if (library.Tracks.Any(track => track.Album != "Río") || lists[0].Items.Count != 0 ||
+                        library.TagEdits.ContainsKey(first.Path) || !library.TagEdits.ContainsKey(second.Path))
+                        throw new InvalidOperationException("Applying the reviewed changes did not resolve the album group.");
+                    Action("Deshacer edición por lotes").RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                    if (library.Tracks[1].Album != " RÍO ")
+                        throw new InvalidOperationException("Undo did not restore the album variant.");
+                    finished.SetResult();
+                }
+                catch (Exception error) { finished.SetException(error); }
+                finally { if (review?.IsVisible == true) review.Close(); }
+            }));
+            ShowTagReview(this, new RoutedEventArgs());
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Console.WriteLine("Tag review: selected album group, previewed and applied a correction, and restored it with Undo.");
+        }
+        finally
+        {
+            library = originalLibrary;
+            database = originalDatabase;
+            undoBatchTags = originalUndo;
+        }
+    }
+
     private async Task VerifyLibraryOperations(string root, Track fixture)
     {
         const int librarySize = 12000;

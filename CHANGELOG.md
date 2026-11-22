@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.62.7
+
+- **Revisión de etiquetas** agrupa pistas sin artista o álbum, variantes que pueden dividir un álbum y posibles duplicados.
+- El editor por lotes también corrige artista y álbum. La vista previa muestra el valor anterior y el nuevo antes de aplicar los cambios.
+
 ## 0.62.6
 
 - Si se interrumpe o cancela un escaneo del NAS, Prisma conserva las pistas guardadas y permite continuar por las carpetas pendientes.
