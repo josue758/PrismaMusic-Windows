@@ -2,6 +2,14 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.63.0
+
+- El título del reproductor abre el álbum, selecciona la canción actual y desplaza la lista hasta ella. El nombre del artista abre su ficha.
+- Los álbumes muestran sus géneros. Las fichas de álbum y artista permiten exportar M3U8.
+- El editor de álbum guarda datos, carátulas y etiquetas por pista en Prisma. La escritura en archivos FLAC es opcional.
+- Biblioteca permite activar la búsqueda de música nueva cada 90 segundos y conserva hasta siete copias diarias de SQLite.
+- Prisma conserva los idiomas de traducción de letras al volver a abrir la app.
+
 ## 0.62.10
 
 - Corrige la reproducción a velocidad ajustada cuando el decodificador entrega PCM entero, como algunos archivos FLAC de 24 bits leídos desde un NAS.

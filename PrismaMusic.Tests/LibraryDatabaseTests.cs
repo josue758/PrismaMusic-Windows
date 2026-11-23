@@ -175,6 +175,26 @@ public sealed class LibraryDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void RecoverySkipsDamagedNewestBackup()
+    {
+        var db = new LibraryDatabase(directory);
+        var library = db.Load();
+        library.Tracks.Add(Song(@"C:\M\a.flac"));
+        db.Save(library, true);
+        db.Load();
+
+        var backups = Path.Combine(directory, "backups");
+        string originalBackup = Assert.Single(Directory.GetFiles(backups, "*.sqlite3"));
+        File.Copy(originalBackup, Path.Combine(backups, "library-20000101.sqlite3"));
+        File.WriteAllText(originalBackup, "damaged backup");
+        SqliteConnection.ClearAllPools();
+        File.WriteAllText(Path.Combine(directory, "library.sqlite3"), "damaged library");
+
+        Assert.Single(new LibraryDatabase(directory).Load().Tracks);
+        Assert.Single(Directory.GetFiles(directory, "library.corrupt-*.sqlite3"));
+    }
+
+    [Fact]
     public void CorruptDatabaseIsKeptAndRestoredFromBackup()
     {
         var database = new LibraryDatabase(directory);
@@ -196,7 +216,7 @@ public sealed class LibraryDatabaseTests : IDisposable
     }
 
     [Fact]
-    public void OnlyFiveBackupsAreKept()
+    public void OnlySevenBackupsAreKept()
     {
         Directory.CreateDirectory(Path.Combine(directory, "backups"));
         for (int day = 1; day <= 8; day++)
@@ -204,6 +224,6 @@ public sealed class LibraryDatabaseTests : IDisposable
 
         new LibraryDatabase(directory).Load();
 
-        Assert.True(Directory.GetFiles(Path.Combine(directory, "backups"), "library-*.sqlite3").Length <= 5);
+        Assert.Equal(7, Directory.GetFiles(Path.Combine(directory, "backups"), "library-*.sqlite3").Length);
     }
 }

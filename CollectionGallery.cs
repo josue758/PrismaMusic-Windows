@@ -163,7 +163,7 @@ public partial class MainWindow
         {
             try
             {
-                var payload = ReadArtworkPayload(track.Path);
+                var payload = ReadCustomArtwork(track.ArtworkOverride) ?? ReadArtworkPayload(track.Path);
                 if (payload == null) continue;
                 using var bytes = new MemoryStream(payload);
                 return DecodeArtwork(bytes, size);

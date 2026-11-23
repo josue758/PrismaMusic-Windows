@@ -156,6 +156,7 @@ public partial class MainWindow
             if (autoplay) player.Play();
             SetPlaying(autoplay);
             Now.Text = track.Name;
+            TransportArtist.Text = track.Artist;
             Artist.Text = track.Detail;
             UpdateMini();
             if (recordHistory)

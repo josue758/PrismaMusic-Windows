@@ -231,12 +231,14 @@
       <Setter Property="Background" Value="{DynamicResource ControlFill}"/>
       <Setter Property="Padding" Value="13,9"/>
       <Setter Property="Margin" Value="0,0,6,0"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="BorderBrush" Value="#26FFFFFF"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
             <Grid x:Name="Root" RenderTransformOrigin=".5,.5">
               <Grid.RenderTransform><ScaleTransform ScaleX="1" ScaleY="1"/></Grid.RenderTransform>
-              <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="11" Padding="{TemplateBinding Padding}" BorderThickness="1" BorderBrush="#26FFFFFF">
+              <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="11" Padding="{TemplateBinding Padding}" BorderThickness="{TemplateBinding BorderThickness}" BorderBrush="{TemplateBinding BorderBrush}">
                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
               </Border>
               <Border x:Name="Hover" Background="White" CornerRadius="10" Opacity="0" IsHitTestVisible="False"/>

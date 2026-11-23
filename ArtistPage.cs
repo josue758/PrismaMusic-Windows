@@ -40,10 +40,10 @@ public partial class MainWindow
         args.Handled = true;
     }
 
-    private void OpenArtistCollection(string name)
+    private void OpenArtistCollection(string name, bool allSources = false)
     {
         var tracks = library.Tracks.Where(track => string.Equals(track.Artist, name, StringComparison.OrdinalIgnoreCase) &&
-            (selectedLibrarySource == null || IsTrackInSource(track.Path, selectedLibrarySource)))
+            (allSources || selectedLibrarySource == null || IsTrackInSource(track.Path, selectedLibrarySource)))
             .OrderBy(track => track.Album).ThenBy(track => track.Disc).ThenBy(track => track.Number)
             .ThenBy(track => track.Name).ToArray();
         if (tracks.Length > 0) OpenCollection(new LibraryRow(name, "", tracks), album: false);
@@ -120,6 +120,7 @@ public partial class MainWindow
         ((TextBlock)artistPagePlayButton.Content).SetResourceReference(TextBlock.ForegroundProperty, "OnAccentBrush");
         actions.Children.Add(artistPagePlayButton);
         actions.Children.Add(ActionButton("Aleatorio", ShuffleCollection));
+        actions.Children.Add(ActionButton("Exportar M3U8", ExportCollectionPlaylist));
         if (!page.Tracks.All(IsDemo)) actions.Children.Add(ActionButton("Cambiar retrato", (_, _) => ShowArtistProfile(page.Name)));
         identity.Children.Add(actions);
         var photoCredit = ActionButton("Créditos del retrato", (_, _) => OpenArtistSource(photo.Tag as string));

@@ -56,6 +56,7 @@ public partial class MainWindow
         current = updated;
         CurrentTrackPath = current.Path;
         Now.Text = updated.Name;
+        TransportArtist.Text = updated.Artist;
         Artist.Text = updated.Detail;
         if (oldTrack.FormatLabel != updated.FormatLabel) AudioFormat.Text = updated.FormatLabel;
         UpdateFavoriteToolbarButton();

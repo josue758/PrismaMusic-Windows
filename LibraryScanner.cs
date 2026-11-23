@@ -75,7 +75,8 @@ internal static class LibraryScanner
             {
                 // SMB libraries written by macOS can contain AppleDouble copies that share
                 // the music extension but contain only filesystem metadata.
-                if (info.Name.StartsWith("._", StringComparison.Ordinal) || !Extensions.Contains(info.Extension)) continue;
+                if (info.Name.StartsWith("._", StringComparison.Ordinal) ||
+                    info.Name.StartsWith(".prisma-tag-", StringComparison.OrdinalIgnoreCase) || !Extensions.Contains(info.Extension)) continue;
                 string path = info.FullName;
                 if (onlyNew && cache != null && cache.TryGetValue(path, out var existing))
                 {

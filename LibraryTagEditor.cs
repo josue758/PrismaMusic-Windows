@@ -12,13 +12,14 @@ using System.Windows.Media;
 namespace PrismaMusic;
 
 public sealed record LibraryTagEdit(string Title = null, string Artist = null, string Album = null, string Genre = null, uint? Year = null,
-    string AlbumArtist = null, uint? Disc = null, uint? Number = null)
+    string AlbumArtist = null, uint? Disc = null, uint? Number = null, string ArtworkOverride = null)
 {
     internal Track ApplyTo(Track track)
     {
         var edited = track with { Name = Title ?? track.Name, Artist = Artist ?? track.Artist, Album = Album ?? track.Album,
             Genre = Genre ?? track.Genre, Year = Year ?? track.Year,
-            AlbumArtist = AlbumArtist ?? track.AlbumArtist, Disc = Disc ?? track.Disc, Number = Number ?? track.Number };
+            AlbumArtist = AlbumArtist ?? track.AlbumArtist, Disc = Disc ?? track.Disc, Number = Number ?? track.Number,
+            ArtworkOverride = ArtworkOverride ?? track.ArtworkOverride };
         return edited == track ? track : edited;
     }
 }

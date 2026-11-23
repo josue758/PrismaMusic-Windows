@@ -78,7 +78,20 @@ public partial class MainWindow
             Status.Text = LocalTextExtension.Translate("No hay pistas para exportar en esta vista.");
             return;
         }
-        await ExportFile(".m3u8", "Prisma Music.m3u8", "M3U8", () => Task.Run(() => LibraryExport.PlaylistText(tracks)));
+        await ExportPlaylist("Prisma Music", tracks);
+    }
+
+    private async void ExportCollectionPlaylist(object sender, RoutedEventArgs args)
+    {
+        if (collection is { } page) await ExportPlaylist(page.Name, page.Tracks);
+    }
+
+    private Task ExportPlaylist(string title, Track[] tracks)
+    {
+        string invalid = new string(Path.GetInvalidFileNameChars());
+        string name = string.Concat(title.Select(character => invalid.Contains(character) ? '_' : character)).Trim(' ', '.');
+        if (name.Length > 100) name = name[..100].TrimEnd(' ', '.');
+        return ExportFile(".m3u8", $"Prisma - {name}.m3u8", "M3U8", () => Task.Run(() => LibraryExport.PlaylistText(tracks)));
     }
 
     private async Task ExportFile(string extension, string name, string type, Func<Task<string>> buildContents)

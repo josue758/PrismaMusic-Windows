@@ -198,6 +198,13 @@
               <WrapPanel x:Name="CollectionActions" Visibility="Collapsed" Margin="0,12,0,0">
                 <Button Click="PlayCollection" Background="{DynamicResource AccentBrush}"><TextBlock Text="{local:LocalText Text=Reproducir colección}" Foreground="{DynamicResource OnAccentBrush}" FontWeight="SemiBold"/></Button>
                 <Button Content="{local:LocalText Text=Aleatorio}" Click="ShuffleCollection"/>
+                <Button Content="{local:LocalText Text=Exportar M3U8}" Click="ExportCollectionPlaylist"/>
+                <Button x:Name="EditAlbumButton" Click="EditAlbum" Visibility="Collapsed">
+                  <StackPanel Orientation="Horizontal">
+                    <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE70F;" Margin="0,0,7,0"/>
+                    <TextBlock Text="{local:LocalText Text=Editar álbum}"/>
+                  </StackPanel>
+                </Button>
                 <Button x:Name="ArtistOverviewButton" Content="{local:LocalText Text=Ver perfil}" Click="ShowArtistOverview" Visibility="Collapsed"/>
               </WrapPanel>
             </StackPanel>
@@ -647,8 +654,28 @@
           <Button DockPanel.Dock="Right" x:Name="FavoriteToolbarButton" Content="&#xEB51;" Style="{StaticResource TransportIcon}"
                   Click="Favorite" AutomationProperties.Name="{local:LocalText Text=Favorito}" ToolTip="{local:LocalText Text=Favorito}"/>
           <StackPanel VerticalAlignment="Center">
-            <TextBlock x:Name="TransportTitle" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="{Binding Text, ElementName=Artist}" Foreground="{DynamicResource Muted}" FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
+            <StackPanel.Resources>
+              <Style x:Key="TransportLink" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                <Setter Property="HorizontalAlignment" Value="Left"/>
+                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                <Setter Property="Margin" Value="0"/>
+                <Setter Property="Padding" Value="3,1"/>
+                <Setter Property="MinHeight" Value="18"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding CurrentTrackPath, RelativeSource={RelativeSource AncestorType=Window}}" Value="{x:Null}">
+                    <Setter Property="IsEnabled" Value="False"/>
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </StackPanel.Resources>
+            <Button Style="{StaticResource TransportLink}" Click="OpenPlayingAlbum" ToolTip="{local:LocalText Text=Ver álbum}">
+              <TextBlock x:Name="TransportTitle" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis"/>
+            </Button>
+            <Button Style="{StaticResource TransportLink}" Click="OpenPlayingArtist" ToolTip="{local:LocalText Text=Ver artista}">
+              <TextBlock x:Name="TransportArtist" Foreground="{DynamicResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+            </Button>
             <TextBlock Text="{Binding Text, ElementName=AudioFormat}" Visibility="{DynamicResource TrackQualityVisibility}" Foreground="{DynamicResource AccentBrush}" FontSize="10" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
           </StackPanel>
         </DockPanel>

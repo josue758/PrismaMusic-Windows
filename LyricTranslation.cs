@@ -106,6 +106,15 @@ public partial class MainWindow
 
         var source = AddLanguage("Idioma original", preferredLyricSource, 0);
         var target = AddLanguage("Idioma de destino", preferredLyricTarget, 2);
+        source.SelectionChanged += (_, _) => RememberLanguages();
+        target.SelectionChanged += (_, _) => RememberLanguages();
+
+        void RememberLanguages()
+        {
+            if (source.SelectedValue is string from) preferredLyricSource = from;
+            if (target.SelectedValue is string to) preferredLyricTarget = to;
+            SaveAudioSettings();
+        }
         var actions = new WrapPanel { Margin = new Thickness(0, 14, 0, 8) };
         header.Children.Add(actions);
         var translate = new Button { Content = LocalTextExtension.Translate("Traducir"), IsDefault = true };
@@ -164,8 +173,6 @@ public partial class MainWindow
                 status.Text = LocalTextExtension.Translate("Traduciendo…");
                 var translations = await TranslateLocalLines(python, from, lines, TranslatorDirectory, to);
                 var pairs = lines.Zip(translations).ToDictionary(pair => pair.First, pair => pair.Second);
-                preferredLyricSource = from;
-                preferredLyricTarget = to;
                 if (lyricRevision == revision)
                 {
                     translatedLines = pairs;

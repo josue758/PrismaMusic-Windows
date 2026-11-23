@@ -42,17 +42,33 @@ internal sealed class LibraryDatabase(string directory)
         if (healthy) return;
 
         SqliteConnection.ClearAllPools();
-        string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss-fffffff");
         File.Move(DatabasePath, Path.Combine(directory, $"library.corrupt-{stamp}.sqlite3"));
         foreach (string side in new[] { "-wal", "-shm" })
             if (File.Exists(DatabasePath + side)) File.Delete(DatabasePath + side);
-        string backup = Directory.Exists(BackupDirectory)
-            ? Directory.GetFiles(BackupDirectory, "library-*.sqlite3").OrderDescending().FirstOrDefault()
-            : null;
-        if (backup != null) File.Copy(backup, DatabasePath);
+        if (!Directory.Exists(BackupDirectory)) return;
+        foreach (string backup in Directory.GetFiles(BackupDirectory, "library-*.sqlite3").OrderDescending())
+        {
+            try
+            {
+                using var candidate = new SqliteConnection(new SqliteConnectionStringBuilder
+                {
+                    DataSource = backup, Mode = SqliteOpenMode.ReadOnly, Pooling = false
+                }.ToString());
+                candidate.Open();
+                using var check = candidate.CreateCommand();
+                check.CommandText = "PRAGMA quick_check";
+                if (check.ExecuteScalar() as string != "ok") continue;
+                check.CommandText = "SELECT count(*) FROM sqlite_schema WHERE type = 'table' AND name IN ('library_state', 'tracks')";
+                if (check.ExecuteScalar() is not 2L) continue;
+            }
+            catch (SqliteException) { continue; }
+            File.Copy(backup, DatabasePath);
+            break;
+        }
     }
 
-    // Una copia por día de uso, renovada en cada inicio sano; se conservan las cinco más recientes.
+    // Una copia por día de uso, renovada en cada inicio sano; se conservan las siete más recientes.
     private void CreateBackup(SqliteConnection source)
     {
         try
@@ -68,7 +84,7 @@ internal sealed class LibraryDatabase(string directory)
                 source.BackupDatabase(copy);
             }
             File.Move(temporary, target, true);
-            foreach (string old in Directory.GetFiles(BackupDirectory, "library-*.sqlite3").OrderDescending().Skip(5))
+            foreach (string old in Directory.GetFiles(BackupDirectory, "library-*.sqlite3").OrderDescending().Skip(7))
                 File.Delete(old);
         }
         catch (Exception) { }

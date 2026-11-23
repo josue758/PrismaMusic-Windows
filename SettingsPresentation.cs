@@ -149,6 +149,16 @@ public partial class MainWindow
         AutomationProperties.SetLabeledBy(readers, readerLabel);
         card.Children.Add(subfolders);
         card.Children.Add(onLaunch);
+        var discovery = new CheckBox { Content = T("Descubrir música nueva en segundo plano"), IsChecked = discoverNewMusic,
+            Style = (Style)FindResource("SettingsToggle") };
+        discovery.Click += (_, _) =>
+        {
+            discoverNewMusic = discovery.IsChecked == true;
+            UpdateLibraryDiscovery();
+            SaveAudioSettings();
+        };
+        card.Children.Add(discovery);
+        card.Children.Add(SettingsHint("Busca archivos nuevos cada 90 segundos en las fuentes de la biblioteca."));
         card.Children.Add(readerLabel);
         card.Children.Add(readers);
         card.Children.Add(SettingsHint("Automático ajusta las lecturas a la carpeta. Elige 2, 4 u 8 para fijar un límite."));
