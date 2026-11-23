@@ -35,7 +35,7 @@ $link.IconLocation = "$exe,0"
 $link.Save()
 New-Item -Path $registry -Force | Out-Null
 $command = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{0}" -Uninstall' -f (Join-Path $installDir 'Install.ps1')
-$values = @{ DisplayName='Prisma Music'; DisplayVersion='0.63.0'; InstallLocation=$installDir; DisplayIcon=$exe; UninstallString=$command }
+$values = @{ DisplayName='Prisma Music'; DisplayVersion='0.63.1'; InstallLocation=$installDir; DisplayIcon=$exe; UninstallString=$command }
 foreach ($entry in $values.GetEnumerator()) {
     New-ItemProperty -Path $registry -Name $entry.Key -Value $entry.Value -PropertyType String -Force | Out-Null
 }

@@ -2,6 +2,10 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.63.1
+
+- El editor de álbum reúne la carátula y los datos en una tarjeta compacta. La tabla de canciones tiene desplazamiento propio y los botones de guardado permanecen visibles al cambiar el tamaño de la ventana.
+
 ## 0.63.0
 
 - El título del reproductor abre el álbum, selecciona la canción actual y desplaza la lista hasta ella. El nombre del artista abre su ficha.

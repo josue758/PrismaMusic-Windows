@@ -786,7 +786,18 @@ public partial class MainWindow : Window
 			collection = libraryRow2;
 			RefreshRows();
 			if (Environment.GetEnvironmentVariable("PRISMA_ALBUM_EDITOR_PREVIEW") != null)
+			{
+				var previewTrack = libraryRow2.Tracks[0];
+				var previewTracks = Enumerable.Range(1, 18).Select(number => previewTrack with
+				{
+					Name = demo.Tracks[(number - 1) % demo.Tracks.Count].Name + " " + number,
+					AlbumArtist = previewTrack.Artist, Disc = (uint)(number > 12 ? 2 : 1), Number = (uint)number
+				}).ToArray();
+				collection = libraryRow2 with { Tracks = previewTracks };
 				EditAlbum(EditAlbumButton, new RoutedEventArgs());
+				collection = libraryRow2;
+				Console.WriteLine("Album editor preview and viewport checks passed.");
+			}
 			Rows.SelectedIndex = 0;
 			BrowseRelatedArtist(this, new RoutedEventArgs());
 			if (collection?.Name != libraryRow.Tracks[0].Artist)

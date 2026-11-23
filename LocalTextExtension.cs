@@ -82,6 +82,7 @@ public sealed class LocalTextExtension : MarkupExtension
         ["Exportar M3U8"] = ("Export M3U8", "Exportar M3U8"),
         ["Elegir carátula"] = ("Choose cover", "Escolher capa"),
         ["Canciones del álbum"] = ("Album tracks", "Faixas do álbum"),
+        ["Doble clic o F2 para editar"] = ("Double-click or press F2 to edit", "Clique duas vezes ou pressione F2 para editar"),
         ["Los campos con varios valores se conservan si los dejas vacíos."] = ("Leave a field blank to preserve its mixed values.", "Deixe o campo em branco para manter seus valores diferentes."),
         ["Guardar también en los archivos FLAC"] = ("Also save to FLAC files", "Salvar também nos arquivos FLAC"),
         ["Guardando etiquetas en los archivos FLAC…"] = ("Saving tags to FLAC files…", "Salvando etiquetas nos arquivos FLAC…"),
