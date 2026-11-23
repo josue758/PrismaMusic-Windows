@@ -890,11 +890,13 @@ public partial class MainWindow : Window
 			UndoQueueRemoval(this, new RoutedEventArgs());
 			if (queue.Count != 2 || queue[1] != nextTrack || SideQueue.Items.Count != 2)
 				throw new InvalidOperationException("The side queue did not reorder and undo a removal.");
+			SetListeningPanelHidden(false);
 			ToggleListeningPanel(this, new RoutedEventArgs());
 			if (Listening.Visibility != Visibility.Collapsed || ListeningColumn.Width.Value != 0)
 				throw new InvalidOperationException("The playback panel did not release its column.");
 			ToggleListeningPanel(this, new RoutedEventArgs());
-			if (Listening.Visibility != Visibility.Visible || ListeningColumn.Width.Value <= 0)
+			if (Listening.Visibility != Visibility.Visible ||
+				(listeningIsOverlay ? !ListeningScrim.IsVisible || ListeningColumn.Width.Value != 0 : ListeningColumn.Width.Value <= 0))
 				throw new InvalidOperationException("The playback panel did not reopen.");
 			QueueHeaderButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 			if (ListeningTabs.SelectedIndex != 1 || ListeningTrackSummary.Visibility != Visibility.Collapsed ||
