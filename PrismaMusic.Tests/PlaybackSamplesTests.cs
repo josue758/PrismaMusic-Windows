@@ -1,5 +1,6 @@
 using System.IO;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 using Xunit;
 
 namespace PrismaMusic.Tests;
@@ -29,5 +30,7 @@ public sealed class PlaybackSamplesTests
         Assert.Equal(new[] { .5f, -.5f }, result);
         Assert.Equal(48000, samples.WaveFormat.SampleRate);
         Assert.Equal(2, samples.WaveFormat.Channels);
+        var tempo = new TempoProvider(stream, samples, .75);
+        Assert.Equal(WaveFormatEncoding.IeeeFloat, new SampleToWaveProvider(tempo).WaveFormat.Encoding);
     }
 }

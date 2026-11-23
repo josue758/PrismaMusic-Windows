@@ -29,7 +29,7 @@ internal sealed class TempoProvider : ISampleProvider
         };
     }
 
-    public WaveFormat WaveFormat => source.WaveFormat;
+    public WaveFormat WaveFormat => samples.WaveFormat;
     public TimeSpan Position
     {
         get { lock (gate) return TimeSpan.FromSeconds(Math.Min(position, source.TotalTime.TotalSeconds)); }

@@ -2,6 +2,10 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.62.10
+
+- Corrige la reproducción a velocidad ajustada cuando el decodificador entrega PCM entero, como algunos archivos FLAC de 24 bits leídos desde un NAS.
+
 ## 0.62.9
 
 - Si Windows devuelve «El dispositivo no está listo» tras desconectar la salida WASAPI, Prisma recupera la reproducción en la salida disponible y conserva el dispositivo solicitado.
