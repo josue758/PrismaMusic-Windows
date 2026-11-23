@@ -1,0 +1,90 @@
+name: Windows 11 installation validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Release tag to validate
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    runs-on: windows-11-arm
+    timeout-minutes: 18
+    steps:
+      - name: Verify Windows version and run both upgrades
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CANDIDATE: ${{ inputs.candidate }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $os = Get-CimInstance Win32_OperatingSystem
+          if ($os.Caption -notmatch 'Windows 11') { throw "Expected Windows 11; found $($os.Caption)." }
+          Write-Host "$($os.Caption), build $($os.BuildNumber); runner architecture $env:RUNNER_ARCH"
+          if ($env:CANDIDATE -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'Invalid release tag.' }
+          $root = Join-Path $env:RUNNER_TEMP 'prisma-upgrade'
+          New-Item -ItemType Directory $root | Out-Null
+
+          function Get-Installer([string]$tag) {
+            $name = "Prisma-Music-Windows-$($tag.Substring(1))-Setup-x64.exe"
+            $release = gh api "repos/$env:GH_REPO/releases/tags/$tag" | ConvertFrom-Json
+            if ($LASTEXITCODE) { throw "Could not read release $tag." }
+            $asset = $release.assets | Where-Object name -eq $name
+            if ($asset.state -ne 'uploaded' -or !$asset.digest.StartsWith('sha256:')) {
+              throw "Release $tag has no verifiable installer."
+            }
+            gh release download $tag --pattern $name --dir $root
+            if ($LASTEXITCODE) { throw "Download failed for $tag." }
+            $path = Join-Path $root $name
+            if ($asset.digest -ne "sha256:$((Get-FileHash -LiteralPath $path).Hash)") { throw "Checksum mismatch for $tag." }
+            return $path
+          }
+
+          function Invoke-Setup([string]$path, [string]$target, [string]$name) {
+            $log = Join-Path $root "$name.log"
+            $setup = Start-Process -FilePath $path -ArgumentList '/SP-','/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NOICONS',('/DIR="'+$target+'"'),('/LOG="'+$log+'"') -WindowStyle Hidden -PassThru -Wait
+            if ($setup.ExitCode) {
+              Get-Content $log -Tail 25
+              throw "Setup failed for $name ($($setup.ExitCode))."
+            }
+          }
+
+          function Invoke-SessionProbe([string]$app, [string]$mode, [string]$tag) {
+            $stdout = Join-Path $root "$tag-$mode.txt"
+            $stderr = Join-Path $root "$tag-$mode.err"
+            $process = Start-Process -FilePath $app -ArgumentList "--session-probe-$mode" -WindowStyle Hidden -PassThru -Wait -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            Get-Content $stdout, $stderr | ForEach-Object { Write-Host $_ }
+            return $process.ExitCode -eq 0
+          }
+
+          $upgrade = Get-Installer $env:CANDIDATE
+          $sessionFailures = @()
+          foreach ($tag in 'v0.56.1','v0.62.7') {
+            $old = Get-Installer $tag
+            $target = Join-Path $root "app-$tag"
+            $app = Join-Path $target 'Prisma Music.exe'
+            $env:PRISMA_SESSION_PROBE = Join-Path $root "session-$tag"
+            try {
+              Invoke-Setup $old $target "$tag-install"
+              $saved = Invoke-SessionProbe $app 'write' $tag
+              Invoke-Setup $upgrade $target "$tag-upgrade"
+              $version = (Get-Item -LiteralPath $app).VersionInfo.ProductVersion
+              if (!$version.StartsWith($env:CANDIDATE.Substring(1) + '+')) { throw "Unexpected upgraded version $version." }
+              Write-Host "$tag -> $env:CANDIDATE installed on $($os.Caption)."
+              if (!$saved -or !(Invoke-SessionProbe $app 'read' $tag)) {
+                $sessionFailures += $tag
+              } else {
+                Write-Host "Session restored from $tag."
+              }
+            } finally {
+              $uninstall = Join-Path $target 'unins000.exe'
+              if (Test-Path -LiteralPath $uninstall) {
+                Start-Process -FilePath $uninstall -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -WindowStyle Hidden -Wait
+              }
+            }
+          }
+          if ($sessionFailures.Count) { throw "Session validation failed for $($sessionFailures -join ', ')." }
