@@ -62,6 +62,7 @@ public partial class MainWindow
             {
                 Tracks = library.Tracks.ToList(), Folders = library.Folders.ToList(), History = library.History.ToList(),
                 Favorites = new HashSet<string>(library.Favorites, StringComparer.OrdinalIgnoreCase),
+                HiddenTracks = new(library.HiddenTracks, StringComparer.OrdinalIgnoreCase),
                 PlayCounts = new Dictionary<string, int>(library.PlayCounts, StringComparer.OrdinalIgnoreCase),
                 Playlist = library.Playlist.ToList(),
                 Playlists = library.Playlists.ToDictionary(pair => pair.Key, pair => pair.Value.ToList()),

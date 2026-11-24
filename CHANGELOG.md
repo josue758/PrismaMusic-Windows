@@ -2,6 +2,15 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.65.0
+
+- Importación de listas M3U y M3U8 con vista previa, detección de rutas del NAS cambiadas y gestión de listas desde una cabecera.
+- Guardado periódico de la posición y la cola. Las copias SQLite se pueden previsualizar y restaurar desde Configuración.
+- Inicio con música reciente y accesos a listas. La búsqueda presenta canciones, álbumes y artistas juntos.
+- Comparación de duplicados por ruta, formato y duración. Las copias se pueden ocultar de forma reversible.
+- Navegación con un indicador de selección, panel lateral más pequeño sin pista y acceso a añadir música.
+- El selector de audio se actualiza al cambiar dispositivos. Configuración permite buscar y restablecer por sección.
+
 ## 0.64.1
 
 - El editor de listas inteligentes muestra los nombres de filtros y las frecuencias en kHz en el selector.

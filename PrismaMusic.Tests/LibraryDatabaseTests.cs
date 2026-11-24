@@ -21,6 +21,32 @@ public sealed class LibraryDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void RestoringBackupKeepsARecoveryCopyIncludingHiddenTracks()
+    {
+        var database = new LibraryDatabase(directory);
+        var library = database.Load();
+        var first = Song(@"C:\M\first.flac");
+        library.Tracks.Add(first);
+        database.Save(library, tracksChanged: true);
+        database.Load();
+        var daily = Assert.Single(database.Backups());
+
+        var recent = Song(@"C:\M\recent.flac");
+        library.Tracks.Add(recent);
+        library.HiddenTracks.Add(recent.Path);
+        library.Playlists["Current"] = new() { recent.Path };
+        database.Save(library, tracksChanged: true);
+
+        Assert.Equal(first.Path, Assert.Single(database.ReadBackup(daily.Name).Tracks).Path);
+        Assert.Equal(first.Path, Assert.Single(database.RestoreBackup(daily.Name).Tracks).Path);
+        var safety = Assert.Single(database.Backups().Where(backup => backup.BeforeRestore));
+        var prior = database.ReadBackup(safety.Name);
+        Assert.Contains(recent.Path, prior.HiddenTracks);
+        Assert.Equal(recent.Path, Assert.Single(prior.Playlists["Current"]));
+        Assert.Equal(first.Path, Assert.Single(new LibraryDatabase(directory).Load().Tracks).Path);
+    }
+
+    [Fact]
     public void SavesSmartRulesAndTrackImportDates()
     {
         var database = new LibraryDatabase(directory);

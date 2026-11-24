@@ -36,7 +36,7 @@ public partial class MainWindow
         var now = DateTimeOffset.Now;
         var query = new LibraryQuery(rules.Search);
         var history = rules.Unplayed ? library.History.ToHashSet(StringComparer.OrdinalIgnoreCase) : null;
-        return library.Tracks.Where(track => rules.Matches(track, library, history, now) && (query.IsEmpty || query.Matches(track)));
+        return library.Tracks.Where(track => !library.HiddenTracks.Contains(track.Path) && rules.Matches(track, library, history, now) && (query.IsEmpty || query.Matches(track)));
     }
 
     private void NewSmartPlaylist(object sender, RoutedEventArgs args) => OpenSmartPlaylistEditor(null);

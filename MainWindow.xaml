@@ -159,6 +159,8 @@
                 <Button Grid.Column="2" Content="＋" Style="{StaticResource CompactButton}" Click="AddFolder"
                         AutomationProperties.Name="{local:LocalText Text=Añadir carpeta}" ToolTip="{local:LocalText Text=Añadir carpeta}" Padding="7,3"/>
               </Grid>
+              <Button Content="{local:LocalText Text=Añadir música}" Click="AddFolder" Style="{StaticResource FluentNavigationButton}"
+                      Padding="10,7" Margin="3,3,3,0" Background="Transparent"/>
               <ItemsControl x:Name="LibrarySources" Margin="3,0"/>
               <Button Content="{local:LocalText Text=Conectar NAS}" Click="ConnectNas" Style="{StaticResource FluentNavigationButton}"
                       Padding="10,7" Margin="3,3,3,0" Background="Transparent" AutomationProperties.Name="{local:LocalText Text=Conectar NAS}"/>
@@ -213,14 +215,26 @@
         <Border x:Name="PlaylistCommands" DockPanel.Dock="Top" Visibility="Collapsed"
                 Background="{DynamicResource SettingsCard}" BorderBrush="{DynamicResource WorkspaceStroke}"
                 BorderThickness="1" CornerRadius="10" Padding="12,9" Margin="0,0,0,8">
-          <DockPanel>
-            <WrapPanel DockPanel.Dock="Right">
-              <Button Content="{local:LocalText Text=Nueva lista}" Click="NewPlaylist"/>
-              <Button Content="{local:LocalText Text=Nueva lista inteligente}" Click="NewSmartPlaylist"/>
-              <Button x:Name="EditSmartPlaylistButton" Content="{local:LocalText Text=Editar reglas}" Click="EditSmartPlaylist"/>
-            </WrapPanel>
-            <TextBlock x:Name="PlaylistType" VerticalAlignment="Center" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-          </DockPanel>
+          <WrapPanel VerticalAlignment="Center">
+            <ComboBox Style="{StaticResource FilterCombo}" x:Name="PlaylistPicker" Width="190" Margin="0,0,8,0"
+                      SelectionChanged="SelectPlaylist" AutomationProperties.Name="{local:LocalText Text=Listas}"/>
+            <TextBlock x:Name="PlaylistType" VerticalAlignment="Center" Margin="0,0,14,0" Foreground="{DynamicResource Muted}"/>
+            <Button Content="{local:LocalText Text=Importar lista}" Click="ImportPlaylist"/>
+            <Button Content="{local:LocalText Text=Administrar listas}" Click="ShowPlaylistActions" x:Name="PlaylistActionsButton">
+              <Button.ContextMenu>
+                <ContextMenu Style="{StaticResource PlayerMenu}">
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Nueva lista}" Click="NewPlaylist"/>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Nueva lista inteligente}" Click="NewSmartPlaylist"/>
+                  <Separator/>
+                  <MenuItem x:Name="EditSmartPlaylistButton" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Editar reglas}" Click="EditSmartPlaylist"/>
+                  <MenuItem x:Name="RenamePlaylistMenu" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Renombrar lista}" Click="RenamePlaylist"/>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Duplicar lista}" Click="DuplicatePlaylist"/>
+                  <MenuItem x:Name="DeletePlaylistMenu" Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Eliminar lista}" Click="DeletePlaylist"/>
+                  <MenuItem Style="{StaticResource PlayerMenuItem}" Header="{local:LocalText Text=Exportar lista}" Click="ExportCurrentPlaylist"/>
+                </ContextMenu>
+              </Button.ContextMenu>
+            </Button>
+          </WrapPanel>
         </Border>
         <DockPanel x:Name="LibraryFilterBar" DockPanel.Dock="Top" Margin="0,0,0,6">
           <Button x:Name="LibraryMenuButton" DockPanel.Dock="Right" Content="&#xE712;" Style="{StaticResource TransportIcon}"
@@ -237,7 +251,7 @@
               </ContextMenu>
             </Button.ContextMenu>
           </Button>
-          <WrapPanel><ComboBox Style="{StaticResource FilterCombo}" x:Name="PlaylistPicker" Width="180" Margin="0,0,6,6" Visibility="Collapsed" SelectionChanged="SelectPlaylist" AutomationProperties.Name="{local:LocalText Text=Listas}"/><Button x:Name="OpenRelatedArtist" Content="{local:LocalText Text=Ver artista}" Click="BrowseRelatedArtist" Visibility="Collapsed"/><Button x:Name="OpenRelatedAlbum" Content="{local:LocalText Text=Ver álbum}" Click="BrowseRelatedAlbum" Visibility="Collapsed"/>
+          <WrapPanel><Button x:Name="OpenRelatedArtist" Content="{local:LocalText Text=Ver artista}" Click="BrowseRelatedArtist" Visibility="Collapsed"/><Button x:Name="OpenRelatedAlbum" Content="{local:LocalText Text=Ver álbum}" Click="BrowseRelatedAlbum" Visibility="Collapsed"/>
           <ComboBox Style="{StaticResource FilterCombo}" x:Name="ArtistFilter" Width="146" Margin="0,0,6,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Artista}"/>
           <ComboBox Style="{StaticResource FilterCombo}" x:Name="Genre" Width="165" Margin="0,0,6,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Género}"/>
           <ComboBox Style="{StaticResource FilterCombo}" x:Name="Year" Width="139" Margin="0,0,6,6" SelectionChanged="Filter" AutomationProperties.Name="{local:LocalText Text=Año}"/>
@@ -251,6 +265,7 @@
           <Button Content="↓" Click="MoveQueueDown" AutomationProperties.Name="{local:LocalText Text=Bajar en la cola}" ToolTip="{local:LocalText Text=Bajar en la cola}"/>
           <Button Content="{local:LocalText Text=Quitar}" Click="RemoveFromQueue"/>
         </StackPanel>
+        <StackPanel x:Name="SearchGroups" DockPanel.Dock="Top" Visibility="Collapsed" Margin="0,3,0,8"/>
         <StackPanel DockPanel.Dock="Bottom">
           <TextBlock x:Name="Status" TextWrapping="Wrap" Foreground="{DynamicResource Muted}" Margin="0,9,0,0"/>
 

@@ -3,13 +3,16 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace PrismaMusic;
 
 public partial class MainWindow
 {
     private static string SessionFile => Path.Combine(DataDirectory, "session.json");
-    private sealed record ListeningSession(string Track, double Position, string[] Queue, string[] OriginalOrder = null, string[] PlaybackOrder = null, int Section = 0);
+    private sealed record ListeningSession(string Track, double Position, string[] Queue, string[] OriginalOrder = null,
+        string[] PlaybackOrder = null, int Section = 0, bool? Shuffle = null, RepeatMode? Repeat = null, string PlaylistName = null);
+    private string lastSavedSession;
     private int startupSection = 3;
 
     private void MoveQueueUp(object sender, RoutedEventArgs args) => EditQueue(-1);
@@ -34,6 +37,14 @@ public partial class MainWindow
             Rows.SelectedIndex = Array.FindIndex(rows, item => item.Tracks[0] == track);
     }
 
+    private void StartSessionAutoSave()
+    {
+        var timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(5) };
+        timer.Tick += (_, _) => { if (!restoringBackup && pendingTrack == null) SaveSession(); };
+        Closed += (_, _) => timer.Stop();
+        timer.Start();
+    }
+
     private void SaveSession()
     {
         try
@@ -41,9 +52,21 @@ public partial class MainWindow
             Directory.CreateDirectory(DataDirectory);
             double position = playbackRetry is { Interrupted: true } retry && retry.Track.Path == current?.Path
                 ? retry.Position : player.Position.TotalSeconds;
-            var session = new ListeningSession(current?.Path, position, queue.Select(t => t.Path).ToArray(), originalContext.Select(t => t.Path).ToArray(), context.Select(t => t.Path).ToArray(), Math.Max(0, LibrarySectionIndex));
-            File.WriteAllText(SessionFile + ".tmp", JsonSerializer.Serialize(session));
-            File.Move(SessionFile + ".tmp", SessionFile, true);
+            if (!double.IsFinite(position) || position < 0) position = 0;
+            position = rememberPosition ? Math.Round(position, 2) : 0;
+            var session = new ListeningSession(current?.Path, position, queue.Select(t => t.Path).ToArray(),
+                originalContext.Select(t => t.Path).ToArray(), context.Select(t => t.Path).ToArray(),
+                Math.Max(0, LibrarySectionIndex), shuffle, repeat, playlistName);
+            string contents = JsonSerializer.Serialize(session);
+            if (contents == lastSavedSession && File.Exists(SessionFile)) return;
+            string temporary = SessionFile + $".{Environment.ProcessId}.tmp";
+            try
+            {
+                File.WriteAllText(temporary, contents);
+                File.Move(temporary, SessionFile, true);
+                lastSavedSession = contents;
+            }
+            finally { File.Delete(temporary); }
         }
         catch (Exception error) { System.Diagnostics.Trace.WriteLine(error); }
     }
@@ -55,6 +78,18 @@ public partial class MainWindow
             if (!File.Exists(SessionFile)) return;
             var session = JsonSerializer.Deserialize<ListeningSession>(File.ReadAllText(SessionFile));
             if (session == null) return;
+            if (session.Shuffle is bool shuffleMode)
+            {
+                shuffle = shuffleMode;
+                MarkPlaybackToggle(ShuffleButton, shuffle);
+            }
+            if (session.Repeat is RepeatMode repeatMode && Enum.IsDefined(repeatMode))
+            {
+                repeat = repeatMode;
+                UpdateRepeatButton();
+            }
+            if (session.PlaylistName != null && PlaylistPicker.Items.Contains(session.PlaylistName))
+                PlaylistPicker.SelectedItem = session.PlaylistName;
             if (startupSection == 2 && session.Section >= 0 && session.Section < Navigation.Items.Count)
                 LibrarySectionIndex = session.Section;
             var tracks = library.Tracks.ToDictionary(t => t.Path, StringComparer.OrdinalIgnoreCase);

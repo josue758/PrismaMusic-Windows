@@ -59,6 +59,7 @@ public sealed class Library
 	public List<Track> Tracks { get; set; } = new List<Track>();
 
 	public HashSet<string> Favorites { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+	public HashSet<string> HiddenTracks { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
 	public List<string> Playlist { get; set; } = new List<string>();
 
@@ -355,7 +356,7 @@ public partial class MainWindow : Window
 		{
 			bool flag = ActualWidth < 1120.0;
 			bool narrow = ActualWidth < 940;
-			NavigationColumn.Width = new GridLength(narrow ? 154 : flag ? 168 : Math.Clamp(ActualWidth * .155, 210, 258));
+			NavigationColumn.Width = new GridLength(narrow ? 141 : flag ? 168 : Math.Clamp(ActualWidth * .155, 210, 258));
 			TitleBrandName.Visibility = TitleVisualizerLabel.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
 			TitleVisualizerGlyph.Margin = narrow ? new Thickness(0) : new Thickness(0, 0, 6, 0);
 			SidebarSettingsLabel.Text = T(flag ? "Ajustes" : "Configuración");
@@ -423,10 +424,14 @@ public partial class MainWindow : Window
 				Status.Text = T("No se pudo leer la biblioteca. ") + error.Message;
 			}
 			RefreshInitialLibrary();
+			if (SessionProbeDirectory() != null && Environment.GetEnvironmentVariable("PRISMA_SESSION_DEVICE") is { Length: > 0 } probeDevice)
+				player.OutputId = ReadAudioOutputs(null, includeRates: false).Devices
+					.FirstOrDefault(device => device.Name.Contains(probeDevice, StringComparison.OrdinalIgnoreCase))?.Id;
 			Shell.IsEnabled = true;
 			await RestoreSession();
 			if (!IsLoaded) return;
 			sessionRestored = database != null;
+			if (sessionRestored && SessionProbeDirectory() == null) StartSessionAutoSave();
 			if (SessionProbeDirectory() != null)
 			{
 				await RunSessionProbe();
@@ -660,6 +665,9 @@ public partial class MainWindow : Window
 			if (HomeView.Visibility != Visibility.Visible || HomeContent.Children.Count < 6 || Rows.IsVisible)
 				throw new InvalidOperationException("Library Home did not show the music overview.");
 			Search.Text = track.Name;
+			if (!SearchGroups.IsVisible || SearchGroups.Children.Count != 1)
+				throw new InvalidOperationException("Global search did not show the grouped results.");
+			CaptureDesignPreview(Shell, "PRISMA_GROUPED_SEARCH_PREVIEW");
 			if (HomeView.Visibility != Visibility.Collapsed || Rows.Items.Count != 1)
 				throw new InvalidOperationException("Title-bar search did not show results from Home.");
 			Search.Clear();
@@ -667,6 +675,18 @@ public partial class MainWindow : Window
 			CaptureDesignPreview(Shell, "PRISMA_HOME_PREVIEW");
 			LibrarySectionIndex = 0;
 			Console.WriteLine("Home dashboard and title-bar search passed.");
+			if (Environment.GetEnvironmentVariable("PRISMA_PLAYLIST_IMPORT_PREVIEW") != null)
+			{
+				string fixture = Path.Combine(Path.GetTempPath(), $"prisma-list-preview-{Guid.NewGuid():N}.m3u8");
+				try
+				{
+					System.IO.File.WriteAllLines(fixture, new[] { "#EXTM3U", demo.Tracks[0].Path,
+						$@"\\old-nas\{Path.GetFileName(Path.GetDirectoryName(demo.Tracks[1].Path))}\{Path.GetFileName(demo.Tracks[1].Path)}", "missing.flac" });
+					await OpenPlaylistImportPreview(fixture);
+					Console.WriteLine("M3U8 preview showed exact, relocated and missing tracks.");
+				}
+				finally { System.IO.File.Delete(fixture); }
+			}
 			var verifiedLossless = track with { Codec = "FLAC", SampleRate = 96000, BitDepth = 24 };
 			library.Tracks = demo.Tracks.Select(item => item == track ? verifiedLossless : item).ToList();
 			RefreshFilters();
@@ -962,6 +982,7 @@ public partial class MainWindow : Window
 			if (Environment.GetEnvironmentVariable("PRISMA_SMOKE_UI_ONLY") == "1" ||
 				Environment.GetEnvironmentVariable("PRISMA_SMOKE_UI_ONLY_WITHOUT_AUDIO") == "1" && !HasDefaultSmokeAudioEndpoint())
 			{
+				if (Environment.GetEnvironmentVariable("PRISMA_SETTINGS_PREVIEW") != null) Settings(this, new RoutedEventArgs());
 				Console.WriteLine("UI smoke passed. Playback validation is separate.");
 				System.Windows.Application.Current.Shutdown(0);
 				return;
@@ -1752,6 +1773,7 @@ public partial class MainWindow : Window
 			.ToHashSet(StringComparer.OrdinalIgnoreCase);
 		library.Tracks.RemoveAll(track => removedPaths.Contains(track.Path));
 		library.Favorites.RemoveWhere(removedPaths.Contains);
+		library.HiddenTracks.RemoveWhere(removedPaths.Contains);
 		library.Playlist.RemoveAll(removedPaths.Contains);
 		library.History.RemoveAll(removedPaths.Contains);
 		foreach (string removed in removedPaths) library.PlayCounts.Remove(removed);
@@ -1807,7 +1829,7 @@ public partial class MainWindow : Window
 	private async Task<(int TracksFound, bool Complete)?> Scan(string[] folders, bool add, bool onlyNew = false, bool allSubfolders = false,
 		bool retryFailures = false, NasScanCheckpoint nasCheckpoint = null, bool background = false)
 	{
-		if (scanning || relocatingSource || editingAlbum || folders.Length == 0)
+		if (scanning || relocatingSource || editingAlbum || restoringBackup || folders.Length == 0)
 		{
 			return null;
 		}
@@ -2149,6 +2171,8 @@ public partial class MainWindow : Window
 	private void RefreshRows(bool refreshQueue = true)
 	{
 		if (refreshQueue) RefreshSideQueue();
+		SearchGroups.Visibility = Visibility.Collapsed;
+		SearchGroups.Children.Clear();
 		galleryExportTracks = null;
 		UpdateWideLibraryColumns();
 		UpdateCollectionHeader();
@@ -2165,14 +2189,13 @@ public partial class MainWindow : Window
 			? System.Windows.Controls.SelectionMode.Single : System.Windows.Controls.SelectionMode.Extended;
 		GalleryPager.Visibility = Visibility.Collapsed;
 		QueueTools.Visibility = collection == null && LibrarySectionIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
-		PlaylistCommands.Visibility = PlaylistPicker.Visibility =
-			collection == null && LibrarySectionIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
-		EditSmartPlaylistButton.Visibility = SmartRules != null ? Visibility.Visible : Visibility.Collapsed;
+		PlaylistCommands.Visibility = collection == null && LibrarySectionIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
 		PlaylistType.Text = T(SmartRules == null ? "Lista manual" : "Lista inteligente");
 		LosslessNotice.Visibility = Visibility.Collapsed;
 		BackToCollection.Visibility = ((collection == null) ? Visibility.Collapsed : Visibility.Visible);
-		bool showHome = collection == null && ReferenceEquals(Navigation.SelectedItem, HomeNavigation) &&
-			string.IsNullOrWhiteSpace(Search.Text);
+		bool homeSelected = collection == null && ReferenceEquals(Navigation.SelectedItem, HomeNavigation);
+		bool showHome = homeSelected && string.IsNullOrWhiteSpace(Search.Text);
+		if (homeSelected && selectedLibrarySource == null) Heading.Text = T(showHome ? "Inicio" : "Resultados de búsqueda");
 		bool showArtist = collection != null && !albumPage && !showAllArtistSongs;
 		if (!showArtist && renderedArtistPage != null)
 		{
@@ -2227,6 +2250,8 @@ public partial class MainWindow : Window
 			6 => SmartRules is { } rules ? SmartPlaylistTracks(rules) : ResolveSavedTracks(ActivePlaylist),
 			_ => orderedTracks ?? (IEnumerable<Track>)library.Tracks,
 		};
+		if (LibrarySectionIndex != 4 && library.HiddenTracks.Count != 0)
+			source = source.Where(track => !library.HiddenTracks.Contains(track.Path));
 		var query = new LibraryQuery(Search.Text);
 		if (losslessView) source = source.Where(track => track.IsLossless);
 		if (selectedLibrarySource != null)
@@ -2241,6 +2266,12 @@ public partial class MainWindow : Window
 			&& (!year.HasValue || t.Year == year.Value)
 			&& (artist == null || string.Equals(t.Artist, artist, StringComparison.CurrentCultureIgnoreCase)));
 		if (!query.IsEmpty) source = query.Filter(source);
+		if (!query.IsEmpty && LibrarySectionIndex != 4)
+		{
+			var matches = source.ToArray();
+			ShowGroupedSearch(matches);
+			source = matches;
+		}
 		if (LibrarySectionIndex == 1)
 		{
 			var source2 = from t in source
@@ -2292,7 +2323,7 @@ public partial class MainWindow : Window
 		if (LibrarySectionIndex == 6)
 			CollectionCount.Text = $"{T(playlistName)}  ·  {(Rows.Items.Count == 1 ? T("1 pista") : LocalTextExtension.Format("{0:N0} pistas", Rows.Items.Count))}";
 		else if (!query.IsEmpty && !losslessView)
-			CollectionCount.Text = LocalTextExtension.Format("{0:N0} resultados", Rows.Items.Count);
+			CollectionCount.Text = Rows.Items.Count == 1 ? T("1 resultado") : LocalTextExtension.Format("{0:N0} resultados", Rows.Items.Count);
 		UpdateEmptyLibrary();
 	}
 
@@ -2845,60 +2876,10 @@ public partial class MainWindow : Window
 
 	private void NewPlaylist(object sender, RoutedEventArgs args)
 	{
-		System.Windows.Controls.TextBox input = new System.Windows.Controls.TextBox
-		{
-			Width = 290.0,
-			Margin = new Thickness(0.0, 6.0, 0.0, 12.0),
-			MaxLength = 80
-		};
-		System.Windows.Controls.Button button = new System.Windows.Controls.Button
-		{
-			Content = LocalTextExtension.Translate("Crear"),
-			IsDefault = true,
-			HorizontalAlignment = System.Windows.HorizontalAlignment.Right
-		};
-		StackPanel stackPanel = new StackPanel
-		{
-			Margin = new Thickness(20.0)
-		};
-		stackPanel.Children.Add(new TextBlock
-		{
-			Text = LocalTextExtension.Translate("Nombre de la lista")
-		});
-		stackPanel.Children.Add(input);
-		stackPanel.Children.Add(button);
-		Window dialog = new Window
-		{
-			Title = LocalTextExtension.Translate("Nueva lista"),
-			Owner = this,
-			Content = stackPanel,
-			WindowStartupLocation = WindowStartupLocation.CenterOwner,
-			SizeToContent = SizeToContent.WidthAndHeight,
-			ResizeMode = ResizeMode.NoResize,
-			Background = new SolidColorBrush(Color.FromRgb(38, 38, 38))
-		};
-		button.Click += (object _, RoutedEventArgs _) =>
-		{
-			string text = input.Text.Trim();
-			if (text.Length == 0 || PlaylistPicker.Items.Cast<string>().Contains(text, StringComparer.CurrentCultureIgnoreCase))
-			{
-				System.Windows.MessageBox.Show(dialog, LocalTextExtension.Translate("Escribe un nombre distinto para la lista."), LocalTextExtension.Translate("Nueva lista"));
-			}
-			else
-			{
-				library.Playlists.Add(text, new List<string>());
-				playlistName = text;
-				UpdatePlaylistPicker();
-				Save();
-				dialog.Close();
-			}
-		};
-		dialog.Loaded += (object _, RoutedEventArgs _) =>
-		{
-			input.Focus();
-		};
-		dialog.ShowDialog();
+		if (AskPlaylistName(T("Nueva lista"), "") is { } name)
+			ChangePlaylists(name, (manual, _) => manual.Add(name, new List<string>()));
 	}
+
 
 	private void Playlist(object sender, RoutedEventArgs args)
 	{
@@ -3451,6 +3432,10 @@ public partial class MainWindow : Window
 		};
 		libraryPage.Children.Add(SettingsSection(new TextBlock { Text = T("Biblioteca") }, "Gestiona las carpetas de música y las copias de tu colección."));
 		AddLibrarySettings(AddSettingsCard(libraryPage, "Carpetas de música"));
+		var backups = AddSettingsCard(libraryPage, "Copias de seguridad");
+		backups.Children.Add(SettingsButton("Ver copias de seguridad", ShowLibraryBackups));
+		var hidden = AddSettingsCard(libraryPage, "Pistas ocultas");
+		hidden.Children.Add(SettingsButton("Ver pistas ocultas", ShowHiddenTracks));
 		var exportCard = AddSettingsCard(libraryPage, "Exportar biblioteca");
 		var exportLibrary = new System.Windows.Controls.Button { Content = LocalTextExtension.Translate("Exportar biblioteca") };
 		exportLibrary.Click += ExportLibrary;
@@ -3636,6 +3621,32 @@ public partial class MainWindow : Window
 		};
 		navigation.SelectedIndex = 0;
 		var sidebar = new DockPanel();
+		var searchSettings = PlaylistTextBox("");
+		AutomationProperties.SetName(searchSettings, T("Buscar ajustes"));
+		var searchHost = new StackPanel { Margin = new Thickness(12, 9, 12, 3) };
+		searchHost.Children.Add(SettingsHint("Buscar ajustes"));
+		searchHost.Children.Add(searchSettings);
+		DockPanel.SetDock(searchHost, Dock.Top);
+		sidebar.Children.Add(searchHost);
+		var reset = SettingsButton("Restablecer sección", async (_, _) =>
+		{
+			int section = navigation.SelectedIndex;
+			if (section < 0 || section >= 6) return;
+			if (System.Windows.MessageBox.Show(settingsWindow, T("¿Restablecer los ajustes de esta sección?"), T("Restablecer sección"),
+				MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+			await ResetSettingsSection(section);
+			SaveAudioSettings();
+			settingsPageOnOpen = section;
+			settingsWindow.Close();
+			Dispatcher.BeginInvoke(new Action(() => Settings(this, new RoutedEventArgs())));
+		});
+		reset.Margin = new Thickness(12, 3, 12, 6);
+		DockPanel.SetDock(reset, Dock.Bottom);
+		sidebar.Children.Add(reset);
+		navigation.SelectionChanged += (_, _) => reset.IsEnabled = navigation.SelectedIndex is >= 0 and < 6;
+		searchSettings.TextChanged += (_, _) => FilterSettingsPages(navigation, settingsScroll, searchSettings.Text);
+		navigation.SelectedIndex = settingsPageOnOpen;
+		settingsPageOnOpen = 0;
 		button3.Margin = new Thickness(12, 8, 12, 12);
 		DockPanel.SetDock(button3, Dock.Bottom);
 		sidebar.Children.Add(button3);
@@ -3742,6 +3753,17 @@ public partial class MainWindow : Window
 							ApplyTheme(previousTheme);
 						}
 					}
+
+					searchSettings.Text = "ReplayGain";
+					if (!ReferenceEquals(settingsScroll.Content, soundPage) || soundPage.Children.OfType<UIElement>().Count(item => item.Visibility == Visibility.Visible) != 1)
+						throw new InvalidOperationException("Settings search did not isolate the ReplayGain card.");
+					await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+					SaveSettingsPreview("-busqueda");
+					searchSettings.Text = "no-match-abc123";
+					if (settingsScroll.Content is not TextBlock empty || empty.Text != T("No se encontraron ajustes."))
+						throw new InvalidOperationException("Settings search did not expose the empty state.");
+					searchSettings.Clear();
+					Console.WriteLine("Settings search matched a card and restored the navigation.");
 
 					void SaveSettingsPreview(string suffix)
 					{

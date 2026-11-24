@@ -202,6 +202,7 @@ public partial class MainWindow
             Save();
             if (LibrarySectionIndex is 4 or 5 or 6 || ReferenceEquals(Navigation.SelectedItem, HomeNavigation)) RefreshRows();
         }
+        if (!recordHistory && ReferenceEquals(Navigation.SelectedItem, HomeNavigation) && HomeView.IsVisible) RenderLibraryHome();
         if (trackChanged) LoadPresentation(track);
         PublishSystemPlayback();
     }

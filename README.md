@@ -1,6 +1,8 @@
 # Prisma Music para Windows
 
-**Versión Windows 0.64.1** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
+**Versión Windows 0.65.0** · Port nativo para Windows de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic). Comparte el producto y sus funciones, pero usa una interfaz WPF y servicios de audio propios de Windows.
+
+En **Listas**, importa M3U y M3U8 con vista previa y revisión de rutas del NAS. El menú **Administrar listas** permite renombrar, duplicar y eliminar listas personalizadas. En **Configuración → Biblioteca** puedes elegir una copia de seguridad para restaurarla o volver a mostrar pistas ocultas.
 
 En **Listas**, crea listas inteligentes con reglas y revisa sus coincidencias antes de guardar. En **Configuración → Sonido** puedes activar ReplayGain para FLAC etiquetados. **Configuración → Reproducción** permite controlar la transición sin pausas entre pistas sin pérdida compatibles a velocidad normal.
 
@@ -16,7 +18,7 @@ Compatible con Windows 10 22H2 y Windows 11, x64. El ejecutable distribuido llev
 
 Esta versión mejora la experiencia de escaneo y la identificación de pistas, muestra los metadatos de etiquetas sin modificar archivos, busca carátulas y perfiles de artistas en línea cuando hace falta, y reorganiza la sala de escucha a pantalla completa y Configuración. El panel de fuentes permite gestionar carpetas locales y recursos NAS/SMB accesibles desde Windows.
 
-Descarga y ejecuta **Prisma-Music-Windows-0.64.1-Setup-x64.exe**. Se instala para tu usuario, incluye .NET y crea un acceso directo en Inicio. Puedes desinstalar Prisma desde Configuración de Windows y conservar la biblioteca en LocalAppData. [Descargas para Windows](https://github.com/josue758/PrismaMusic-Windows/releases)
+Descarga y ejecuta **Prisma-Music-Windows-0.65.0-Setup-x64.exe**. Se instala para tu usuario, incluye .NET y crea un acceso directo en Inicio. Puedes desinstalar Prisma desde Configuración de Windows y conservar la biblioteca en LocalAppData. [Descargas para Windows](https://github.com/josue758/PrismaMusic-Windows/releases)
 
 El asistente de **Primeros pasos** guía en cuatro etapas: idioma, colección, apariencia y preferencias de inicio. Para un NAS, conecta el recurso en el Explorador de archivos y selecciónalo en el asistente. La apariencia inicial incluye tres perfiles de material, tema, color de acento y una vista previa de la transparencia. Pulsa Enter o haz doble clic en una pista para reproducirla, Ctrl+F para buscar y Ctrl+I para ver información.
 
@@ -53,7 +55,7 @@ Para compilar con el SDK .NET 8 en Windows:
 
 Para generar el instalador, indica al compilador de Inno Setup 7 la versión del proyecto, la ruta absoluta de `publish` y una carpeta de salida. Incluye los avisos de licencia del proyecto y sus dependencias en `publish` antes de compilar.
 
-    ISCC.exe /DAppVersion=0.64.1 "/DPayloadRoot=C:\ruta\publish" "/DSetupOutput=C:\ruta\dist" installer\PrismaMusic.iss
+    ISCC.exe /DAppVersion=0.65.0 "/DPayloadRoot=C:\ruta\publish" "/DSetupOutput=C:\ruta\dist" installer\PrismaMusic.iss
 
 El ejecutable admite --smoke-test para leer las tres demos y comprobar que avanza la reproducción.
 

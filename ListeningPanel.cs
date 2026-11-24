@@ -78,7 +78,7 @@ public partial class MainWindow
         if (ListeningTabs == null || ListeningTrackSummary == null) return;
         int selected = ListeningTabs.SelectedIndex;
         ListeningPanelTitle.Text = T(selected switch { 1 => "Cola de reproducción", 2 => "Información", _ => "Reproduciendo ahora" });
-        ListeningTrackSummary.Visibility = selected == 1 ? Visibility.Collapsed : Visibility.Visible;
+        ListeningTrackSummary.Visibility = selected == 1 || current == null ? Visibility.Collapsed : Visibility.Visible;
         SetActive(LyricsHeaderButton, 0);
         SetActive(QueueHeaderButton, 1);
         SetActive(InfoHeaderButton, 2);
@@ -108,7 +108,8 @@ public partial class MainWindow
             Listening.SetResourceReference(BackgroundProperty, overlay ? "SettingsBackground" : "ListeningSurface");
             KeyboardNavigation.SetTabNavigation(Listening, overlay ? KeyboardNavigationMode.Cycle : KeyboardNavigationMode.Continue);
         }
-        double width = overlay ? Math.Clamp(ActualWidth * .40, 300, 410) : Math.Clamp(ActualWidth * .232, 330, 420);
+        double width = overlay ? Math.Clamp(ActualWidth * .40, 300, 410)
+            : current == null ? 248 : Math.Clamp(ActualWidth * .232, 330, 420);
         bool visible = IsListeningPanelVisible;
         Listening.Width = overlay ? width : double.NaN;
         ListeningColumn.Width = new GridLength(visible && !overlay ? width : 0);
@@ -137,6 +138,7 @@ public partial class MainWindow
     {
         InvalidateGaplessIfCandidateChanged();
         QueueNowCard.Visibility = current != null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateListeningPanelWidth();
         var selected = SideQueue.SelectedItem;
         SideQueue.ItemsSource = queue.ToArray();
         SideQueue.SelectedItem = selected;

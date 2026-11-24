@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
@@ -13,8 +14,8 @@ public partial class MainWindow
 {
     private void RenderLibraryHome()
     {
-        var tracks = library.Tracks.Where(track => selectedLibrarySource == null ||
-            IsTrackInSource(track.Path, selectedLibrarySource)).ToArray();
+        var tracks = library.Tracks.Where(track => !library.HiddenTracks.Contains(track.Path) &&
+            (selectedLibrarySource == null || IsTrackInSource(track.Path, selectedLibrarySource))).ToArray();
         HomeContent.Children.Clear();
         if (tracks.Length == 0)
         {
@@ -29,11 +30,14 @@ public partial class MainWindow
         var albums = tracks.GroupBy(track => (track.Album, Artist: AlbumOwner(track)))
             .Select(group => new LibraryRow(group.Key.Album, group.Key.Artist,
                 group.OrderBy(track => track.Disc).ThenBy(track => track.Number).ThenBy(track => track.Name).ToArray()))
-            .OrderBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+            .OrderByDescending(row => row.Tracks.Max(track => track.AddedAt))
+            .ThenByDescending(row => row.Tracks.Sum(track => (long)library.PlayCounts.GetValueOrDefault(track.Path)))
+            .ThenBy(row => row.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
         var index = tracks.ToDictionary(track => track.Path, StringComparer.OrdinalIgnoreCase);
         var recent = library.History.Where(index.ContainsKey).Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(5).Select(path => index[path]).ToArray();
-        var spotlight = recent.FirstOrDefault() ?? tracks[0];
+        var spotlight = current != null && index.TryGetValue(current.Path, out var activeTrack)
+            ? activeTrack : recent.FirstOrDefault() ?? albums[0].Tracks[0];
         var artwork = new LibraryRow(spotlight.Album, spotlight.Artist, new[] { spotlight });
         var hero = new DockPanel { Margin = new Thickness(15) };
         var heroArt = BuildHomeArtwork(artwork, 126);
@@ -42,12 +46,14 @@ public partial class MainWindow
         DockPanel.SetDock(heroArt, Dock.Left);
         hero.Children.Add(heroArt);
         var heroText = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        heroText.Children.Add(HomeText(recent.Length > 0 ? "Volver a escuchar" : "En tu biblioteca", 11, muted: true));
+        bool resume = current != null && string.Equals(current.Path, spotlight.Path, StringComparison.OrdinalIgnoreCase);
+        heroText.Children.Add(HomeText(resume || recent.Length > 0 ? "Continuar escuchando" : "En tu biblioteca", 11, muted: true));
         var featuredTitle = HomeText(spotlight.Name, 26, translate: false, heading: true);
         featuredTitle.Margin = new Thickness(0, 3, 0, 0);
         heroText.Children.Add(featuredTitle);
         heroText.Children.Add(HomeText(spotlight.Detail, 12, translate: false, muted: true));
-        var play = ActionButton("Reproducir ahora", (_, _) => PlayFromHome(spotlight, tracks));
+        var play = ActionButton(resume ? playing ? "Pausar" : "Reanudar pista" : "Reproducir ahora",
+            (_, args) => { if (resume && current?.Path == spotlight.Path) Toggle(this, args); else PlayFromHome(spotlight, tracks); });
         play.SetResourceReference(BackgroundProperty, "AccentBrush");
         ((TextBlock)play.Content).SetResourceReference(TextBlock.ForegroundProperty, "OnAccentBrush");
         play.Margin = new Thickness(0, 10, 0, 0);
@@ -80,7 +86,18 @@ public partial class MainWindow
         totals.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
         HomeContent.Children.Add(totals);
 
-        AddHeading("Álbumes destacados", "Ver álbumes", 1);
+        var shortcuts = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        foreach (var playlist in new[] { "Mi lista" }.Concat(library.Playlists.Keys).Concat(library.SmartPlaylists.Keys).Take(5))
+        {
+            var shortcut = ActionButton(playlist, (_, _) =>
+            {
+                PlaylistPicker.SelectedItem = playlist;
+                Navigation.SelectedItem = PlaylistNavigation;
+            });
+            shortcuts.Children.Add(shortcut);
+        }
+        HomeContent.Children.Add(shortcuts);
+        AddHeading(albums[0].Tracks.Any(track => track.AddedAt.HasValue) ? "Añadidos recientemente" : "Álbumes de tu biblioteca", "Ver álbumes", 1);
         var covers = new UniformGrid { Columns = Math.Min(3, albums.Length) };
         foreach (var album in albums.Take(5))
         {

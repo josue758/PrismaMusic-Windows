@@ -158,7 +158,19 @@ public partial class MainWindow
         var all = AddAction("Seleccionar grupo", (_, _) => tracks.SelectAll());
         var refresh = AddAction("Volver a comprobar");
         var undo = AddAction("Deshacer edición por lotes");
+        var compare = AddAction("Comparar copias", (_, _) =>
+        {
+            if (groups.SelectedItem is ReviewGroup group) CompareDuplicates(group.Issue, dialog);
+        });
+        var hide = AddAction("Ocultar copia de la biblioteca");
         var edit = AddAction("Vista previa de edición");
+        hide.Click += async (_, _) =>
+        {
+            if (groups.SelectedItem is not ReviewGroup { Issue.Kind: TagIssueKind.PossibleDuplicate } group) return;
+            var paths = tracks.SelectedItems.Cast<ReviewTrack>().Select(item => item.Path).ToArray();
+            if (paths.Length == 0 || paths.Length >= group.Issue.Tracks.Length) return;
+            if (ChangeHiddenTracks(paths, hide: true)) await Refresh();
+        };
         refresh.Click += async (_, _) => await Refresh();
         undo.Click += async (_, _) =>
         {
@@ -198,7 +210,7 @@ public partial class MainWindow
             UpdateActions();
             try
             {
-                var snapshot = library.Tracks.ToArray();
+                var snapshot = library.Tracks.Where(track => !library.HiddenTracks.Contains(track.Path)).ToArray();
                 var found = await Task.Run(() => LibraryTagReview.Find(snapshot));
                 if (!dialog.IsVisible) return;
                 selectedIssue = found;
@@ -231,6 +243,9 @@ public partial class MainWindow
             all.IsEnabled = !reviewing && tracks.Items.Count > 0;
             copy.IsEnabled = !reviewing && tracks.SelectedItems.Count == 1;
             undo.IsEnabled = canEdit && undoBatchTags != null;
+            bool duplicate = groups.SelectedItem is ReviewGroup { Issue.Kind: TagIssueKind.PossibleDuplicate };
+            compare.Visibility = hide.Visibility = duplicate ? Visibility.Visible : Visibility.Collapsed;
+            hide.IsEnabled = canEdit && tracks.SelectedItems.Count > 0 && tracks.SelectedItems.Count < tracks.Items.Count;
         }
         ListBox CreateList(string label)
         {

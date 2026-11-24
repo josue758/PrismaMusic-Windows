@@ -57,6 +57,7 @@ internal static class LibraryRelocation
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             Tracks = library.Tracks.Select(track => paths.TryGetValue(track.Path, out var path) ? track with { Path = path } : track).ToList(),
             Favorites = new HashSet<string>(library.Favorites.Select(Map), StringComparer.OrdinalIgnoreCase),
+            HiddenTracks = new(library.HiddenTracks.Select(Map), StringComparer.OrdinalIgnoreCase),
             Playlist = library.Playlist.Select(Map).ToList(),
             Playlists = library.Playlists.ToDictionary(pair => pair.Key, pair => pair.Value.Select(Map).ToList(), library.Playlists.Comparer),
             SmartPlaylists = new(library.SmartPlaylists, StringComparer.OrdinalIgnoreCase),

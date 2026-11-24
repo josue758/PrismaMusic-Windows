@@ -42,7 +42,8 @@ public partial class MainWindow
 
     private void OpenArtistCollection(string name, bool allSources = false)
     {
-        var tracks = library.Tracks.Where(track => string.Equals(track.Artist, name, StringComparison.OrdinalIgnoreCase) &&
+        var tracks = library.Tracks.Where(track => !library.HiddenTracks.Contains(track.Path) &&
+            string.Equals(track.Artist, name, StringComparison.OrdinalIgnoreCase) &&
             (allSources || selectedLibrarySource == null || IsTrackInSource(track.Path, selectedLibrarySource)))
             .OrderBy(track => track.Album).ThenBy(track => track.Disc).ThenBy(track => track.Number)
             .ThenBy(track => track.Name).ToArray();

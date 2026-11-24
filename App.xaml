@@ -608,6 +608,28 @@
     </Style>
     <Style x:Key="NavigationItem" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
       <Setter Property="Padding" Value="9,7"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="NavigationSurface" CornerRadius="7" Background="Transparent" BorderThickness="1" BorderBrush="Transparent">
+              <Grid>
+                <Border x:Name="SelectedIndicator" HorizontalAlignment="Left" Width="3" Height="15" Margin="2,0,0,0"
+                        Background="{DynamicResource AccentBrush}" CornerRadius="1.5" Visibility="Collapsed"/>
+                <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="NavigationSurface" Property="Background" Value="{DynamicResource ControlFill}"/></Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="SelectedIndicator" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="NavigationSurface" Property="Background" Value="{DynamicResource ControlFill}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="NavigationSurface" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
       <Setter Property="ContentTemplate">
         <Setter.Value>
           <DataTemplate>

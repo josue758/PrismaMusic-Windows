@@ -64,8 +64,13 @@ public partial class MainWindow
             VerticalOffset = -6, AllowsTransparency = true, StaysOpen = false, Child = surface };
         audioOutputPopup = popup;
         audioOutputSurface = surface;
+        var live = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        AudioOutputSnapshot displayed = null;
+        string route = null;
+        bool busy = false;
         popup.Closed += (_, _) =>
         {
+            live.Stop();
             audioOutputPopup = null;
             audioOutputSurface = null;
             audioDevicePicker = null;
@@ -79,18 +84,46 @@ public partial class MainWindow
             anchor.Focus();
         };
         refresh.Click += async (_, _) => await Populate();
+        live.Tick += async (_, _) =>
+        {
+            if (busy || !refresh.IsEnabled || audioDevicePicker?.IsDropDownOpen == true || audioRatePicker?.IsDropDownOpen == true) return;
+            busy = true;
+            bool changed;
+            try
+            {
+                string requested = player.OutputId;
+                var next = await Task.Run(() => ReadAudioOutputs(requested, includeRates: false));
+                changed = popup.IsOpen && SameDevice(requested, player.OutputId) &&
+                    (displayed == null || !displayed.Devices.SequenceEqual(next.Devices) || displayed.ActiveName != next.ActiveName ||
+                     !Equals(displayed.MixFormat, next.MixFormat) || route != CurrentRoute());
+            }
+            finally { busy = false; }
+            if (changed) await Populate(quiet: true);
+        };
         popup.IsOpen = true;
         refresh.Focus();
         await Populate();
+        if (popup.IsOpen) live.Start();
 
-        async Task Populate()
+        string CurrentRoute() => $"{opened}|{player.ActiveOutputId}|{AudioOutputMode()}|{player.OutputNotice}";
+
+        async Task Populate(bool quiet = false)
         {
+            if (busy || !popup.IsOpen) return;
+            busy = true;
             refresh.IsEnabled = false;
-            content.Children.Clear();
-            content.Children.Add(Note(T("Consultando dispositivos…")));
+            if (!quiet)
+            {
+                content.Children.Clear();
+                content.Children.Add(Note(T("Consultando dispositivos…")));
+            }
             string outputId = player.OutputId;
-            var snapshot = await Task.Run(() => ReadAudioOutputs(outputId));
+            AudioOutputSnapshot snapshot;
+            try { snapshot = await Task.Run(() => ReadAudioOutputs(outputId)); }
+            finally { busy = false; }
             if (!popup.IsOpen) return;
+            displayed = snapshot;
+            route = CurrentRoute();
             content.Children.Clear();
             refresh.IsEnabled = true;
 
@@ -102,9 +135,15 @@ public partial class MainWindow
                     Text = (hasActiveOutput ? player.ActiveOutputName : snapshot.ActiveName) ?? T("Sin salida de audio"),
                     FontSize = 18, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap
                 });
+                string chosen = player.OutputId == null ? T("Predeterminada del sistema") :
+                    snapshot.Devices.FirstOrDefault(device => SameDevice(device.Id, player.OutputId))?.Name ??
+                    T("Dispositivo guardado no disponible");
+                section.Children.Add(Note(LocalTextExtension.Format("Salida solicitada: {0}", chosen)));
                 section.Children.Add(Note(hasActiveOutput ? AudioOutputMode() : T("Pendiente de iniciar la reproducción")));
                 if (hasActiveOutput && player.OutputNotice is { } notice && !player.StrictDirect)
                     section.Children.Add(Note(T(notice)));
+                else if (snapshot.MissingDevice)
+                    section.Children.Add(Note(T("La salida guardada no está disponible; se muestra la predeterminada.")));
             });
 
             Card(T("Elegir dispositivo"), section =>
@@ -122,12 +161,7 @@ public partial class MainWindow
                     await ApplyChanges();
                 };
                 section.Children.Add(audioDevicePicker);
-                string requestedName = options.FirstOrDefault(output => SameDevice(output.Id, player.OutputId))?.Name;
-                if (player.ActiveOutputId != null && player.OutputId != null && !SameDevice(player.ActiveOutputId, player.OutputId))
-                    section.Children.Add(Note(LocalTextExtension.Format("Salida solicitada: {0}", requestedName)));
                 if (snapshot.Error != null) section.Children.Add(Note(snapshot.Error));
-                else if (snapshot.MissingDevice)
-                    section.Children.Add(Note(T("La salida guardada no está disponible; se muestra la predeterminada.")));
             });
             if (snapshot.MixFormat != null)
             {

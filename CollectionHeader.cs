@@ -24,9 +24,9 @@ public partial class MainWindow
         {
             artRequest = null;
             CollectionArt.Source = null;
-            int count = selectedLibrarySource == null
-                ? library.Tracks.Count
-                : library.Tracks.Count(track => IsTrackInSource(track.Path, selectedLibrarySource));
+            int count = selectedLibrarySource == null && library.HiddenTracks.Count == 0 ? library.Tracks.Count :
+                library.Tracks.Count(track => !library.HiddenTracks.Contains(track.Path) &&
+                    (selectedLibrarySource == null || IsTrackInSource(track.Path, selectedLibrarySource)));
             if (LibrarySectionIndex == 4)
             {
                 CollectionCount.Text = queue.Count == 1 ? LocalTextExtension.Translate("1 canción en cola")

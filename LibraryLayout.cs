@@ -41,11 +41,14 @@ public partial class MainWindow
     {
         RefreshLibraryIndex();
         var key = AlbumKey(album, owner);
-        if (orderedAlbums.TryGetValue(key, out var tracks)) return tracks;
+        if (orderedAlbums.TryGetValue(key, out var tracks)) return VisibleTracks(tracks);
         indexedAlbums ??= library.Tracks.ToLookup(track => AlbumKey(track.Album, AlbumOwner(track)));
         tracks = indexedAlbums[key].OrderBy(track => track.Disc).ThenBy(track => track.Number).ThenBy(track => track.Name).ToArray();
         if (tracks.Length > 0) orderedAlbums.Add(key, tracks);
-        return tracks;
+        return VisibleTracks(tracks);
+
+        Track[] VisibleTracks(Track[] members) => library.HiddenTracks.Count == 0 ? members :
+            members.Where(track => !library.HiddenTracks.Contains(track.Path)).ToArray();
     }
 
     private sealed class LibraryQuery

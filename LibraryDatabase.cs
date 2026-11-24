@@ -9,7 +9,7 @@ using Microsoft.Data.Sqlite;
 
 namespace PrismaMusic;
 
-internal sealed class LibraryDatabase(string directory)
+internal sealed partial class LibraryDatabase(string directory)
 {
     private Dictionary<string, Track> savedTracks = new(StringComparer.OrdinalIgnoreCase);
 
@@ -90,17 +90,19 @@ internal sealed class LibraryDatabase(string directory)
         catch (Exception) { }
     }
 
-    private Library ReadLibrary(SqliteConnection db)
+    private Library ReadLibrary(SqliteConnection db, bool initialize = true)
     {
         using var readState = db.CreateCommand();
         readState.CommandText = "SELECT payload FROM library_state WHERE id = 1";
         if (readState.ExecuteScalar() is not string payload)
         {
+            if (!initialize) throw new InvalidDataException("La copia no contiene una biblioteca.");
             var oldPath = Path.Combine(directory, "library.json");
             var legacy = File.Exists(oldPath)
                 ? JsonSerializer.Deserialize<Library>(File.ReadAllText(oldPath)) ?? new Library()
                 : new Library();
             legacy.Favorites = new HashSet<string>(legacy.Favorites, StringComparer.OrdinalIgnoreCase);
+            legacy.HiddenTracks = new HashSet<string>(legacy.HiddenTracks, StringComparer.OrdinalIgnoreCase);
             legacy.TagEdits = new Dictionary<string, LibraryTagEdit>(legacy.TagEdits, StringComparer.OrdinalIgnoreCase);
             legacy.PlayCounts = new Dictionary<string, int>(legacy.PlayCounts, StringComparer.OrdinalIgnoreCase);
             Save(legacy, true);
@@ -109,6 +111,7 @@ internal sealed class LibraryDatabase(string directory)
 
         var library = JsonSerializer.Deserialize<Library>(payload) ?? throw new InvalidDataException("Biblioteca inválida.");
         library.Favorites = new HashSet<string>(library.Favorites, StringComparer.OrdinalIgnoreCase);
+        library.HiddenTracks = new HashSet<string>(library.HiddenTracks, StringComparer.OrdinalIgnoreCase);
         library.TagEdits = new Dictionary<string, LibraryTagEdit>(library.TagEdits, StringComparer.OrdinalIgnoreCase);
         library.PlayCounts = new Dictionary<string, int>(library.PlayCounts, StringComparer.OrdinalIgnoreCase);
         library.SmartPlaylists = new Dictionary<string, SmartPlaylistRules>(library.SmartPlaylists, StringComparer.OrdinalIgnoreCase);
@@ -123,7 +126,7 @@ internal sealed class LibraryDatabase(string directory)
             library.Tracks.Add(track);
             index.Add(track.Path, track);
         }
-        savedTracks = index;
+        if (initialize) savedTracks = index;
         return library;
     }
 
@@ -207,6 +210,7 @@ internal sealed class LibraryDatabase(string directory)
         {
             library.Folders,
             library.Favorites,
+            library.HiddenTracks,
             library.Playlist,
             library.Playlists,
             library.SmartPlaylists,

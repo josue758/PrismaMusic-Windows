@@ -37,6 +37,16 @@ public partial class MainWindow
                 LibrarySectionIndex = 1;
                 await Play(tracks[1], false, 1.5);
                 if (!opened) throw new InvalidOperationException("Cannot open demo for session probe.");
+                if (Environment.GetEnvironmentVariable("PRISMA_SESSION_AUTOSAVE_PROBE") == "1")
+                {
+                    if (!SaveAudioSettings()) throw new InvalidOperationException("Could not write the test settings.");
+                    StartSessionAutoSave();
+                    for (int attempt = 0; attempt < 40 && !File.Exists(SessionFile); attempt++) await Task.Delay(250);
+                    if (!File.Exists(SessionFile)) throw new InvalidOperationException("Autosave did not write the isolated session.");
+                    Console.WriteLine("Session checkpoint written. Awaiting interruption.");
+                    await Task.Delay(TimeSpan.FromSeconds(30));
+                    throw new InvalidOperationException("The session-autosave test process was not interrupted.");
+                }
                 Console.WriteLine("Closing process with paused track, playback order and settings.");
             }
             else
