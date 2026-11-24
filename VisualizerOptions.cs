@@ -59,13 +59,9 @@ public partial class MainWindow
         layer.Children.Add(panel);
 
         var styleCard = AddSettingsCard(body, "Estilo");
-        var nebula = StyleChoice("nebula", "Nebulosa", "Partículas luminosas a pantalla completa");
-        styleCard.Children.Add(nebula);
         var presets = new UniformGrid { Columns = 2 };
-        presets.Children.Add(StyleChoice("bars", "Barras", "Espectro vertical"));
-        presets.Children.Add(StyleChoice("mirror", "Espejo", "Reflejo del espectro"));
-        presets.Children.Add(StyleChoice("centered", "Centrado", "Barras sobre el eje"));
-        presets.Children.Add(StyleChoice("aurora", "Aurora", "Ondas superpuestas"));
+        foreach (var (value, label, description) in VisualizerStyles)
+            presets.Children.Add(StyleChoice(value, label, description));
         styleCard.Children.Add(presets);
 
         var response = AddSettingsCard(body, "Sensibilidad");
@@ -165,6 +161,19 @@ public partial class MainWindow
             Canvas.SetLeft(orbit, 1);
             Canvas.SetTop(orbit, 7);
             icon.Children.Add(orbit);
+        }
+        else if (style == "orbit")
+        {
+            var ring = new Ellipse { Width = 13, Height = 13, StrokeThickness = 1.1, Opacity = .75 };
+            ring.SetResourceReference(Shape.StrokeProperty, "AccentBrush");
+            Canvas.SetLeft(ring, 5.5);
+            Canvas.SetTop(ring, 4.5);
+            icon.Children.Add(ring);
+            for (int i = 0; i < 8; i++)
+            {
+                double angle = i * Math.Tau / 8;
+                Dot(12 + Math.Cos(angle) * 9.5, 11 + Math.Sin(angle) * 9.5, i % 2 == 0 ? 2.6 : 1.9, .9);
+            }
         }
         else if (style == "aurora")
         {

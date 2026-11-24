@@ -4036,7 +4036,11 @@ public partial class MainWindow : Window
 
 	private static void CaptureDesignPreview(FrameworkElement view, string environmentVariable, FrameworkElement crop = null)
 	{
-		if (Environment.GetEnvironmentVariable(environmentVariable) is not string path) return;
+		if (Environment.GetEnvironmentVariable(environmentVariable) is string path) SaveDesignPreview(view, path, crop);
+	}
+
+	private static void SaveDesignPreview(FrameworkElement view, string path, FrameworkElement crop = null)
+	{
 		view.UpdateLayout();
 		var bitmap = new RenderTargetBitmap((int)Math.Ceiling(view.ActualWidth), (int)Math.Ceiling(view.ActualHeight),
 			96, 96, PixelFormats.Pbgra32);

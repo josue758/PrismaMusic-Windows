@@ -11,6 +11,12 @@ internal sealed class SpectrumStage : FrameworkElement
     private Brush fill;
     private Brush reflection;
     private Pen[] ribbons;
+    private Pen ribbonGlow;
+    private Pen guide;
+    private Pen orbitSpoke;
+    private Pen orbitTrail;
+    private Brush fieldGlow;
+    private Brush star;
     private Color accent;
     private string style;
     private double phase;
@@ -41,9 +47,9 @@ internal sealed class SpectrumStage : FrameworkElement
             levels[i] = level;
             Peak = Math.Max(Peak, level);
         }
-        if (style == "aurora" && Peak > 0 && animate)
+        if ((style == "aurora" || style == "orbit") && Peak > 0 && animate)
         {
-            phase = (phase + 1.05 / fps) % (Math.PI * 2);
+            phase = (phase + (style == "orbit" ? .29 + Peak * .42 : 1.05) / fps) % Math.Tau;
             changed = true;
         }
         if (style == "nebula")
@@ -63,14 +69,23 @@ internal sealed class SpectrumStage : FrameworkElement
     {
         accent = color;
         var light = Color.FromRgb((byte)((color.R + 255) / 2), (byte)((color.G + 255) / 2), (byte)((color.B + 255) / 2));
-        fill = new LinearGradientBrush(light, color, 90);
-        reflection = new LinearGradientBrush(Color.FromArgb(58, color.R, color.G, color.B), Colors.Transparent, 90);
+        fill = new LinearGradientBrush(light, Color.FromArgb(150, color.R, color.G, color.B), 90);
+        reflection = new LinearGradientBrush(Color.FromArgb(102, color.R, color.G, color.B), Colors.Transparent, 90);
+        fieldGlow = new RadialGradientBrush(Color.FromArgb(98, color.R, color.G, color.B),
+            Color.FromArgb(0, color.R, color.G, color.B));
+        star = new RadialGradientBrush(light, Color.FromArgb(0, color.R, color.G, color.B));
         fill.Freeze();
         reflection.Freeze();
+        fieldGlow.Freeze();
+        star.Freeze();
+        guide = CreatePen(color, 36, 1);
+        ribbonGlow = CreatePen(color, 33, 11);
+        orbitSpoke = CreatePen(light, 230, 2.5);
+        orbitTrail = CreatePen(color, 45, 7);
         ribbons = new Pen[6];
         for (int i = 0; i < ribbons.Length; i++)
         {
-            byte opacity = (byte)(60 + i * 25);
+            byte opacity = (byte)(92 + i * 28);
             Color tone = i % 2 == 0 ? light : color;
             ribbons[i] = new Pen(new SolidColorBrush(Color.FromArgb(opacity, tone.R, tone.G, tone.B)), i == 5 ? 2.2 : 1.25)
             {
@@ -92,30 +107,87 @@ internal sealed class SpectrumStage : FrameworkElement
             nebula.Draw(drawing, width, height, levels, Peak);
             return;
         }
+        if (style == "orbit")
+        {
+            DrawOrbit(drawing, width, height);
+            return;
+        }
         if (style == "aurora")
         {
             DrawAurora(drawing, width, height);
             return;
         }
 
-        double pitch = width / BandCount;
-        double barWidth = Math.Min(18, pitch * .62);
         bool centered = style == "centered";
         bool mirrored = style == "mirror";
-        double baseline = height * (centered ? .5 : mirrored ? .63 : .86);
+        double left = width * .05;
+        double span = width - left * 2;
+        double pitch = span / BandCount;
+        double barWidth = Math.Min(27, pitch * .66);
+        double baseline = height * (centered ? .47 : mirrored ? .54 : .66);
+        double corner = Math.Min(5, barWidth * .29);
+        drawing.DrawEllipse(fieldGlow, null, new Point(width * .5, baseline - height * .08), width * .58, height * .42);
+        drawing.DrawLine(guide, new Point(left, baseline), new Point(width - left, baseline));
         for (int i = 0; i < BandCount; i++)
         {
-            double barHeight = 3 + levels[i] * height * (centered ? .72 : mirrored ? .54 : .72);
-            double x = (i + .5) * pitch - barWidth / 2;
+            double barHeight = 4 + levels[i] * height * (centered ? .51 : mirrored ? .38 : .47);
+            double x = left + (i + .5) * pitch - barWidth / 2;
             double y = baseline - barHeight * (centered ? .5 : 1);
-            drawing.DrawRoundedRectangle(fill, null, new Rect(x, y, barWidth, barHeight), 3, 3);
+            drawing.DrawRoundedRectangle(fill, null, new Rect(x, y, barWidth, barHeight), corner, corner);
             if (mirrored)
-                drawing.DrawRoundedRectangle(reflection, null, new Rect(x, baseline + 5, barWidth, barHeight * .48), 3, 3);
+                drawing.DrawRoundedRectangle(reflection, null, new Rect(x, baseline + 5, barWidth, barHeight * .52), corner, corner);
+        }
+    }
+
+    private static Pen CreatePen(Color color, byte opacity, double thickness)
+    {
+        var pen = new Pen(new SolidColorBrush(Color.FromArgb(opacity, color.R, color.G, color.B)), thickness)
+        {
+            StartLineCap = PenLineCap.Round,
+            EndLineCap = PenLineCap.Round
+        };
+        pen.Freeze();
+        return pen;
+    }
+
+    private void DrawOrbit(DrawingContext drawing, double width, double height)
+    {
+        double scale = Math.Min(width, height);
+        double radius = scale * .198;
+        var center = new Point(width * .51, height * .46);
+        for (int ring = 1; ring <= 3; ring++)
+        {
+            double distance = radius * (.42 + ring * .22);
+            drawing.DrawEllipse(null, guide, center, distance, distance);
+        }
+        drawing.DrawEllipse(fieldGlow, null, center, radius * 2.45, radius * 1.95);
+        for (int i = 0; i < BandCount; i++)
+        {
+            double angle = i * Math.Tau / BandCount + phase;
+            double length = scale * (.014 + levels[i] * .118);
+            var spoke = new Vector(Math.Cos(angle), Math.Sin(angle));
+            var inner = center + spoke * radius;
+            var outer = center + spoke * (radius + length);
+            drawing.DrawLine(orbitTrail, inner, outer);
+            drawing.DrawLine(orbitSpoke, inner, outer);
+            if (i % 4 == 0)
+            {
+                double halo = scale * (.004 + levels[i] * .009);
+                drawing.DrawEllipse(star, null, outer, halo, halo);
+            }
+        }
+        for (int i = 0; i < 3; i++)
+        {
+            double angle = i * Math.Tau / 3 - phase * 1.2;
+            var point = center + new Vector(Math.Cos(angle), Math.Sin(angle)) * (radius * .71);
+            double halo = scale * (.013 + levels[i * 8] * .010);
+            drawing.DrawEllipse(star, null, point, halo, halo);
         }
     }
 
     private void DrawAurora(DrawingContext drawing, double width, double height)
     {
+        drawing.DrawEllipse(fieldGlow, null, new Point(width * .51, height * .47), width * .61, height * .40);
         double pitch = width / (BandCount - 1);
         for (int ribbon = 0; ribbon < ribbons.Length; ribbon++)
         {
@@ -132,6 +204,8 @@ internal sealed class SpectrumStage : FrameworkElement
                     previous = y;
                 }
             }
+            path.Freeze();
+            drawing.DrawGeometry(null, ribbonGlow, path);
             drawing.DrawGeometry(null, ribbons[ribbon], path);
         }
     }
@@ -141,6 +215,6 @@ internal sealed class SpectrumStage : FrameworkElement
         double position = band / (BandCount - 1d);
         double envelope = Math.Sin(position * Math.PI);
         double wave = Math.Sin(position * Math.PI * 4 - phase + ribbon * .48);
-        return height * (.51 + (ribbon - 2.5) * .026 + envelope * wave * (.06 + levels[band] * .27));
+        return height * (.47 + (ribbon - 2.5) * .033 + envelope * wave * (.065 + levels[band] * .245));
     }
 }

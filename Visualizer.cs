@@ -12,8 +12,15 @@ namespace PrismaMusic;
 
 public partial class MainWindow
 {
-    private static readonly (string Value, string Label)[] VisualizerStyles =
-        { ("bars", "Barras"), ("mirror", "Espejo"), ("centered", "Centrado"), ("aurora", "Aurora"), ("nebula", "Nebulosa") };
+    private static readonly (string Value, string Label, string Description)[] VisualizerStyles =
+    {
+        ("nebula", "Nebulosa", "Partículas y halos"),
+        ("orbit", "Órbita", "Espectro circular"),
+        ("bars", "Barras", "Espectro vertical"),
+        ("mirror", "Espejo", "Reflejo del espectro"),
+        ("centered", "Centrado", "Barras sobre el eje"),
+        ("aurora", "Aurora", "Ondas superpuestas")
+    };
     private static readonly int[] VisualizerRates = { 24, 30, 60 };
     private Window visualizerWindow;
     private SpectrumStage visualizerSpectrum;
@@ -27,7 +34,6 @@ public partial class MainWindow
     private Button visualizerOptionsButton;
     private Grid visualizerOptionsLayer;
     private Border visualizerOptionsPanel;
-    private Action<bool> visualizerSceneLayout;
     private DispatcherTimer visualizerTimer;
     private Color visualizerAccent;
 
@@ -76,6 +82,9 @@ public partial class MainWindow
         };
         Grid.SetRowSpan(shade, 3);
         root.Children.Add(shade);
+        visualizerSpectrum = new SpectrumStage { IsHitTestVisible = false, ClipToBounds = true };
+        Grid.SetRowSpan(visualizerSpectrum, 3);
+        root.Children.Add(visualizerSpectrum);
 
         var header = new DockPanel { Margin = new Thickness(40, 26, 40, 10) };
         visualizerOptionsButton = SettingsButton("Ajustes", ShowVisualizerOptions);
@@ -106,39 +115,21 @@ public partial class MainWindow
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         };
-        header.Children.Add(title);
+        var heading = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        heading.Children.Add(title);
+        visualizerStyleLabel = new TextBlock { FontSize = 13, VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(14, 3, 0, 0), Foreground = new SolidColorBrush(Color.FromArgb(198, 255, 255, 255)) };
+        heading.Children.Add(visualizerStyleLabel);
+        header.Children.Add(heading);
         root.Children.Add(header);
-        var stage = new Grid { Margin = new Thickness(48, 24, 48, 22), MaxWidth = 1500 };
-        stage.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(.8, GridUnitType.Star) });
-        stage.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.6, GridUnitType.Star) });
-        var trackCard = new StackPanel { Margin = new Thickness(0, 0, 28, 0), VerticalAlignment = VerticalAlignment.Center };
-        stage.Children.Add(trackCard);
+        var trackCard = new DockPanel { Margin = new Thickness(48, 0, 48, 21),
+            VerticalAlignment = VerticalAlignment.Bottom, MaxWidth = 550, HorizontalAlignment = HorizontalAlignment.Left };
 
-        var display = new Grid { ClipToBounds = true, Margin = new Thickness(22, 0, 22, 20) };
-        display.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        display.RowDefinitions.Add(new RowDefinition());
-        visualizerStyleLabel = new TextBlock
-        {
-            FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White,
-            Margin = new Thickness(4, 20, 4, 8)
-        };
-        display.Children.Add(visualizerStyleLabel);
-        visualizerSpectrum = new SpectrumStage { IsHitTestVisible = false };
-        Grid.SetRow(visualizerSpectrum, 1);
-        display.Children.Add(visualizerSpectrum);
-        var displayCard = new Border
-        {
-            CornerRadius = new CornerRadius(16), Child = display,
-            BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.FromArgb(45, 255, 255, 255)),
-            Background = new SolidColorBrush(Color.FromArgb(148, 16, 19, 29))
-        };
-        Grid.SetColumn(displayCard, 1);
-        stage.Children.Add(displayCard);
         var artworkFrame = new Border
         {
-            Width = 240,
-            Height = 240,
-            CornerRadius = new CornerRadius(18),
+            Width = 60,
+            Height = 60,
+            CornerRadius = new CornerRadius(8),
             BorderBrush = new SolidColorBrush(Color.FromArgb(0x50, 255, 255, 255)),
             BorderThickness = new Thickness(1),
             Background = new SolidColorBrush(Color.FromArgb(0x20, color.R, color.G, color.B)),
@@ -153,44 +144,38 @@ public partial class MainWindow
         var coverImage = new Image { Source = Cover.Source, Stretch = Stretch.UniformToFill };
         cover.Children.Add(coverImage);
         artworkFrame.Child = cover;
+        DockPanel.SetDock(artworkFrame, Dock.Left);
         trackCard.Children.Add(artworkFrame);
-        stage.SizeChanged += (_, _) => SizeArtwork();
         cover.SizeChanged += (_, _) =>
-        {
-            double round = visualizerStyle == "nebula" ? 8 : 17;
-            cover.Clip = new RectangleGeometry(new Rect(0, 0, cover.ActualWidth, cover.ActualHeight), round, round);
-        };
-        void SizeArtwork() => artworkFrame.Width = artworkFrame.Height = visualizerStyle == "nebula" ? 60 :
-            Math.Max(1, Math.Min(280, Math.Min(stage.ActualWidth / 3 - 28, stage.ActualHeight * .63)));
+            cover.Clip = new RectangleGeometry(new Rect(0, 0, cover.ActualWidth, cover.ActualHeight), 8, 8);
         visualizerArtwork.Tag = coverImage;
 
         var metadata = new StackPanel
         {
-            Margin = new Thickness(0, 12, 0, 0)
+            Margin = new Thickness(12, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
         };
         visualizerTitle = new TextBlock
         {
             Text = Now.Text,
             Foreground = Brushes.White,
-            FontSize = 23,
+            FontSize = 18,
             FontWeight = FontWeights.SemiBold,
-            TextAlignment = TextAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         visualizerArtist = new TextBlock
         {
             Text = Artist.Text,
             Foreground = new SolidColorBrush(Color.FromArgb(0xC8, 255, 255, 255)),
-            FontSize = 14,
-            TextAlignment = TextAlignment.Center,
+            FontSize = 12,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 5, 0, 0)
         };
         metadata.Children.Add(visualizerTitle);
         metadata.Children.Add(visualizerArtist);
         trackCard.Children.Add(metadata);
-        Grid.SetRow(stage, 1);
-        root.Children.Add(stage);
+        Grid.SetRow(trackCard, 1);
+        root.Children.Add(trackCard);
 
         var controls = new StackPanel
         {
@@ -238,49 +223,14 @@ public partial class MainWindow
         playback.Children.Add(timeline);
         var transport = new Border
         {
-            Margin = new Thickness(48, 0, 48, 24), MaxWidth = 1500, CornerRadius = new CornerRadius(14),
-            Background = new SolidColorBrush(Color.FromArgb(162, 16, 19, 29)),
+            Margin = new Thickness(48, 0, 48, 24), MaxWidth = 850, CornerRadius = new CornerRadius(14),
+            Background = new SolidColorBrush(Color.FromArgb(122, 16, 19, 29)),
             BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.FromArgb(45, 255, 255, 255)),
             Child = playback
         };
         Grid.SetRow(transport, 2);
         root.Children.Add(transport);
-        visualizerSceneLayout = immersive =>
-        {
-            if (immersive)
-            {
-                if (display.Children.Contains(visualizerSpectrum))
-                {
-                    display.Children.Remove(visualizerSpectrum);
-                    Grid.SetRow(visualizerSpectrum, 0);
-                    Grid.SetRowSpan(visualizerSpectrum, 3);
-                    root.Children.Insert(3, visualizerSpectrum);
-                }
-            }
-            else if (root.Children.Contains(visualizerSpectrum))
-            {
-                root.Children.Remove(visualizerSpectrum);
-                Grid.SetRowSpan(visualizerSpectrum, 1);
-                Grid.SetRow(visualizerSpectrum, 1);
-                display.Children.Add(visualizerSpectrum);
-            }
-            displayCard.Visibility = immersive ? Visibility.Collapsed : Visibility.Visible;
-            stage.MaxWidth = immersive ? double.PositiveInfinity : 1500;
-            trackCard.Orientation = immersive ? Orientation.Horizontal : Orientation.Vertical;
-            trackCard.VerticalAlignment = immersive ? VerticalAlignment.Bottom : VerticalAlignment.Center;
-            trackCard.HorizontalAlignment = immersive ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
-            trackCard.Margin = immersive ? new Thickness(0, 0, 0, 1) : new Thickness(0, 0, 28, 0);
-            Grid.SetColumnSpan(trackCard, immersive ? 2 : 1);
-            metadata.Margin = immersive ? new Thickness(12, 0, 0, 0) : new Thickness(0, 12, 0, 0);
-            metadata.VerticalAlignment = VerticalAlignment.Center;
-            visualizerTitle.TextAlignment = visualizerArtist.TextAlignment = immersive ? TextAlignment.Left : TextAlignment.Center;
-            visualizerTitle.FontSize = immersive ? 18 : 23;
-            visualizerArtist.FontSize = immersive ? 12 : 14;
-            artworkFrame.CornerRadius = new CornerRadius(immersive ? 8 : 18);
-            transport.MaxWidth = immersive ? 850 : 1500;
-            transport.Background = new SolidColorBrush(Color.FromArgb(immersive ? (byte)122 : (byte)162, 16, 19, 29));
-            SizeArtwork();
-        };
+
 
         visualizerWindow = new Window
         {
@@ -319,7 +269,6 @@ public partial class MainWindow
             visualizerOptionsButton = null;
             visualizerOptionsLayer = null;
             visualizerOptionsPanel = null;
-            visualizerSceneLayout = null;
             visualizerAccent = default;
         };
         visualizerTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -382,7 +331,6 @@ public partial class MainWindow
         {
             visualizerStyleLabel.Tag = visualizerStyle;
             visualizerStyleLabel.Text = T(VisualizerStyles.First(style => style.Value == visualizerStyle).Label);
-            visualizerSceneLayout(visualizerStyle == "nebula");
         }
         visualizerSpectrum.Update(player.Spectrum, playing, visualizerSensitivity,
             visualizerFramesPerSecond, visualizerStyle, visualizerAccent, MotionEnabled);

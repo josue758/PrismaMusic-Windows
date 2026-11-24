@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -24,10 +25,19 @@ public partial class MainWindow
             choices.Count(choice => choice.Tag is int) != VisualizerRates.Length)
             throw new InvalidOperationException("The visualizer settings panel is missing styles or frame rates.");
 
-        choices.Single(item => Equals(item.Tag, "aurora")).IsChecked = true;
-        if (visualizerStyle != "aurora" || visualizerStyleLabel.Text != T("Aurora") || ReferenceEquals(visualizerSpectrum.Parent, root))
-            throw new InvalidOperationException("Aurora did not retain its visualizer layout.");
-        choices.Single(item => Equals(item.Tag, "nebula")).IsChecked = true;
+        var controlsPosition = visualizerSeek.TranslatePoint(new Point(0, 0), root);
+        var trackPosition = visualizerTitle.TranslatePoint(new Point(0, 0), root);
+        foreach (var (value, label, _) in VisualizerStyles.OrderBy(style => style.Value == "nebula"))
+        {
+            choices.Single(item => Equals(item.Tag, value)).IsChecked = true;
+            root.UpdateLayout();
+            if (visualizerStyle != value || visualizerStyleLabel.Text != T(label) ||
+                !ReferenceEquals(visualizerSpectrum.Parent, root) || visualizerSpectrum.ActualWidth != root.ActualWidth ||
+                visualizerSpectrum.ActualHeight != root.ActualHeight ||
+                visualizerSeek.TranslatePoint(new Point(0, 0), root) != controlsPosition ||
+                visualizerTitle.TranslatePoint(new Point(0, 0), root) != trackPosition)
+                throw new InvalidOperationException($"The {value} style did not preserve the full-screen layout.");
+        }
         choices.Single(item => Equals(item.Tag, 60)).IsChecked = true;
         Children<Slider>(visualizerOptionsPanel).Single().Value = 1.45;
         if (visualizerStyle != "nebula" || visualizerStyleLabel.Text != T("Nebulosa") || !ReferenceEquals(visualizerSpectrum.Parent, root) ||
@@ -37,9 +47,7 @@ public partial class MainWindow
         if (useFixtureSpectrum)
         {
             visualizerTimer.Stop();
-            for (int version = 0; version < 24; version++)
-                visualizerSpectrum.Update(new[] { .72f, .68f, .50f, .42f, .58f, .38f, .42f, .22f, .48f },
-                    true, visualizerSensitivity, visualizerFramesPerSecond, visualizerStyle, visualizerAccent, animate: true);
+            FeedPreviewSpectrum();
             await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
         }
         else await Task.Delay(160);
@@ -51,7 +59,27 @@ public partial class MainWindow
         if (visualizerOptionsLayer != null || !visualizerWindow.IsVisible)
             throw new InvalidOperationException("Escape did not dismiss the options without leaving the visualizer.");
         CaptureDesignPreview(root, "PRISMA_VISUALIZER_PREVIEW");
-        Console.WriteLine("Visualizer settings, live style changes, full-window Nebula and Escape navigation passed.");
+        if (Environment.GetEnvironmentVariable("PRISMA_VISUALIZER_STYLES_PREVIEW") is { } folder)
+        {
+            Directory.CreateDirectory(folder);
+            foreach (var (value, _, _) in VisualizerStyles)
+            {
+                visualizerStyle = value;
+                UpdateVisualizer();
+                if (useFixtureSpectrum) FeedPreviewSpectrum();
+                else await Task.Delay(180);
+                SaveDesignPreview(root, Path.Combine(folder, $"{value}.png"));
+            }
+        }
+        Console.WriteLine("Visualizer settings, all six full-screen styles, fixed controls and Escape navigation passed.");
+
+        void FeedPreviewSpectrum()
+        {
+            float[] spectrum = { .72f, .68f, .50f, .42f, .58f, .38f, .42f, .22f, .48f };
+            for (int frame = 0; frame < 24; frame++)
+                visualizerSpectrum.Update(spectrum, true, visualizerSensitivity, visualizerFramesPerSecond,
+                    visualizerStyle, visualizerAccent, animate: true);
+        }
 
         static IEnumerable<TElement> Children<TElement>(DependencyObject element) where TElement : DependencyObject
         {

@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.65.2
+
+- Los seis estilos del visualizador comparten un escenario a pantalla completa, con la carátula y los controles en la parte inferior.
+- Órbita muestra un espectro circular con haces y halos. Barras, Espejo, Centrado y Aurora conservan sus animaciones y aprovechan el ancho de la pantalla.
+
 ## 0.65.1
 
 - Rediseño del panel de ajustes del visualizador con tarjetas de estilo, sensibilidad continua y selector de FPS.
