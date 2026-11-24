@@ -25,7 +25,10 @@ public sealed record SmartPlaylistRules(string Search = "", string Artist = "", 
 
 public partial class MainWindow
 {
-    private sealed record PlaylistChoice(string Value, string Label);
+    private sealed record PlaylistChoice(string Value, string Label)
+    {
+        public override string ToString() => Label;
+    }
 
     private SmartPlaylistRules SmartRules => library.SmartPlaylists.GetValueOrDefault(playlistName);
     private IEnumerable<Track> SmartPlaylistTracks(SmartPlaylistRules rules)

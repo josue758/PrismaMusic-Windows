@@ -2,6 +2,10 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.64.1
+
+- El editor de listas inteligentes muestra los nombres de filtros y las frecuencias en kHz en el selector.
+
 ## 0.64.0
 
 - Listas inteligentes con reglas combinables y vista previa del resultado.
