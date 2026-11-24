@@ -2,6 +2,11 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.65.1
+
+- Rediseño del panel de ajustes del visualizador con tarjetas de estilo, sensibilidad continua y selector de FPS.
+- Nebulosa ocupa la pantalla completa con partículas luminosas que responden al audio y una carátula compacta.
+
 ## 0.65.0
 
 - Importación de listas M3U y M3U8 con vista previa, detección de rutas del NAS cambiadas y gestión de listas desde una cabecera.

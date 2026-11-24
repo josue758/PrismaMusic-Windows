@@ -983,6 +983,33 @@ public partial class MainWindow : Window
 				Environment.GetEnvironmentVariable("PRISMA_SMOKE_UI_ONLY_WITHOUT_AUDIO") == "1" && !HasDefaultSmokeAudioEndpoint())
 			{
 				if (Environment.GetEnvironmentVariable("PRISMA_SETTINGS_PREVIEW") != null) Settings(this, new RoutedEventArgs());
+				if (Environment.GetEnvironmentVariable("PRISMA_VISUALIZER_OPTIONS_PREVIEW") != null)
+				{
+					Now.Text = demo.Tracks[0].Name;
+					Artist.Text = demo.Tracks[0].Detail;
+					Cover.Tag = demo.Tracks[0].Album;
+					Cover.Source = await LoadCollectionArtwork(
+						new LibraryRow(demo.Tracks[0].Album, demo.Tracks[0].Artist, new[] { demo.Tracks[0] }), artist: false, 400);
+					bool liveVisualizer = Environment.GetEnvironmentVariable("PRISMA_VISUALIZER_AUDIO_DEVICE") is { Length: > 0 };
+					if (liveVisualizer)
+					{
+						string name = Environment.GetEnvironmentVariable("PRISMA_VISUALIZER_AUDIO_DEVICE");
+						var output = ReadAudioOutputs(null, includeRates: false).Devices
+							.FirstOrDefault(device => device.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
+						if (output == null) throw new InvalidOperationException("Visualizer test output was not found.");
+						player.OutputId = output.Id;
+						await Play(demo.Tracks[0]);
+					}
+					ShowVisualizer(this, new RoutedEventArgs());
+					await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+					if (liveVisualizer)
+					{
+						for (int attempt = 0; attempt < 20 && visualizerSpectrum.Peak <= 0; attempt++) await Task.Delay(50);
+						if (visualizerSpectrum.Peak <= 0) throw new InvalidOperationException("The visualizer received no live audio signal.");
+					}
+					await VerifyVisualizerControls(useFixtureSpectrum: !liveVisualizer);
+					visualizerWindow.Close();
+				}
 				Console.WriteLine("UI smoke passed. Playback validation is separate.");
 				System.Windows.Application.Current.Shutdown(0);
 				return;
@@ -1277,22 +1304,7 @@ public partial class MainWindow : Window
 			if (listeningRoom != null || !ReferenceEquals(Transport.Parent, Shell))
 				throw new InvalidOperationException("The visualizer opened the listening room or moved the library transport.");
 			VerifyVisibleBounds(window2, (FrameworkElement)window2.Content, fullscreen: true, visualizerSeek);
-			ShowVisualizerOptions(visualizerOptionsButton, new RoutedEventArgs());
-			ContextMenu contextMenu = visualizerOptionsMenu;
-			if (contextMenu == null || contextMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "style")) != VisualizerStyles.Length || visualizerOptionsMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "sensitivity")) != 4 || visualizerOptionsMenu.Items.OfType<MenuItem>().Count((MenuItem item) => object.Equals(item.Tag, "fps")) != 3)
-			{
-				throw new InvalidOperationException("Visualizer style, sensitivity or frame-rate options are missing.");
-			}
-			visualizerOptionsMenu.IsOpen = false;
-			contextMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, T("Aurora")))
-				.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-			if (visualizerStyle != "aurora" || visualizerStyleLabel.Text != T("Aurora"))
-				throw new InvalidOperationException("The Aurora visualizer did not switch styles.");
-			if (!string.IsNullOrEmpty(visualizerPreview))
-			{
-				await Task.Delay(160);
-				CaptureDesignPreview((FrameworkElement)visualizerWindow.Content, "PRISMA_VISUALIZER_PREVIEW");
-			}
+			await VerifyVisualizerControls(useFixtureSpectrum: false);
 			player.Volume = previewVolume;
 			visualizerWindow.Close();
 			if (visualizerWindow != null)
@@ -2576,7 +2588,6 @@ public partial class MainWindow : Window
 			? ambientLight * Math.Clamp(player.Level * .42, 0, .2) : 0;
 		UpdateArtworkMotion();
 		if (queueNoticeDeadline is DateTime deadline && DateTime.UtcNow >= deadline) ClearQueueNotice();
-		UpdateVisualizer();
 		if (opened)
 		{
 			double totalSeconds = player.Position.TotalSeconds;
@@ -2994,25 +3005,12 @@ public partial class MainWindow : Window
 			ambientLight = Math.Clamp(audioSettings.AmbientLight, 0, 1);
 			ApplyTheme(audioSettings.Theme);
 			ApplyAppearanceProfile(audioSettings.AppearanceProfile);
-			bool flag;
 			animateSpectrum = audioSettings.AnimateSpectrum;
-			switch (audioSettings.VisualizerStyle)
-			{
-			case "bars":
-			case "mirror":
-			case "centered":
-			case "aurora":
-				flag = true;
-				break;
-			default:
-				flag = false;
-				break;
-			}
-			visualizerStyle = (flag ? audioSettings.VisualizerStyle : "mirror");
+			visualizerStyle = VisualizerStyles.Any(style => style.Value == audioSettings.VisualizerStyle)
+				? audioSettings.VisualizerStyle : "mirror";
 			visualizerSensitivity = (double.IsFinite(audioSettings.VisualizerSensitivity) ? Math.Clamp(audioSettings.VisualizerSensitivity, 0.5, 2.0) : 1.0);
 			int num = audioSettings.VisualizerFramesPerSecond;
-			flag = ((num == 24 || num == 30 || num == 60) ? true : false);
-			visualizerFramesPerSecond = (flag ? audioSettings.VisualizerFramesPerSecond : 30);
+			visualizerFramesPerSecond = VisualizerRates.Contains(num) ? num : 30;
 			SpectrumView.Visibility = ((!animateSpectrum) ? Visibility.Collapsed : Visibility.Visible);
 			eqPreamp = double.IsFinite(audioSettings.EqPreamp) ? Math.Clamp(audioSettings.EqPreamp, -12, 6) : 0;
 			eqAutoHeadroom = audioSettings.EqAutoHeadroom;
@@ -3468,14 +3466,14 @@ public partial class MainWindow : Window
 		AddOption(visualizerCard, "Estilo del visualizador", VisualizerStyles.Select(style => style.Label).ToArray(),
 			Array.FindIndex(VisualizerStyles, style => style.Value == visualizerStyle),
 			index => { visualizerStyle = VisualizerStyles[index].Value; });
-		int[] rates = { 24, 30, 60 };
-		AddOption(visualizerCard, "Frecuencia de actualización", new[] { "24 FPS", "30 FPS", "60 FPS" },
+		int[] rates = VisualizerRates;
+		AddOption(visualizerCard, "Frecuencia de actualización", rates.Select(rate => $"{rate} FPS").ToArray(),
 			Array.IndexOf(rates, visualizerFramesPerSecond), index =>
 			{
 				visualizerFramesPerSecond = rates[index];
 				if (visualizerTimer != null) visualizerTimer.Interval = TimeSpan.FromMilliseconds(1000d / rates[index]);
 			});
-		visualizerCard.Children.Add(CreateLyricSetting("Sensibilidad", .5, 2, .25, visualizerSensitivity, "0.00×",
+		visualizerCard.Children.Add(CreateLyricSetting("Sensibilidad", .5, 2, .05, visualizerSensitivity, "0.00×",
 			value => { visualizerSensitivity = value; SaveSettingsSoon(); }));
 		panel = visualizerCard;
 		AddPreference("Espectro animado", animateSpectrum, enabled =>

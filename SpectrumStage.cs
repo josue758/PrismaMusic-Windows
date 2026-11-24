@@ -14,6 +14,7 @@ internal sealed class SpectrumStage : FrameworkElement
     private Color accent;
     private string style;
     private double phase;
+    private NebulaField nebula;
 
     internal double Peak { get; private set; }
 
@@ -44,6 +45,16 @@ internal sealed class SpectrumStage : FrameworkElement
         {
             phase = (phase + 1.05 / fps) % (Math.PI * 2);
             changed = true;
+        }
+        if (style == "nebula")
+        {
+            nebula ??= new NebulaField();
+            nebula.SetAccent(nextAccent);
+            if (playing && Peak > 0 && animate)
+            {
+                nebula.Advance(levels, fps);
+                changed = true;
+            }
         }
         if (changed) InvalidateVisual();
     }
@@ -76,6 +87,11 @@ internal sealed class SpectrumStage : FrameworkElement
         double width = ActualWidth;
         double height = ActualHeight;
         if (fill == null || width < BandCount || height < 16) return;
+        if (style == "nebula")
+        {
+            nebula.Draw(drawing, width, height, levels, Peak);
+            return;
+        }
         if (style == "aurora")
         {
             DrawAurora(drawing, width, height);

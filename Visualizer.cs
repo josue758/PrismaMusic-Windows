@@ -13,7 +13,8 @@ namespace PrismaMusic;
 public partial class MainWindow
 {
     private static readonly (string Value, string Label)[] VisualizerStyles =
-        { ("bars", "Barras"), ("mirror", "Espejo"), ("centered", "Centrado"), ("aurora", "Aurora") };
+        { ("bars", "Barras"), ("mirror", "Espejo"), ("centered", "Centrado"), ("aurora", "Aurora"), ("nebula", "Nebulosa") };
+    private static readonly int[] VisualizerRates = { 24, 30, 60 };
     private Window visualizerWindow;
     private SpectrumStage visualizerSpectrum;
     private TextBlock visualizerStyleLabel;
@@ -24,7 +25,9 @@ public partial class MainWindow
     private Button visualizerPlayButton;
     private Slider visualizerSeek;
     private Button visualizerOptionsButton;
-    private ContextMenu visualizerOptionsMenu;
+    private Grid visualizerOptionsLayer;
+    private Border visualizerOptionsPanel;
+    private Action<bool> visualizerSceneLayout;
     private DispatcherTimer visualizerTimer;
     private Color visualizerAccent;
 
@@ -75,7 +78,18 @@ public partial class MainWindow
         root.Children.Add(shade);
 
         var header = new DockPanel { Margin = new Thickness(40, 26, 40, 10) };
-        visualizerOptionsButton = CreateVisualizerControl("\uE713", T("Opciones del visualizador"), ShowVisualizerOptions);
+        visualizerOptionsButton = SettingsButton("Ajustes", ShowVisualizerOptions);
+        visualizerOptionsButton.ToolTip = T("Opciones del visualizador");
+        System.Windows.Automation.AutomationProperties.SetName(visualizerOptionsButton, T("Opciones del visualizador"));
+        visualizerOptionsButton.MinWidth = 104;
+        visualizerOptionsButton.VerticalAlignment = VerticalAlignment.Center;
+        var optionsLabel = new StackPanel { Orientation = Orientation.Horizontal };
+        optionsLabel.Children.Add(new TextBlock { Text = "\uE713", FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+            Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center });
+        optionsLabel.Children.Add(new TextBlock { Text = T("Ajustes"), VerticalAlignment = VerticalAlignment.Center });
+        visualizerOptionsButton.Content = optionsLabel;
+        visualizerOptionsButton.Foreground = Brushes.White;
+        visualizerOptionsButton.Background = new SolidColorBrush(Color.FromArgb(28, 255, 255, 255));
         DockPanel.SetDock(visualizerOptionsButton, Dock.Right);
         header.Children.Add(visualizerOptionsButton);
         var back = SettingsButton("Tu biblioteca", (_, _) => visualizerWindow?.Close());
@@ -140,10 +154,14 @@ public partial class MainWindow
         cover.Children.Add(coverImage);
         artworkFrame.Child = cover;
         trackCard.Children.Add(artworkFrame);
-        stage.SizeChanged += (_, _) =>
-            artworkFrame.Width = artworkFrame.Height = Math.Max(1, Math.Min(280, Math.Min(stage.ActualWidth / 3 - 28, stage.ActualHeight * .63)));
+        stage.SizeChanged += (_, _) => SizeArtwork();
         cover.SizeChanged += (_, _) =>
-            cover.Clip = new RectangleGeometry(new Rect(0, 0, cover.ActualWidth, cover.ActualHeight), 17, 17);
+        {
+            double round = visualizerStyle == "nebula" ? 8 : 17;
+            cover.Clip = new RectangleGeometry(new Rect(0, 0, cover.ActualWidth, cover.ActualHeight), round, round);
+        };
+        void SizeArtwork() => artworkFrame.Width = artworkFrame.Height = visualizerStyle == "nebula" ? 60 :
+            Math.Max(1, Math.Min(280, Math.Min(stage.ActualWidth / 3 - 28, stage.ActualHeight * .63)));
         visualizerArtwork.Tag = coverImage;
 
         var metadata = new StackPanel
@@ -227,6 +245,42 @@ public partial class MainWindow
         };
         Grid.SetRow(transport, 2);
         root.Children.Add(transport);
+        visualizerSceneLayout = immersive =>
+        {
+            if (immersive)
+            {
+                if (display.Children.Contains(visualizerSpectrum))
+                {
+                    display.Children.Remove(visualizerSpectrum);
+                    Grid.SetRow(visualizerSpectrum, 0);
+                    Grid.SetRowSpan(visualizerSpectrum, 3);
+                    root.Children.Insert(3, visualizerSpectrum);
+                }
+            }
+            else if (root.Children.Contains(visualizerSpectrum))
+            {
+                root.Children.Remove(visualizerSpectrum);
+                Grid.SetRowSpan(visualizerSpectrum, 1);
+                Grid.SetRow(visualizerSpectrum, 1);
+                display.Children.Add(visualizerSpectrum);
+            }
+            displayCard.Visibility = immersive ? Visibility.Collapsed : Visibility.Visible;
+            stage.MaxWidth = immersive ? double.PositiveInfinity : 1500;
+            trackCard.Orientation = immersive ? Orientation.Horizontal : Orientation.Vertical;
+            trackCard.VerticalAlignment = immersive ? VerticalAlignment.Bottom : VerticalAlignment.Center;
+            trackCard.HorizontalAlignment = immersive ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+            trackCard.Margin = immersive ? new Thickness(0, 0, 0, 1) : new Thickness(0, 0, 28, 0);
+            Grid.SetColumnSpan(trackCard, immersive ? 2 : 1);
+            metadata.Margin = immersive ? new Thickness(12, 0, 0, 0) : new Thickness(0, 12, 0, 0);
+            metadata.VerticalAlignment = VerticalAlignment.Center;
+            visualizerTitle.TextAlignment = visualizerArtist.TextAlignment = immersive ? TextAlignment.Left : TextAlignment.Center;
+            visualizerTitle.FontSize = immersive ? 18 : 23;
+            visualizerArtist.FontSize = immersive ? 12 : 14;
+            artworkFrame.CornerRadius = new CornerRadius(immersive ? 8 : 18);
+            transport.MaxWidth = immersive ? 850 : 1500;
+            transport.Background = new SolidColorBrush(Color.FromArgb(immersive ? (byte)122 : (byte)162, 16, 19, 29));
+            SizeArtwork();
+        };
 
         visualizerWindow = new Window
         {
@@ -242,15 +296,16 @@ public partial class MainWindow
         };
         visualizerWindow.PreviewKeyDown += (_, key) =>
         {
-            if (key.Key is Key.Escape or Key.F12)
-            {
-                key.Handled = true;
-                visualizerWindow.Close();
-            }
+            if (key.Key is not (Key.Escape or Key.F12)) return;
+            key.Handled = true;
+            if (key.Key == Key.Escape && visualizerOptionsLayer?.IsVisible == true) CloseVisualizerOptions();
+            else visualizerWindow.Close();
         };
         visualizerWindow.Closed += (_, _) =>
         {
             visualizerTimer?.Stop();
+            FlushVisualizerSave();
+            visualizerSaveTimer = null;
             visualizerTimer = null;
             visualizerWindow = null;
             visualizerSpectrum = null;
@@ -262,7 +317,9 @@ public partial class MainWindow
             visualizerPlayButton = null;
             visualizerSeek = null;
             visualizerOptionsButton = null;
-            visualizerOptionsMenu = null;
+            visualizerOptionsLayer = null;
+            visualizerOptionsPanel = null;
+            visualizerSceneLayout = null;
             visualizerAccent = default;
         };
         visualizerTimer = new DispatcherTimer(DispatcherPriority.Background)
@@ -297,107 +354,7 @@ public partial class MainWindow
         return button;
     }
 
-    private void ShowVisualizerOptions(object sender, RoutedEventArgs args)
-    {
-        var menu = new ContextMenu
-        {
-            Background = new SolidColorBrush(Color.FromRgb(37, 36, 44)),
-            Foreground = Brushes.White,
-            Padding = new Thickness(6)
-        };
-        visualizerOptionsMenu = menu;
-        menu.Items.Add(new MenuItem
-        {
-            Header = LocalTextExtension.Translate("Estilo"),
-            FontWeight = FontWeights.SemiBold,
-            IsEnabled = false
-        });
-        foreach (var style in VisualizerStyles)
-            AddChoice(style.Label, style.Value, visualizerStyle, value =>
-            {
-                visualizerStyle = value;
-                UpdateVisualizer();
-            });
-        menu.Items.Add(new Separator());
-        menu.Items.Add(new MenuItem
-        {
-            Header = LocalTextExtension.Translate("Sensibilidad"),
-            FontWeight = FontWeights.SemiBold,
-            IsEnabled = false
-        });
-        foreach (double sensitivity in new[] { .5, 1, 1.5, 2 })
-        {
-            double value = sensitivity;
-            var item = new MenuItem
-            {
-                Header = LocalTextExtension.Format("Sensibilidad {0}×", value.ToString("0.#")),
-                IsCheckable = true,
-                IsChecked = Math.Abs(visualizerSensitivity - value) < .01,
-                Tag = "sensitivity"
-            };
-            item.Click += (_, _) =>
-            {
-                SelectRadio(item, "sensitivity");
-                visualizerSensitivity = value;
-                SaveAudioSettings();
-            };
-            menu.Items.Add(item);
-        }
-        menu.Items.Add(new Separator());
-        menu.Items.Add(new MenuItem
-        {
-            Header = LocalTextExtension.Translate("Frecuencia de actualización"),
-            FontWeight = FontWeights.SemiBold,
-            IsEnabled = false
-        });
-        foreach (int framesPerSecond in new[] { 24, 30, 60 })
-        {
-            int value = framesPerSecond;
-            var item = new MenuItem
-            {
-                Header = $"{value} FPS",
-                IsCheckable = true,
-                IsChecked = visualizerFramesPerSecond == value,
-                Tag = "fps"
-            };
-            item.Click += (_, _) =>
-            {
-                SelectRadio(item, "fps");
-                visualizerFramesPerSecond = value;
-                if (visualizerTimer != null)
-                    visualizerTimer.Interval = TimeSpan.FromMilliseconds(1000d / value);
-                SaveAudioSettings();
-            };
-            menu.Items.Add(item);
-        }
-        menu.PlacementTarget = (FrameworkElement)sender;
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-        menu.IsOpen = true;
 
-        void AddChoice(string label, string value, string selected, Action<string> change)
-        {
-            var item = new MenuItem
-            {
-                Header = LocalTextExtension.Translate(label),
-                IsCheckable = true,
-                IsChecked = selected == value,
-                Tag = "style"
-            };
-            item.Click += (_, _) =>
-            {
-                SelectRadio(item, "style");
-                change(value);
-                SaveAudioSettings();
-            };
-            menu.Items.Add(item);
-        }
-
-        void SelectRadio(MenuItem selected, string group)
-        {
-            foreach (var item in menu.Items.OfType<MenuItem>())
-                if (Equals(item.Tag, group)) item.IsChecked = ReferenceEquals(item, selected);
-        }
-    }
 
     private void UpdateVisualizer()
     {
@@ -425,8 +382,9 @@ public partial class MainWindow
         {
             visualizerStyleLabel.Tag = visualizerStyle;
             visualizerStyleLabel.Text = T(VisualizerStyles.First(style => style.Value == visualizerStyle).Label);
+            visualizerSceneLayout(visualizerStyle == "nebula");
         }
         visualizerSpectrum.Update(player.Spectrum, playing, visualizerSensitivity,
-            visualizerFramesPerSecond, visualizerStyle, visualizerAccent, interfaceAnimations && SystemParameters.ClientAreaAnimation);
+            visualizerFramesPerSecond, visualizerStyle, visualizerAccent, MotionEnabled);
     }
 }
