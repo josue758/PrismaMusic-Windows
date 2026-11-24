@@ -18,6 +18,7 @@ public partial class MainWindow
     private void SetStopAfterTrack(bool enabled)
     {
         stopAfterTrack = enabled;
+        InvalidateGapless();
         StopAfterTrackIndicator.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
         StopAfterTrackMenuItem.Header = LocalTextExtension.Translate(enabled
             ? "Cancelar pausa al final de la canción" : "Pausar al final de esta canción");

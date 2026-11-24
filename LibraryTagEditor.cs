@@ -224,7 +224,7 @@ public partial class MainWindow
         foreach (var (path, edit, restored) in changes)
         {
             if (!originals.TryGetValue(path, out var original)) throw new InvalidOperationException(T("La pista ya no está en la biblioteca."));
-            updated.Add(path, restored ?? edit?.ApplyTo(original) ?? original);
+            updated.Add(path, restored != null ? restored with { AddedAt = original.AddedAt } : edit?.ApplyTo(original) ?? original);
             if (edit == null || edit == new LibraryTagEdit()) nextEdits.Remove(path);
             else nextEdits[path] = edit;
         }

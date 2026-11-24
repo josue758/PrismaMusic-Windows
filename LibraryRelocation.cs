@@ -59,6 +59,7 @@ internal static class LibraryRelocation
             Favorites = new HashSet<string>(library.Favorites.Select(Map), StringComparer.OrdinalIgnoreCase),
             Playlist = library.Playlist.Select(Map).ToList(),
             Playlists = library.Playlists.ToDictionary(pair => pair.Key, pair => pair.Value.Select(Map).ToList(), library.Playlists.Comparer),
+            SmartPlaylists = new(library.SmartPlaylists, StringComparer.OrdinalIgnoreCase),
             History = library.History.Select(Map).ToList(),
             PlayCounts = library.PlayCounts.ToDictionary(pair => Map(pair.Key), pair => pair.Value, StringComparer.OrdinalIgnoreCase),
             TagEdits = library.TagEdits.ToDictionary(pair => Map(pair.Key), pair => pair.Value, StringComparer.OrdinalIgnoreCase)

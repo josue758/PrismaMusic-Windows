@@ -253,6 +253,10 @@
                 <Trigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="{x:Static local:MotionSettings.PressedScale}" Duration="{x:Static local:MotionSettings.Press}" EasingFunction="{StaticResource EaseOut}"/><DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="{x:Static local:MotionSettings.PressedScale}" Duration="{x:Static local:MotionSettings.Press}" EasingFunction="{StaticResource EaseOut}"/><DoubleAnimation Storyboard.TargetName="PressShade" Storyboard.TargetProperty="Opacity" To=".13" Duration="{x:Static local:MotionSettings.Press}" EasingFunction="{StaticResource EaseOut}"/></Storyboard></BeginStoryboard></Trigger.EnterActions>
                 <Trigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="{x:Static local:MotionSettings.Fast}" EasingFunction="{StaticResource EaseOut}"/><DoubleAnimation Storyboard.TargetName="Root" Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="{x:Static local:MotionSettings.Fast}" EasingFunction="{StaticResource EaseOut}"/><DoubleAnimation Storyboard.TargetName="PressShade" Storyboard.TargetProperty="Opacity" To="0" Duration="{x:Static local:MotionSettings.Fast}"/></Storyboard></BeginStoryboard></Trigger.ExitActions>
               </Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Surface" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                <Setter TargetName="Surface" Property="BorderThickness" Value="2"/>
+              </Trigger>
               <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Root" Property="Opacity" Value=".45"/></Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>

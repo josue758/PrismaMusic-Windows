@@ -21,6 +21,22 @@ public sealed class LibraryDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void SavesSmartRulesAndTrackImportDates()
+    {
+        var database = new LibraryDatabase(directory);
+        var library = database.Load();
+        var date = DateTimeOffset.UtcNow;
+        var rules = new SmartPlaylistRules(Codec: "FLAC", SampleRate: 96000, Favorites: true, AddedThisMonth: true);
+        library.SmartPlaylists["Hi-res"] = rules;
+        library.Tracks.Add(Song(@"C:\M\a.flac") with { AddedAt = date });
+        database.Save(library, tracksChanged: true);
+
+        var restored = new LibraryDatabase(directory).Load();
+        Assert.Equal(rules, restored.SmartPlaylists["HI-RES"]);
+        Assert.Equal(date, Assert.Single(restored.Tracks).AddedAt);
+    }
+
+    [Fact]
     public void SaveAndLoadKeepTracksFavoritesAndFolders()
     {
         var first = new LibraryDatabase(directory);

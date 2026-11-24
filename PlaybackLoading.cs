@@ -29,6 +29,7 @@ public partial class MainWindow
             RetryTrackButton.Content = T(retry.Interrupted ? "Reanudar pista" : "Reintentar pista");
             RetryTrackButton.ToolTip = retry.Track.Name;
             RetryTrackButton.Visibility = Visibility.Visible;
+            ShowNasRecovery(retry, available: false);
             Status.Text = retry.Interrupted
                 ? LocalTextExtension.Format("Se interrumpió «{0}» en el NAS. Al recuperar la conexión puedes reanudar desde {1}.",
                     retry.Track.Name, FormatClock(retry.Position))
@@ -64,6 +65,7 @@ public partial class MainWindow
         try { if (opened) position = player.Position.TotalSeconds; }
         catch (Exception failure) when (current != null && IsNetworkPlaybackFailure(current, failure)) { }
         opened = false;
+        InvalidateGapless();
         SetPlaying(false);
         if (current != null && pendingOpen == null && IsNetworkPlaybackFailure(current, error))
         {
@@ -103,8 +105,10 @@ public partial class MainWindow
     private async Task OpenTrack(Track track, bool remember, double position, bool autoplay, bool recordHistory, bool interrupted = false)
     {
         CancelPendingOpen();
+        InvalidateGapless();
         playbackRetry = null;
         RetryTrackButton.Visibility = Visibility.Collapsed;
+        NasRecoveryNotice.Visibility = Visibility.Collapsed;
         using var request = new CancellationTokenSource();
         pendingOpen = request;
         pendingTrack = track;
@@ -119,6 +123,8 @@ public partial class MainWindow
         Status.Text = loading;
         bool strict = player.StrictDirect;
         WaveStream prepared = null;
+        ReplayGainTags tags = null;
+        var mode = player.ReplayMode;
 
         try
         {
@@ -126,7 +132,11 @@ public partial class MainWindow
             try
             {
                 request.Token.ThrowIfCancellationRequested();
-                prepared = await Task.Run(() => prepareAudioFile(track.Path, strict), request.Token);
+                (prepared, tags) = await Task.Run(() =>
+                {
+                    var replay = !strict && mode != ReplayGainMode.Off ? ReplayGainTags.Read(track.Path) : null;
+                    return (prepareAudioFile(track.Path, strict), replay);
+                }, request.Token);
             }
             finally { fileOpenGate.Release(); }
 
@@ -134,7 +144,7 @@ public partial class MainWindow
             if (Status.Text == loading) Status.Text = "";
             opened = false;
             openingAudioError = null;
-            player.OpenPrepared(prepared, strict);
+            player.OpenPrepared(prepared, strict, tags);
             prepared = null; // The engine owns the decoder, including on output initialization failure.
             if (!opened && openingAudioError is { } failure)
             {
@@ -155,22 +165,7 @@ public partial class MainWindow
             lastPlaybackPosition = player.Position.TotalSeconds;
             if (autoplay) player.Play();
             SetPlaying(autoplay);
-            Now.Text = track.Name;
-            TransportArtist.Text = track.Artist;
-            Artist.Text = track.Detail;
-            UpdateMini();
-            if (recordHistory)
-            {
-                int plays = library.PlayCounts.GetValueOrDefault(track.Path);
-                if (opened && autoplay && plays < int.MaxValue) library.PlayCounts[track.Path] = plays + 1;
-                library.History.Remove(track.Path);
-                library.History.Insert(0, track.Path);
-                if (library.History.Count > 500) library.History.RemoveAt(500);
-                Save();
-                if (LibrarySectionIndex == 5 || ReferenceEquals(Navigation.SelectedItem, HomeNavigation)) RefreshRows();
-            }
-            if (trackChanged) LoadPresentation(track);
-            PublishSystemPlayback();
+            ShowOpenedTrack(track, trackChanged, recordHistory, autoplay);
         }
         catch (OperationCanceledException) when (request.IsCancellationRequested) { }
         catch (Exception error)
@@ -188,6 +183,27 @@ public partial class MainWindow
                 SetPlaying(playing);
             }
         }
+    }
+
+    private void ShowOpenedTrack(Track track, bool trackChanged, bool recordHistory, bool autoplay)
+    {
+        Now.Text = track.Name;
+        TransportArtist.Text = track.Artist;
+        Artist.Text = track.Detail;
+        UpdateMini();
+        RefreshSideQueue();
+        if (recordHistory)
+        {
+            int plays = library.PlayCounts.GetValueOrDefault(track.Path);
+            if (opened && autoplay && plays < int.MaxValue) library.PlayCounts[track.Path] = plays + 1;
+            library.History.Remove(track.Path);
+            library.History.Insert(0, track.Path);
+            if (library.History.Count > 500) library.History.RemoveAt(500);
+            Save();
+            if (LibrarySectionIndex is 4 or 5 or 6 || ReferenceEquals(Navigation.SelectedItem, HomeNavigation)) RefreshRows();
+        }
+        if (trackChanged) LoadPresentation(track);
+        PublishSystemPlayback();
     }
 
     private void CancelPendingOpen()

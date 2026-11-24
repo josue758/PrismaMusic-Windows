@@ -135,6 +135,8 @@ public partial class MainWindow
 
     private void RefreshSideQueue()
     {
+        InvalidateGaplessIfCandidateChanged();
+        QueueNowCard.Visibility = current != null ? Visibility.Visible : Visibility.Collapsed;
         var selected = SideQueue.SelectedItem;
         SideQueue.ItemsSource = queue.ToArray();
         SideQueue.SelectedItem = selected;

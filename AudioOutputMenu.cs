@@ -94,7 +94,20 @@ public partial class MainWindow
             content.Children.Clear();
             refresh.IsEnabled = true;
 
-            Card(T("Dispositivo"), section =>
+            bool hasActiveOutput = opened && player.ActiveOutputName != null;
+            Card(T(hasActiveOutput ? "Salida activa" : "Salida disponible"), section =>
+            {
+                section.Children.Add(new TextBlock
+                {
+                    Text = (hasActiveOutput ? player.ActiveOutputName : snapshot.ActiveName) ?? T("Sin salida de audio"),
+                    FontSize = 18, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap
+                });
+                section.Children.Add(Note(hasActiveOutput ? AudioOutputMode() : T("Pendiente de iniciar la reproducción")));
+                if (hasActiveOutput && player.OutputNotice is { } notice && !player.StrictDirect)
+                    section.Children.Add(Note(T(notice)));
+            });
+
+            Card(T("Elegir dispositivo"), section =>
             {
                 var options = new[] { new AudioOutputInfo(T("Predeterminada del sistema"), null) }
                     .Concat(snapshot.Devices).ToList();
@@ -110,10 +123,6 @@ public partial class MainWindow
                 };
                 section.Children.Add(audioDevicePicker);
                 string requestedName = options.FirstOrDefault(output => SameDevice(output.Id, player.OutputId))?.Name;
-                if (player.ActiveOutputName is string playingDevice)
-                    section.Children.Add(Note(LocalTextExtension.Format("Sonando en: {0}", playingDevice)));
-                else if (snapshot.ActiveName != null)
-                    section.Children.Add(Note(LocalTextExtension.Format("Dispositivo disponible: {0}", snapshot.ActiveName)));
                 if (player.ActiveOutputId != null && player.OutputId != null && !SameDevice(player.ActiveOutputId, player.OutputId))
                     section.Children.Add(Note(LocalTextExtension.Format("Salida solicitada: {0}", requestedName)));
                 if (snapshot.Error != null) section.Children.Add(Note(snapshot.Error));
@@ -126,14 +135,8 @@ public partial class MainWindow
                 var format = activeSignal ? player.OutputFormat : snapshot.MixFormat;
                 Card(T(activeSignal ? "Señal de salida" : "Formato predeterminado de Windows"), section =>
                 {
-                    var signal = new DockPanel { Margin = new Thickness(0, 1, 0, 0) };
-                    var mode = new TextBlock { Text = AudioOutputMode(), FontSize = 11,
-                        Foreground = (Brush)FindResource("AccentBrush"), VerticalAlignment = VerticalAlignment.Center };
-                    DockPanel.SetDock(mode, Dock.Right);
-                    signal.Children.Add(mode);
-                    signal.Children.Add(new TextBlock { Text = $"{format.SampleRate / 1000d:0.###} kHz · {format.BitsPerSample} bit",
-                        FontSize = 19, FontWeight = FontWeights.SemiBold });
-                    section.Children.Add(signal);
+                    section.Children.Add(new TextBlock { Text = $"{format.SampleRate / 1000d:0.###} kHz · {format.BitsPerSample} bit",
+                        FontSize = 17, FontWeight = FontWeights.SemiBold });
                     section.Children.Add(Note(format.Channels == 1 ? T("1 canal") : LocalTextExtension.Format("{0} canales", format.Channels)));
                     if (activeSignal && player.SourceFormat is WaveFormat source)
                     {

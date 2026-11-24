@@ -111,6 +111,7 @@ internal sealed class LibraryDatabase(string directory)
         library.Favorites = new HashSet<string>(library.Favorites, StringComparer.OrdinalIgnoreCase);
         library.TagEdits = new Dictionary<string, LibraryTagEdit>(library.TagEdits, StringComparer.OrdinalIgnoreCase);
         library.PlayCounts = new Dictionary<string, int>(library.PlayCounts, StringComparer.OrdinalIgnoreCase);
+        library.SmartPlaylists = new Dictionary<string, SmartPlaylistRules>(library.SmartPlaylists, StringComparer.OrdinalIgnoreCase);
         using var readTracks = db.CreateCommand();
         readTracks.CommandText = "SELECT CAST(payload AS BLOB) FROM tracks ORDER BY path";
         var index = new Dictionary<string, Track>(StringComparer.OrdinalIgnoreCase);
@@ -208,6 +209,7 @@ internal sealed class LibraryDatabase(string directory)
             library.Favorites,
             library.Playlist,
             library.Playlists,
+            library.SmartPlaylists,
             library.History,
             library.PlayCounts,
             library.TagEdits

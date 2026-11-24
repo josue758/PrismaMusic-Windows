@@ -2,6 +2,14 @@
 
 Este historial documenta las versiones de Windows para las que se encontró código fuente o metadatos de versión verificables. La edición Windows es el port oficial de [Prisma Music para macOS](https://github.com/josue758/PrismaMusic); las interfaces y el motor de audio son nativos de cada sistema y sus números de versión no tienen que coincidir.
 
+## 0.64.0
+
+- Listas inteligentes con reglas combinables y vista previa del resultado.
+- El reproductor avisa cuando una pista del NAS vuelve a estar disponible y conserva su posición de reanudación.
+- ReplayGain por pista o por álbum en FLAC etiquetados con salida estándar.
+- Transición sin pausas cuando las pistas sin pérdida comparten formato PCM y ganancia a velocidad normal.
+- Avisos de reproducción para Narrador y un diseño más claro en la cola y la salida de audio.
+
 ## 0.63.1
 
 - El editor de álbum reúne la carátula y los datos en una tarjeta compacta. La tabla de canciones tiene desplazamiento propio y los botones de guardado permanecen visibles al cambiar el tamaño de la ventana.

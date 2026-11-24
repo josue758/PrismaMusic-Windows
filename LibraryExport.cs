@@ -65,6 +65,7 @@ public partial class MainWindow
                 PlayCounts = new Dictionary<string, int>(library.PlayCounts, StringComparer.OrdinalIgnoreCase),
                 Playlist = library.Playlist.ToList(),
                 Playlists = library.Playlists.ToDictionary(pair => pair.Key, pair => pair.Value.ToList()),
+                SmartPlaylists = new(library.SmartPlaylists, StringComparer.OrdinalIgnoreCase),
                 TagEdits = new Dictionary<string, LibraryTagEdit>(library.TagEdits, StringComparer.OrdinalIgnoreCase)
             };
             return Task.Run(() => LibraryExport.LibraryJson(snapshot));

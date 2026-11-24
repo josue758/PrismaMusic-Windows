@@ -63,6 +63,7 @@ public sealed class Library
 	public List<string> Playlist { get; set; } = new List<string>();
 
 	public Dictionary<string, List<string>> Playlists { get; set; } = new Dictionary<string, List<string>>();
+	public Dictionary<string, SmartPlaylistRules> SmartPlaylists { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
 	public List<string> History { get; set; } = new List<string>();
 	public Dictionary<string, int> PlayCounts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -101,7 +102,7 @@ public record LibraryRow(string Name, string Detail, Track[] Tracks, string Foot
 
 public record Track(string Path, string Name, string Artist, string Album, string AlbumArtist, string Genre, uint Year, uint Disc, uint Number, int Seconds,
 	string Codec = null, int SampleRate = 0, int BitDepth = 0, long FileLength = -1, long LastWriteUtcTicks = 0,
-	int? BitrateKbps = null, int Channels = 0, string ArtworkOverride = null)
+	int? BitrateKbps = null, int Channels = 0, string ArtworkOverride = null, DateTimeOffset? AddedAt = null)
 {
 	public bool IsLossless => Codec is "FLAC" or "ALAC" or "PCM";
 	public string DurationLabel => Seconds > 0 ? TimeSpan.FromSeconds(Seconds).ToString(Seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss") : "";
@@ -121,7 +122,7 @@ public partial class MainWindow : Window
 {
 
 	private sealed record AudioSettings(double Volume, string OutputId, bool Exclusive, float[] Gains, float Balance = 0f, bool EqEnabled = true, bool Direct = false, bool ArtworkColors = true, bool AnimateSpectrum = true, double Speed = 1.0, bool StrictDirect = false, bool Shuffle = false, RepeatMode Repeat = RepeatMode.Off, bool RememberPosition = true, string AccentPreset = "artwork", string VisualizerStyle = "mirror", double VisualizerSensitivity = 1.0, int VisualizerFramesPerSecond = 30, int OutputSampleRate = 0, bool ContinueAfterTrack = true, double LyricOffset = 0, double LyricScale = 1, int AppearanceProfile = 0, bool CompactRows = false, bool ShowTrackQuality = true, bool MiniAlwaysOnTop = true, bool FollowLyrics = true, int AlbumSize = 1, bool AutoArtwork = true, bool AutoLyrics = false, bool KeepAwake = false, int StartupSection = 0, double EqPreamp = 0, bool EqAutoHeadroom = true, bool InterfaceAnimations = true, bool PointerEffects = true, bool UndoNotices = true, bool AudioBackdrop = true, bool ArtworkMotion = true, int Theme = 1, double SurfaceTransparency = 1, double AmbientLight = 1, bool ScanSubfolders = true, bool ScanOnLaunch = false, int ParallelTagReads = 0, bool DiscoverNewMusic = false,
-		string LyricSource = "en", string LyricTarget = "es");
+		string LyricSource = "en", string LyricTarget = "es", ReplayGainMode ReplayGain = ReplayGainMode.Off, bool Gapless = true);
 
 	private enum RepeatMode
 	{
@@ -252,7 +253,7 @@ public partial class MainWindow : Window
 		{
 			if (!(playlistName == "Mi lista"))
 			{
-				return library.Playlists[playlistName];
+				return library.Playlists.GetValueOrDefault(playlistName) ?? library.Playlist;
 			}
 			return library.Playlist;
 		}
@@ -317,6 +318,7 @@ public partial class MainWindow : Window
 			}
 		};
 		player.MediaFailed += async (_, error) => await HandleAudioFailure(error);
+		player.ContinuousTransition += (_, track) => AcceptContinuousTrack(track);
 		timer.Tick += (object? _, EventArgs _) =>
 		{
 			Tick();
@@ -330,6 +332,7 @@ public partial class MainWindow : Window
 			timer.Stop();
 			DisposeSystemPlaybackControls();
 			CancelPendingOpen();
+			InvalidateGapless();
 			if (!smokeTest)
 			{
 				if (sessionRestored) SaveSession();
@@ -680,6 +683,24 @@ public partial class MainWindow : Window
 			ArtistFilter.SelectedItem = demo.Tracks[1].Artist;
 			if (Rows.Items.Count != 0) throw new InvalidOperationException("Artist filter did not combine with Lossless.");
 			ArtistFilter.SelectedIndex = 0;
+			if (Environment.GetEnvironmentVariable("PRISMA_SMART_PLAYLIST_PREVIEW") != null)
+			{
+				const string previewList = "FLAC · 96 kHz";
+				library.SmartPlaylists[previewList] = new SmartPlaylistRules(Codec: "FLAC", SampleRate: 96000);
+				playlistName = previewList;
+				UpdatePlaylistPicker();
+				Navigation.SelectedItem = PlaylistNavigation;
+				if (Rows.Items.Count != 1 || PlaylistCommands.Visibility != Visibility.Visible)
+					throw new InvalidOperationException("Smart playlist did not filter the library.");
+				await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+				CaptureDesignPreview(Shell, "PRISMA_SMART_PLAYLIST_LIBRARY_PREVIEW");
+				OpenSmartPlaylistEditor(previewList);
+				library.SmartPlaylists.Remove(previewList);
+				playlistName = "Mi lista";
+				UpdatePlaylistPicker();
+				Navigation.SelectedItem = LosslessNavigation;
+				Console.WriteLine("Smart playlist rules, library layout and preview passed.");
+			}
 			if (Environment.GetEnvironmentVariable("PRISMA_LOSSLESS_PREVIEW") != null &&
 				Environment.GetEnvironmentVariable("PRISMA_LOSSLESS_FIXTURE") is string losslessFixture)
 			{
@@ -927,9 +948,21 @@ public partial class MainWindow : Window
 			LyricsHeaderButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
 			if (Listening.Visibility != Visibility.Visible || ListeningTabs.SelectedIndex != 0)
 				throw new InvalidOperationException("The lyrics shortcut did not restore the listening panel.");
-			if (Environment.GetEnvironmentVariable("PRISMA_SMOKE_UI_ONLY_WITHOUT_AUDIO") == "1" && !HasDefaultSmokeAudioEndpoint())
+			if (Environment.GetEnvironmentVariable("PRISMA_PLAYBACK_FEEDBACK_PROBE") == "1")
+				await VerifyPlaybackFeedback(track);
+			if (Environment.GetEnvironmentVariable("PRISMA_GAPLESS_ONLY") is { Length: > 0 } deviceName)
 			{
-				Console.WriteLine("UI smoke passed. Playback smoke skipped because the runner has no default WASAPI output.");
+				var device = ReadAudioOutputs(null, includeRates: false).Devices.FirstOrDefault(item => item.Name.Contains(deviceName, StringComparison.OrdinalIgnoreCase));
+				if (device == null) throw new InvalidOperationException("Playback test output was not found.");
+				player.OutputId = device.Id;
+				await VerifyGaplessOutput();
+				System.Windows.Application.Current.Shutdown(0);
+				return;
+			}
+			if (Environment.GetEnvironmentVariable("PRISMA_SMOKE_UI_ONLY") == "1" ||
+				Environment.GetEnvironmentVariable("PRISMA_SMOKE_UI_ONLY_WITHOUT_AUDIO") == "1" && !HasDefaultSmokeAudioEndpoint())
+			{
+				Console.WriteLine("UI smoke passed. Playback validation is separate.");
 				System.Windows.Application.Current.Shutdown(0);
 				return;
 			}
@@ -1385,6 +1418,8 @@ public partial class MainWindow : Window
 				await VerifyNasPhysicalRecovery(nasFixture);
 			if (Environment.GetEnvironmentVariable("PRISMA_ARTIST_LAYOUT_PREVIEW") != null)
 				await VerifyResponsiveArtistPage(demo.Tracks);
+			if (Environment.GetEnvironmentVariable("PRISMA_GAPLESS_PROBE") == "1")
+				await VerifyGaplessOutput();
 			VerifyWindowPlacement();
 			Console.WriteLine(player.OutputNotice ?? (player.IsExclusive ? "WASAPI exclusive" : "WASAPI shared"));
 			Console.WriteLine($"OK: {demo.Tracks.Count} demos y reproducción de {track.Name}");
@@ -1801,6 +1836,7 @@ public partial class MainWindow : Window
 		var nasRuns = new Dictionary<string, NasScanRun>(StringComparer.OrdinalIgnoreCase);
 		int savedDuringScan = 0;
 		long lastSave = Environment.TickCount64;
+		var addedAt = DateTimeOffset.UtcNow;
 
 		void PublishDiscovered()
 		{
@@ -1809,7 +1845,7 @@ public partial class MainWindow : Window
 			while (pendingTracks.TryDequeue(out var entry))
 			{
 				if (!visiblePaths.Add(entry.Track.Path)) continue;
-				library.Tracks.Add(ApplyLibraryTags(entry.Track));
+				library.Tracks.Add(ApplyLibraryTags(entry.Track with { AddedAt = addedAt }));
 				publishedPaths.Add(entry.Track.Path);
 				count++;
 				if (add && !library.Folders.Contains(entry.Folder, StringComparer.OrdinalIgnoreCase))
@@ -1890,7 +1926,8 @@ public partial class MainWindow : Window
 					foreach (Track item in tuple.Item1)
 					{
 						if (originalTracks.TryGetValue(item.Path, out var previous) && ReferenceEquals(previous, item)) reusedTracks++;
-						indexed[item.Path] = ApplyLibraryTags(item);
+						var stamp = previous == null ? addedAt : previous.AddedAt;
+						indexed[item.Path] = ApplyLibraryTags(item.AddedAt == stamp ? item : item with { AddedAt = stamp });
 					}
 					if (tuple.Item2 == 0 && !onlyNew && !retryFailures && nasRun?.Resumed != true)
 					{
@@ -1993,7 +2030,7 @@ public partial class MainWindow : Window
 					foreach (Track track in nasRuns.Values.SelectMany(run => run.Tracks).Select(ApplyLibraryTags))
 						if (partial.TryGetValue(track.Path, out var prior) && track != prior)
 						{
-							partial[track.Path] = track;
+							partial[track.Path] = track.AddedAt == prior.AddedAt ? track : track with { AddedAt = prior.AddedAt };
 							updated.Add(track.Path);
 						}
 					if (updated.Count > 0)
@@ -2128,7 +2165,10 @@ public partial class MainWindow : Window
 			? System.Windows.Controls.SelectionMode.Single : System.Windows.Controls.SelectionMode.Extended;
 		GalleryPager.Visibility = Visibility.Collapsed;
 		QueueTools.Visibility = collection == null && LibrarySectionIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
-		PlaylistPicker.Visibility = ((LibrarySectionIndex != 6) ? Visibility.Collapsed : Visibility.Visible);
+		PlaylistCommands.Visibility = PlaylistPicker.Visibility =
+			collection == null && LibrarySectionIndex == 6 ? Visibility.Visible : Visibility.Collapsed;
+		EditSmartPlaylistButton.Visibility = SmartRules != null ? Visibility.Visible : Visibility.Collapsed;
+		PlaylistType.Text = T(SmartRules == null ? "Lista manual" : "Lista inteligente");
 		LosslessNotice.Visibility = Visibility.Collapsed;
 		BackToCollection.Visibility = ((collection == null) ? Visibility.Collapsed : Visibility.Visible);
 		bool showHome = collection == null && ReferenceEquals(Navigation.SelectedItem, HomeNavigation) &&
@@ -2184,7 +2224,7 @@ public partial class MainWindow : Window
 			3 => (orderedTracks ?? library.Tracks.ToArray()).Where(t => library.Favorites.Contains(t.Path)),
 			4 => queue, 
 			5 => ResolveSavedTracks(library.History),
-			6 => ResolveSavedTracks(ActivePlaylist),
+			6 => SmartRules is { } rules ? SmartPlaylistTracks(rules) : ResolveSavedTracks(ActivePlaylist),
 			_ => orderedTracks ?? (IEnumerable<Track>)library.Tracks,
 		};
 		var query = new LibraryQuery(Search.Text);
@@ -2249,7 +2289,9 @@ public partial class MainWindow : Window
 				}
 			}
 		}
-		if (!query.IsEmpty && !losslessView)
+		if (LibrarySectionIndex == 6)
+			CollectionCount.Text = $"{T(playlistName)}  ·  {(Rows.Items.Count == 1 ? T("1 pista") : LocalTextExtension.Format("{0:N0} pistas", Rows.Items.Count))}";
+		else if (!query.IsEmpty && !losslessView)
 			CollectionCount.Text = LocalTextExtension.Format("{0:N0} resultados", Rows.Items.Count);
 		UpdateEmptyLibrary();
 	}
@@ -2489,6 +2531,8 @@ public partial class MainWindow : Window
 	private void Tick()
 	{
 		UpdateSleepTimer();
+		CheckNasRecovery();
+		UpdateGaplessPreparation();
 		float[] spectrum = player.Spectrum;
 		int num = 0;
 		while (animateSpectrum && SystemParameters.ClientAreaAnimation && num < spectrumBars.Length)
@@ -2523,7 +2567,9 @@ public partial class MainWindow : Window
 
 	private void SetPlaying(bool value)
 	{
+		bool changed = playing != value;
 		playing = value;
+		if (changed) AnnouncePlayback(T(value ? "Reproduciendo" : "En pausa"));
 		PublishSystemPlayback();
 		UpdateAwakeRequest(value && keepAwake);
 		PlayButton.Content = (value ? "\uE769" : "\uE768");
@@ -2644,6 +2690,8 @@ public partial class MainWindow : Window
 		shuffle = !shuffle;
 		ReorderPlayback(current);
 		MarkPlaybackToggle(ShuffleButton, shuffle);
+		AnnouncePlayback(T(shuffle ? "Aleatorio activado" : "Aleatorio desactivado"));
+		InvalidateGapless();
 	}
 
 	private void ToggleRepeat(object sender, RoutedEventArgs args)
@@ -2655,6 +2703,8 @@ public partial class MainWindow : Window
 			_ => RepeatMode.Off, 
 		};
 		UpdateRepeatButton();
+		AnnouncePlayback(RepeatButton.ToolTip as string);
+		InvalidateGapless();
 	}
 
 	private void UpdateRepeatButton()
@@ -2675,7 +2725,7 @@ public partial class MainWindow : Window
 	{
 		button.Background = active ? new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)) : Brushes.Transparent;
 		button.SetResourceReference(ForegroundProperty, active ? "AccentBrush" : "Ink");
-		AutomationProperties.SetItemStatus((DependencyObject)(object)button, active ? "On" : "Off");
+		AutomationProperties.SetItemStatus((DependencyObject)(object)button, T(active ? "Activado" : "Desactivado"));
 	}
 
 	private void Next(object sender, RoutedEventArgs args)
@@ -2688,6 +2738,7 @@ public partial class MainWindow : Window
 		Track result;
 		if (opened && player.Position.TotalSeconds > 3.0)
 		{
+			InvalidateGapless();
 			player.Position = TimeSpan.Zero;
 		}
 		else if (previous.TryPop(out result))
@@ -2717,12 +2768,20 @@ public partial class MainWindow : Window
 	{
 		player.Volume = args.NewValue;
 		RefreshMuteButton(args.NewValue);
+		if (Volume != null)
+		{
+			string percent = LocalTextExtension.Format("Volumen {0:P0}", args.NewValue);
+			AutomationProperties.SetItemStatus(Volume, percent);
+			if ((Volume.IsKeyboardFocusWithin && !Volume.IsMouseCaptureWithin) || MuteButton?.IsKeyboardFocusWithin == true)
+				AnnouncePlayback(percent);
+		}
 	}
 
 	private void SeekChanged(object sender, RoutedPropertyChangedEventArgs<double> args)
 	{
 		if (opened && !updatingSeek)
 		{
+			InvalidateGapless();
 			player.Position = TimeSpan.FromSeconds(args.NewValue);
 		}
 	}
@@ -2740,7 +2799,7 @@ public partial class MainWindow : Window
 			Status.Text = (flag ? LocalTextExtension.Format("Añadida a favoritos: {0}", track.Name) : LocalTextExtension.Format("Retirada de favoritos: {0}", track.Name));
 			UpdateFavoriteToolbarButton();
 			Save();
-			if (LibrarySectionIndex == 3)
+			if (LibrarySectionIndex == 3 || LibrarySectionIndex == 6 && SmartRules?.Favorites == true)
 			{
 				RefreshRows();
 			}
@@ -2768,7 +2827,7 @@ public partial class MainWindow : Window
 
 	private void UpdatePlaylistPicker()
 	{
-		PlaylistPicker.ItemsSource = new string[1] { "Mi lista" }.Concat(library.Playlists.Keys.OrderBy((string name) => name)).ToArray();
+		PlaylistPicker.ItemsSource = new string[1] { "Mi lista" }.Concat(library.Playlists.Keys.Concat(library.SmartPlaylists.Keys).Order(StringComparer.CurrentCultureIgnoreCase)).ToArray();
 		PlaylistPicker.SelectedItem = playlistName;
 	}
 
@@ -2843,6 +2902,11 @@ public partial class MainWindow : Window
 
 	private void Playlist(object sender, RoutedEventArgs args)
 	{
+		if (SmartRules != null)
+		{
+			Status.Text = T("Esta lista se actualiza por reglas. Elige una lista manual para añadir canciones.");
+			return;
+		}
 		Track selected = Selected;
 		if ((object)selected != null)
 		{
@@ -2914,6 +2978,8 @@ public partial class MainWindow : Window
 			shuffle = audioSettings.Shuffle;
 			rememberPosition = audioSettings.RememberPosition;
 			continueAfterTrack = audioSettings.ContinueAfterTrack;
+			player.ReplayMode = Enum.IsDefined(audioSettings.ReplayGain) ? audioSettings.ReplayGain : ReplayGainMode.Off;
+			gaplessEnabled = audioSettings.Gapless;
 			lyricOffset = Math.Clamp(audioSettings.LyricOffset, -10, 10);
 			lyricScale = Math.Clamp(audioSettings.LyricScale, .85, 1.35);
 			compactRows = audioSettings.CompactRows;
@@ -2990,7 +3056,7 @@ public partial class MainWindow : Window
 		try
 		{
 			Directory.CreateDirectory(DataDirectory);
-			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics, albumSize, autoArtwork, autoLyrics, keepAwake, startupSection, eqPreamp, eqAutoHeadroom, interfaceAnimations, pointerEffects, undoNotices, audioBackdrop, artworkMotion, themePreference, surfaceTransparency, ambientLight, scanSubfolders, scanOnLaunch, parallelTagReads, discoverNewMusic, preferredLyricSource, preferredLyricTarget)));
+			System.IO.File.WriteAllText(AudioSettingsFile + ".tmp", JsonSerializer.Serialize(new AudioSettings(Volume.Value, player.OutputId, player.Exclusive, gains, player.Balance, eqEnabled, player.Direct, artworkColors, animateSpectrum, player.Speed, player.StrictDirect, shuffle, repeat, rememberPosition, accentPreset, visualizerStyle, visualizerSensitivity, visualizerFramesPerSecond, player.OutputSampleRate, continueAfterTrack, lyricOffset, lyricScale, appearanceProfile, compactRows, showTrackQuality, miniAlwaysOnTop, followLyrics, albumSize, autoArtwork, autoLyrics, keepAwake, startupSection, eqPreamp, eqAutoHeadroom, interfaceAnimations, pointerEffects, undoNotices, audioBackdrop, artworkMotion, themePreference, surfaceTransparency, ambientLight, scanSubfolders, scanOnLaunch, parallelTagReads, discoverNewMusic, preferredLyricSource, preferredLyricTarget, player.ReplayMode, gaplessEnabled)));
 			System.IO.File.Move(AudioSettingsFile + ".tmp", AudioSettingsFile, overwrite: true);
 			return true;
 		}
@@ -3007,6 +3073,7 @@ public partial class MainWindow : Window
 
 	private void ApplyEqualizer()
 	{
+		InvalidateGapless();
 		player.SetGains(eqEnabled ? gains : FlatGains, EffectiveEqGain);
 	}
 
@@ -3199,6 +3266,7 @@ public partial class MainWindow : Window
 		soundPage.Loaded += (_, _) => RefreshEffectiveGain();
 
 		AddBalanceSettings(AddSettingsCard(soundPage, "Balance estéreo"), SaveSettingsSoon);
+		AddReplayGainSettings(AddSettingsCard(soundPage, "ReplayGain"), SaveSettingsSoon);
 		panel = playbackPage;
 		var playbackAnchor = new TextBlock
 		{
@@ -3254,7 +3322,8 @@ public partial class MainWindow : Window
 		});
 
 		panel = AddSettingsCard(playbackPage, "Sesión de escucha");
-		AddPreference("Continuar con la siguiente canción", continueAfterTrack, enabled => continueAfterTrack = enabled);
+		AddPreference("Continuar con la siguiente canción", continueAfterTrack, enabled => { continueAfterTrack = enabled; InvalidateGapless(); });
+		AddPreference("Reproducción sin pausas", gaplessEnabled, enabled => { gaplessEnabled = enabled; InvalidateGapless(); });
 		AddPreference("Evitar el reposo al reproducir", keepAwake, enabled =>
 		{
 			keepAwake = enabled;

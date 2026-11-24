@@ -18,8 +18,43 @@ internal sealed class AudioEngine
     private WasapiOut output;
     private WaveStream reader;
     private VolumeSampleProvider volumeStage;
+    private VolumeSampleProvider replayStage;
+    private ReplayGainTags replayTags;
+    public ReplayGainMode ReplayMode { get; set; }
     private WaveStream directReader;
-    private WaveStream ActiveReader => directReader ?? reader;
+    private WaveStream ActiveReader => directReader ?? continuous?.Current ?? reader;
+    private ContinuousAudioSource continuous;
+    internal event EventHandler<Track> ContinuousTransition;
+    internal bool CanStageNext => continuous != null && output != null && !StrictDirect && Speed == 1 &&
+        OutputFormat?.SampleRate == SourceFormat?.SampleRate;
+
+    private void NotifyContinuousTransition(ContinuousAudioSource source, Track track, ReplayGainTags tags)
+    {
+        dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() =>
+        {
+            if (!ReferenceEquals(continuous, source)) return;
+            replayTags = tags;
+            RefreshTrackGain();
+            source.ReleaseRetired();
+            ContinuousTransition?.Invoke(this, track);
+        }));
+    }
+
+    internal bool StageNext(WaveStream decoder, ISampleProvider samples, Track track, ReplayGainTags tags) =>
+        CanStageNext && Math.Abs(GainFor(tags) - ReplayGainDecibels) < .001 &&
+        continuous.TryStage(decoder, samples, track, tags);
+
+    internal void ClearStagedNext() => continuous?.ClearStaged();
+
+    private double GainFor(ReplayGainTags tags) => StrictDirect || Direct ? 0 :
+        tags?.Decibels(ReplayMode, Math.Max(0, gains.Max() + equalizerGainDb)) ?? 0;
+
+    public double ReplayGainDecibels => GainFor(replayTags);
+
+    private void RefreshTrackGain()
+    {
+        if (replayStage != null) replayStage.Volume = (float)Math.Pow(10, ReplayGainDecibels / 20);
+    }
     public bool StrictDirect { get; set; }
     private int outputSampleRate;
     public int OutputSampleRate
@@ -46,6 +81,7 @@ internal sealed class AudioEngine
         {
             direct = value;
             if (meter != null) meter.Bypass = value;
+            RefreshTrackGain();
         }
     }
     public float Balance
@@ -78,11 +114,16 @@ internal sealed class AudioEngine
     public event EventHandler MediaOpened;
     public event EventHandler MediaEnded;
     public event EventHandler<Exception> MediaFailed;
-    public Duration NaturalDuration => ActiveReader == null ? Duration.Automatic : new Duration(ActiveReader.TotalTime);
+    public Duration NaturalDuration => ActiveReader is { } source ? new Duration(source.TotalTime) : Duration.Automatic;
     public TimeSpan Position
     {
-        get => tempo?.Position ?? ActiveReader?.CurrentTime ?? TimeSpan.Zero;
-        set { if (tempo != null) tempo.Position = value; else if (ActiveReader != null) ActiveReader.CurrentTime = value; }
+        get => tempo?.Position ?? continuous?.Position ?? ActiveReader?.CurrentTime ?? TimeSpan.Zero;
+        set
+        {
+            if (tempo != null) tempo.Position = value;
+            else if (continuous != null) continuous.Position = value;
+            else if (ActiveReader is { } source) source.CurrentTime = value;
+        }
     }
     public double Volume { get => volume; set { volume = value; if (volumeStage != null) volumeStage.Volume = (float)value; } }
 
@@ -91,6 +132,7 @@ internal sealed class AudioEngine
         gains = (float[])values.Clone();
         equalizerGainDb = gainDb;
         meter?.SetGains(gains, equalizerGainDb);
+        RefreshTrackGain();
     }
 
     public void Open(Uri uri)
@@ -161,9 +203,10 @@ internal sealed class AudioEngine
         }
     }
 
-    internal void OpenPrepared(WaveStream prepared, bool strictDirect)
+    internal void OpenPrepared(WaveStream prepared, bool strictDirect, ReplayGainTags tags = null)
     {
         Close();
+        replayTags = tags;
         if (strictDirect) directReader = prepared;
         else reader = prepared;
         OutputNotice = null;
@@ -197,7 +240,15 @@ internal sealed class AudioEngine
                 AttachPlaybackEvents();
                 return;
             }
-            volumeStage = new VolumeSampleProvider(ToPlaybackSamples(reader)) { Volume = (float)volume };
+            ISampleProvider samples = ToPlaybackSamples(reader);
+            if (Speed == 1)
+            {
+                continuous = new ContinuousAudioSource(reader, samples, NotifyContinuousTransition);
+                samples = continuous;
+            }
+            replayStage = new VolumeSampleProvider(samples);
+            RefreshTrackGain();
+            volumeStage = new VolumeSampleProvider(replayStage) { Volume = (float)volume };
             if (!direct && Speed != 1) tempo = new TempoProvider(reader, volumeStage, Speed);
             meter = new Meter((ISampleProvider)tempo ?? volumeStage) { Balance = balance, Bypass = direct };
             meter.SetGains(gains, equalizerGainDb);
@@ -319,12 +370,16 @@ internal sealed class AudioEngine
         var old = output;
         output = null;
         old?.Dispose();
-        reader?.Dispose();
+        if (continuous != null) continuous.Dispose();
+        else reader?.Dispose();
+        continuous = null;
         directReader?.Dispose();
         directReader = null;
         endpoint?.Dispose();
         reader = null;
         volumeStage = null;
+        replayStage = null;
+        replayTags = null;
         tempo = null;
         endpoint = null;
         meter = null;
